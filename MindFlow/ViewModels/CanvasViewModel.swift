@@ -5,7 +5,6 @@ class CanvasViewModel: ObservableObject {
     @Published var topics: [Topic] = []
     @Published var selectedTopicId: UUID?
     @Published var relationDragState: (fromId: UUID, toPosition: CGPoint)?
-    @Published var topicStyle: TopicStyle = .default
     
     private var mainTopicCount = 0
     private let subtopicSpacing: CGFloat = 200 // Vertical spacing between topics at the same level
@@ -656,8 +655,8 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func getTopicBox(topic: Topic) -> CGRect {
-        let width = max(120, CGFloat(topic.name.count * 10))
-        let height: CGFloat = 40
+        let width = max(120, CGFloat(topic.name.count * 10)) + 32 // Add padding for shape
+        let height: CGFloat = 40 // Total height including vertical padding
         return CGRect(
             x: topic.position.x - width/2,
             y: topic.position.y - height/2,
@@ -743,5 +742,41 @@ class CanvasViewModel: ObservableObject {
             removeRelationsToTopic(subtopic.id)
             removeRelationsToSubtopics(subtopic)
         }
+    }
+    
+    func updateTopicShape(_ id: UUID, shape: Topic.Shape) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].shape = shape
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicShape(id, shape, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicShape(_ id: UUID, _ shape: Topic.Shape, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].shape = shape
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicShape(id, shape, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
     }
 } 

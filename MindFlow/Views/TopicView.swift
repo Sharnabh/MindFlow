@@ -90,7 +90,13 @@ private struct TopicContent: View {
     @FocusState var isFocused: Bool
     let onNameChange: (String) -> Void
     let onEditingChange: (Bool) -> Void
-    @EnvironmentObject var viewModel: CanvasViewModel
+    
+    private func calculateSize() -> (width: CGFloat, height: CGFloat) {
+        let text = topic.isEditing ? editingName : topic.name
+        let width = max(120, CGFloat(text.count * 10))
+        let height: CGFloat = 40
+        return (width, height)
+    }
     
     var body: some View {
         Group {
@@ -103,15 +109,21 @@ private struct TopicContent: View {
     }
     
     private func createTextField() -> some View {
-        TextField("", text: $editingName)
+        let size = calculateSize()
+        return TextField("", text: $editingName)
             .textFieldStyle(.plain)
-            .foregroundColor(viewModel.topicStyle.foregroundColor)
-            .font(viewModel.topicStyle.fontStyle)
+            .foregroundColor(.black)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .frame(minWidth: 120, maxWidth: max(120, CGFloat(editingName.count * 10)))
-            .background(createBackground())
-            .overlay(createBorder())
+            .frame(minWidth: size.width, maxWidth: size.width)
+            .background(
+                createBackground()
+                    .frame(width: size.width + 32, height: size.height)
+            )
+            .overlay(
+                createBorder()
+                    .frame(width: size.width + 32, height: size.height)
+            )
             .focused($isFocused)
             .onChange(of: editingName) { newValue in
                 onNameChange(newValue)
@@ -134,71 +146,425 @@ private struct TopicContent: View {
     }
     
     private func createTextDisplay() -> some View {
-        Text(topic.name)
-            .foregroundColor(viewModel.topicStyle.foregroundColor)
-            .font(viewModel.topicStyle.fontStyle)
+        let size = calculateSize()
+        return Text(topic.name)
+            .foregroundColor(.black)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .frame(width: max(120, CGFloat(topic.name.count * 10)))
-            .background(createBackground())
-            .overlay(createBorder())
+            .frame(width: size.width)
+            .background(
+                createBackground()
+                    .frame(width: size.width + 32, height: size.height)
+            )
+            .overlay(
+                createBorder()
+                    .frame(width: size.width + 32, height: size.height)
+            )
     }
     
     private func createBackground() -> some View {
         Group {
-            switch viewModel.topicStyle.shape {
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(viewModel.topicStyle.backgroundColor)
+            switch topic.shape {
             case .rectangle:
                 Rectangle()
-                    .fill(viewModel.topicStyle.backgroundColor)
-            case .capsule:
+                    .fill(Color.blue.opacity(0.1))
+            case .roundedRectangle:
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.blue.opacity(0.1))
+            case .circle:
                 Capsule()
-                    .fill(viewModel.topicStyle.backgroundColor)
-            case .ellipse:
-                Ellipse()
-                    .fill(viewModel.topicStyle.backgroundColor)
+                    .fill(Color.blue.opacity(0.1))
+            case .roundedSquare:
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.blue.opacity(0.1))
+            case .line:
+                Rectangle()
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(height: 2)
+            case .diamond:
+                Diamond()
+                    .fill(Color.blue.opacity(0.1))
+            case .hexagon:
+                RegularPolygon(sides: 6)
+                    .fill(Color.blue.opacity(0.1))
+            case .octagon:
+                RegularPolygon(sides: 8)
+                    .fill(Color.blue.opacity(0.1))
+            case .parallelogram:
+                Parallelogram()
+                    .fill(Color.blue.opacity(0.1))
+            case .cloud:
+                Cloud()
+                    .fill(Color.blue.opacity(0.1))
+            case .heart:
+                Heart()
+                    .fill(Color.blue.opacity(0.1))
+            case .shield:
+                Shield()
+                    .fill(Color.blue.opacity(0.1))
+            case .star:
+                Star()
+                    .fill(Color.blue.opacity(0.1))
+            case .document:
+                Document()
+                    .fill(Color.blue.opacity(0.1))
+            case .doubleRectangle:
+                DoubleRectangle()
+                    .fill(Color.blue.opacity(0.1))
+            case .flag:
+                Flag()
+                    .fill(Color.blue.opacity(0.1))
+            case .leftArrow:
+                Arrow(pointing: .left)
+                    .fill(Color.blue.opacity(0.1))
+            case .rightArrow:
+                Arrow(pointing: .right)
+                    .fill(Color.blue.opacity(0.1))
             }
         }
     }
     
     private func createBorder() -> some View {
         Group {
-            switch viewModel.topicStyle.shape {
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(style: createBorderStyle())
+            switch topic.shape {
             case .rectangle:
                 Rectangle()
-                    .stroke(style: createBorderStyle())
-            case .capsule:
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .roundedRectangle:
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .circle:
                 Capsule()
-                    .stroke(style: createBorderStyle())
-            case .ellipse:
-                Ellipse()
-                    .stroke(style: createBorderStyle())
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .roundedSquare:
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .line:
+                Rectangle()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .frame(height: 2)
+            case .diamond:
+                Diamond()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .hexagon:
+                RegularPolygon(sides: 6)
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .octagon:
+                RegularPolygon(sides: 8)
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .parallelogram:
+                Parallelogram()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .cloud:
+                Cloud()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .heart:
+                Heart()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .shield:
+                Shield()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .star:
+                Star()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .document:
+                Document()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .doubleRectangle:
+                DoubleRectangle()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .flag:
+                Flag()
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .leftArrow:
+                Arrow(pointing: .left)
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+            case .rightArrow:
+                Arrow(pointing: .right)
+                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
             }
         }
     }
+}
+
+// Custom shape views
+private struct Diamond: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct RegularPolygon: Shape {
+    let sides: Int
     
-    private func createBorderStyle() -> StrokeStyle {
-        let color = isSelected ? viewModel.topicStyle.borderColor : viewModel.topicStyle.borderColor.opacity(0.3)
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        var path = Path()
         
-        switch viewModel.topicStyle.borderStyle {
-        case .solid:
-            return StrokeStyle(lineWidth: viewModel.topicStyle.borderWidth)
-        case .dashed:
-            return StrokeStyle(
-                lineWidth: viewModel.topicStyle.borderWidth,
-                dash: [6, 3]
+        for i in 0..<sides {
+            let angle = (2.0 * .pi * Double(i)) / Double(sides) - (.pi / 2)
+            let point = CGPoint(
+                x: center.x + radius * cos(angle),
+                y: center.y + radius * sin(angle)
             )
-        case .dotted:
-            return StrokeStyle(
-                lineWidth: viewModel.topicStyle.borderWidth,
-                dash: [2, 2]
-            )
+            
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
         }
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Parallelogram: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let offset: CGFloat = rect.width * 0.2
+        path.move(to: CGPoint(x: rect.minX + offset, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - offset, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Cloud: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        let centerY = height * 0.5
+        
+        path.move(to: CGPoint(x: width * 0.2, y: centerY))
+        path.addCurve(
+            to: CGPoint(x: width * 0.8, y: centerY),
+            control1: CGPoint(x: width * 0.2, y: height * 0.2),
+            control2: CGPoint(x: width * 0.8, y: height * 0.2)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.2, y: centerY),
+            control1: CGPoint(x: width * 0.8, y: height * 0.8),
+            control2: CGPoint(x: width * 0.2, y: height * 0.8)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Heart: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        
+        path.move(to: CGPoint(x: width * 0.5, y: height * 0.75))
+        path.addCurve(
+            to: CGPoint(x: width * 0.1, y: height * 0.35),
+            control1: CGPoint(x: width * 0.5, y: height * 0.7),
+            control2: CGPoint(x: width * 0.1, y: height * 0.5)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.5, y: height * 0.25),
+            control1: CGPoint(x: width * 0.1, y: height * 0.2),
+            control2: CGPoint(x: width * 0.5, y: height * 0.25)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.9, y: height * 0.35),
+            control1: CGPoint(x: width * 0.5, y: height * 0.25),
+            control2: CGPoint(x: width * 0.9, y: height * 0.2)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.5, y: height * 0.75),
+            control1: CGPoint(x: width * 0.9, y: height * 0.5),
+            control2: CGPoint(x: width * 0.5, y: height * 0.7)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Shield: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        
+        path.move(to: CGPoint(x: width * 0.5, y: height))
+        path.addCurve(
+            to: CGPoint(x: 0, y: height * 0.4),
+            control1: CGPoint(x: width * 0.2, y: height * 0.9),
+            control2: CGPoint(x: 0, y: height * 0.7)
+        )
+        path.addLine(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: width, y: 0))
+        path.addLine(to: CGPoint(x: width, y: height * 0.4))
+        path.addCurve(
+            to: CGPoint(x: width * 0.5, y: height),
+            control1: CGPoint(x: width, y: height * 0.7),
+            control2: CGPoint(x: width * 0.8, y: height * 0.9)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Star: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        let innerRadius = radius * 0.4
+        let points = 5
+        var path = Path()
+        
+        for i in 0..<points * 2 {
+            let angle = (2.0 * .pi * Double(i)) / Double(points * 2) - (.pi / 2)
+            let r = i % 2 == 0 ? radius : innerRadius
+            let point = CGPoint(
+                x: center.x + r * cos(angle),
+                y: center.y + r * sin(angle)
+            )
+            
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct Document: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        let cornerRadius: CGFloat = 8
+        let foldSize: CGFloat = min(width, height) * 0.2
+        
+        path.move(to: CGPoint(x: 0, y: height))
+        path.addLine(to: CGPoint(x: 0, y: cornerRadius))
+        path.addArc(
+            center: CGPoint(x: cornerRadius, y: cornerRadius),
+            radius: cornerRadius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(270),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: width - foldSize, y: 0))
+        path.addLine(to: CGPoint(x: width, y: foldSize))
+        path.addLine(to: CGPoint(x: width, y: height))
+        path.closeSubpath()
+        
+        // Add fold line
+        path.move(to: CGPoint(x: width - foldSize, y: 0))
+        path.addLine(to: CGPoint(x: width - foldSize, y: foldSize))
+        path.addLine(to: CGPoint(x: width, y: foldSize))
+        
+        return path
+    }
+}
+
+private struct DoubleRectangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let offset: CGFloat = 4
+        
+        // Back rectangle
+        path.addRect(CGRect(
+            x: offset,
+            y: offset,
+            width: rect.width - offset,
+            height: rect.height - offset
+        ))
+        
+        // Front rectangle
+        path.addRect(CGRect(
+            x: 0,
+            y: 0,
+            width: rect.width - offset,
+            height: rect.height - offset
+        ))
+        
+        return path
+    }
+}
+
+private struct Flag: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        let poleWidth: CGFloat = width * 0.1
+        
+        // Pole
+        path.addRect(CGRect(
+            x: 0,
+            y: 0,
+            width: poleWidth,
+            height: height
+        ))
+        
+        // Flag part
+        path.move(to: CGPoint(x: poleWidth, y: height * 0.2))
+        path.addLine(to: CGPoint(x: width, y: height * 0.2))
+        path.addLine(to: CGPoint(x: width * 0.8, y: height * 0.5))
+        path.addLine(to: CGPoint(x: width, y: height * 0.8))
+        path.addLine(to: CGPoint(x: poleWidth, y: height * 0.8))
+        path.closeSubpath()
+        
+        return path
+    }
+}
+
+private struct Arrow: Shape {
+    enum Direction {
+        case left
+        case right
+    }
+    
+    let pointing: Direction
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = rect.width
+        let height = rect.height
+        let arrowWidth = width * 0.3
+        
+        switch pointing {
+        case .left:
+            path.move(to: CGPoint(x: 0, y: height * 0.5))
+            path.addLine(to: CGPoint(x: arrowWidth, y: 0))
+            path.addLine(to: CGPoint(x: arrowWidth, y: height * 0.3))
+            path.addLine(to: CGPoint(x: width, y: height * 0.3))
+            path.addLine(to: CGPoint(x: width, y: height * 0.7))
+            path.addLine(to: CGPoint(x: arrowWidth, y: height * 0.7))
+            path.addLine(to: CGPoint(x: arrowWidth, y: height))
+            path.closeSubpath()
+        case .right:
+            path.move(to: CGPoint(x: width, y: height * 0.5))
+            path.addLine(to: CGPoint(x: width - arrowWidth, y: 0))
+            path.addLine(to: CGPoint(x: width - arrowWidth, y: height * 0.3))
+            path.addLine(to: CGPoint(x: 0, y: height * 0.3))
+            path.addLine(to: CGPoint(x: 0, y: height * 0.7))
+            path.addLine(to: CGPoint(x: width - arrowWidth, y: height * 0.7))
+            path.addLine(to: CGPoint(x: width - arrowWidth, y: height))
+            path.closeSubpath()
+        }
+        
+        return path
     }
 }
 
