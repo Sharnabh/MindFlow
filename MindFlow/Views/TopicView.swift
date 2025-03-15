@@ -167,59 +167,59 @@ private struct TopicContent: View {
             switch topic.shape {
             case .rectangle:
                 Rectangle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.1))
+        RoundedRectangle(cornerRadius: 8)
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .circle:
                 Capsule()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .line:
                 Rectangle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
                     .frame(height: 2)
             case .diamond:
                 Diamond()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .hexagon:
                 RegularPolygon(sides: 6)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .octagon:
                 RegularPolygon(sides: 8)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .parallelogram:
                 Parallelogram()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .cloud:
                 Cloud()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .heart:
                 Heart()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .shield:
                 Shield()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .star:
                 Star()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .document:
                 Document()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .doubleRectangle:
                 DoubleRectangle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .flag:
                 Flag()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .leftArrow:
                 Arrow(pointing: .left)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .rightArrow:
                 Arrow(pointing: .right)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             }
         }
     }
@@ -229,59 +229,59 @@ private struct TopicContent: View {
             switch topic.shape {
             case .rectangle:
                 Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+        RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .circle:
                 Capsule()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .line:
                 Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
                     .frame(height: 2)
             case .diamond:
                 Diamond()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .hexagon:
                 RegularPolygon(sides: 6)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .octagon:
                 RegularPolygon(sides: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .parallelogram:
                 Parallelogram()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .cloud:
                 Cloud()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .heart:
                 Heart()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .shield:
                 Shield()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .star:
                 Star()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .document:
                 Document()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .doubleRectangle:
                 DoubleRectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .flag:
                 Flag()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .leftArrow:
                 Arrow(pointing: .left)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .rightArrow:
                 Arrow(pointing: .right)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             }
         }
     }

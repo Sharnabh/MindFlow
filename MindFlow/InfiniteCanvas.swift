@@ -10,6 +10,8 @@ struct InfiniteCanvas: View {
     @State private var cursorPosition: CGPoint = .zero
     @State private var topicsBounds: CGRect = .zero // Track bounds of all topics
     @State private var isSidebarOpen: Bool = false // Track sidebar state
+    @State private var isShowingColorPicker: Bool = false // Track color picker state
+    @State private var isShowingBorderColorPicker: Bool = false // Track border color picker state
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -232,7 +234,7 @@ struct InfiniteCanvas: View {
                                             .fill(Color(.windowBackgroundColor))
                                             .frame(height: topBarHeight)
                                             .overlay(
-                                                Text("Properties")
+                                                Text("Style")
                                                     .foregroundColor(.primary)
                                                     .font(.headline)
                                                     .padding(.leading)
@@ -249,6 +251,124 @@ struct InfiniteCanvas: View {
                                                     viewModel.updateTopicShape(selectedTopic.id, shape: shape)
                                                 }
                                             )
+                                            
+                                            // Fill control
+                                            HStack(spacing: 8) {
+                                                Text("Fill")
+                                                    .foregroundColor(.primary)
+                                                    .font(.system(size: 13))
+                                                
+                                                Spacer()
+                                                
+                                                Button(action: {
+                                                    isShowingColorPicker.toggle()
+                                                }) {
+                                                    RoundedRectangle(cornerRadius: 2)
+                                                        .fill(selectedTopic.backgroundColor)
+                                                        .frame(width: 50, height: 28)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                        )
+                                                }
+                                                .buttonStyle(PlainButtonStyle())
+                                                .popover(isPresented: $isShowingColorPicker, arrowEdge: .bottom) {
+                                                    ColorPickerView(
+                                                        selectedColor: Binding(
+                                                            get: { selectedTopic.backgroundColor },
+                                                            set: { newColor in
+                                                                viewModel.updateTopicBackgroundColor(selectedTopic.id, color: newColor)
+                                                            }
+                                                        ),
+                                                        opacity: Binding(
+                                                            get: { selectedTopic.backgroundOpacity },
+                                                            set: { newOpacity in
+                                                                viewModel.updateTopicBackgroundOpacity(selectedTopic.id, opacity: newOpacity)
+                                                            }
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                                        .padding(.horizontal)
+                                            
+                                            // Border control
+                                            HStack(spacing: 8) {
+                                                Text("Border")
+                                                    .foregroundColor(.primary)
+                                                    .font(.system(size: 13))
+                                                
+                                                Spacer()
+                                                
+                                                Button(action: {
+                                                    isShowingBorderColorPicker.toggle()
+                                                }) {
+                                                    RoundedRectangle(cornerRadius: 2)
+                                                        .fill(selectedTopic.borderColor)
+                                                        .frame(width: 50, height: 28)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                        )
+                                                }
+                                                .buttonStyle(PlainButtonStyle())
+                                                .popover(isPresented: $isShowingBorderColorPicker, arrowEdge: .bottom) {
+                                                    ColorPickerView(
+                                                        selectedColor: Binding(
+                                                            get: { selectedTopic.borderColor },
+                                                            set: { newColor in
+                                                                viewModel.updateTopicBorderColor(selectedTopic.id, color: newColor)
+                                                            }
+                                                        ),
+                                                        opacity: Binding(
+                                                            get: { selectedTopic.borderOpacity },
+                                                            set: { newOpacity in
+                                                                viewModel.updateTopicBorderOpacity(selectedTopic.id, opacity: newOpacity)
+                                                            }
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                            .padding(.horizontal)
+                                            
+                                            // Border width control
+                                            HStack(spacing: 8) {
+                                                Text("Border Width")
+                                                    .foregroundColor(.primary)
+                                                    .font(.system(size: 13))
+                                                
+                                                Spacer()
+                                                
+                                                Menu {
+                                                    ForEach(Topic.BorderWidth.allCases, id: \.self) { width in
+                                                        Button(action: {
+                                                            viewModel.updateTopicBorderWidth(selectedTopic.id, width: width)
+                                                        }) {
+                                                            HStack {
+                                                                if selectedTopic.borderWidth == width {
+                                                                    Image(systemName: "checkmark")
+                                                                        .frame(width: 16, alignment: .center)
+                                                                } else {
+                                                                    Color.clear
+                                                                        .frame(width: 16)
+                                                                }
+                                                                Text(width.displayName)
+                                                                Spacer()
+                                                            }
+                                                            .contentShape(Rectangle())
+                                                        }
+                                                    }
+                                                } label: {
+                                                    HStack {
+                                                        Text(selectedTopic.borderWidth.displayName)
+                                                            .foregroundColor(.white)
+                                                    }
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 6)
+                                                    .frame(width: 100)
+                                                    .background(Color.black.opacity(0.6))
+                                                    .cornerRadius(6)
+                                                }
+                                            }
                                             .padding(.horizontal)
                                         } else {
                                             Text("Select a topic to edit its properties")
@@ -741,27 +861,29 @@ struct ShapeSelector: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
             Text("Shape")
-                .font(.headline)
                 .foregroundColor(.primary)
+                .font(.system(size: 13))
+            
+            Spacer()
             
             Button(action: {
                 isShowingPopover.toggle()
             }) {
-                HStack {
+                HStack(spacing: 4) {
                     ShapePreview(shape: selectedShape)
-                        .frame(width: 24, height: 24)
-                    Text(shapes.first { $0.0 == selectedShape }?.1 ?? "")
-                        .lineLimit(1)
-                    Spacer()
+                        .frame(width: 16, height: 16)
+                        .foregroundColor(.white)
+                    
                     Image(systemName: "chevron.down")
-                        .font(.caption)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.8))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(Color(.controlBackgroundColor))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(width: 50)
+                .background(Color.black.opacity(0.6))
                 .cornerRadius(6)
             }
             .buttonStyle(PlainButtonStyle())
@@ -787,7 +909,6 @@ struct ShapeSelector: View {
                 .frame(width: 180)
                 .background(Color(.windowBackgroundColor))
             }
-            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal)
     }
@@ -801,7 +922,7 @@ struct ShapePreview: View {
         Group {
             switch shape {
             case .rectangle:
-                Rectangle()
+                RoundedRectangle(cornerRadius: 2)
             case .roundedRectangle:
                 RoundedRectangle(cornerRadius: 4)
             case .circle:
@@ -838,7 +959,6 @@ struct ShapePreview: View {
                 Arrow(pointing: .right)
             }
         }
-        .foregroundColor(.blue.opacity(0.6))
     }
 }
 
@@ -924,59 +1044,59 @@ private struct TopicContent: View {
             switch topic.shape {
             case .rectangle:
                 Rectangle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .roundedRectangle:
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .circle:
                 Capsule()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .line:
                 Rectangle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
                     .frame(height: 2)
             case .diamond:
                 Diamond()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .hexagon:
                 RegularPolygon(sides: 6)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .octagon:
                 RegularPolygon(sides: 8)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .parallelogram:
                 Parallelogram()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .cloud:
                 Cloud()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .heart:
                 Heart()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .shield:
                 Shield()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .star:
                 Star()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .document:
                 Document()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .doubleRectangle:
                 DoubleRectangle()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .flag:
                 Flag()
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .leftArrow:
                 Arrow(pointing: .left)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             case .rightArrow:
                 Arrow(pointing: .right)
-                    .fill(Color.blue.opacity(0.1))
+                    .fill(topic.backgroundColor.opacity(topic.backgroundOpacity))
             }
         }
     }
@@ -986,61 +1106,178 @@ private struct TopicContent: View {
             switch topic.shape {
             case .rectangle:
                 Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .roundedRectangle:
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .circle:
                 Capsule()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .line:
                 Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
                     .frame(height: 2)
             case .diamond:
                 Diamond()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .hexagon:
                 RegularPolygon(sides: 6)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .octagon:
                 RegularPolygon(sides: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .parallelogram:
                 Parallelogram()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .cloud:
                 Cloud()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .heart:
                 Heart()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .shield:
                 Shield()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .star:
                 Star()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .document:
                 Document()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .doubleRectangle:
                 DoubleRectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .flag:
                 Flag()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .leftArrow:
                 Arrow(pointing: .left)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             case .rightArrow:
                 Arrow(pointing: .right)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
+                    .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
             }
         }
+    }
+}
+
+// Add this struct before the ShapeSelector
+struct ColorPickerView: View {
+    @Binding var selectedColor: Color
+    @Binding var opacity: Double
+    @State private var hexValue: String = ""
+    @State private var showColorPicker = false
+    
+    let colors: [[Color]] = [
+        [.white, .gray.opacity(0.2), .gray.opacity(0.4), .gray.opacity(0.6), .gray.opacity(0.8), .gray, .black],
+        [Color(red: 1.0, green: 0.85, blue: 0), Color(red: 1.0, green: 0.63, blue: 0.48), Color(red: 0.6, green: 0.98, blue: 0.6), Color(red: 0.25, green: 0.88, blue: 0.82), Color(red: 0.53, green: 0.81, blue: 0.92), Color(red: 0.39, green: 0.58, blue: 0.93), Color(red: 0.87, green: 0.63, blue: 0.87), Color(red: 1.0, green: 0.41, blue: 0.71), Color(red: 1.0, green: 0.75, blue: 0.8)],
+        [Color(red: 1.0, green: 0.72, blue: 0), Color(red: 1.0, green: 0.55, blue: 0.35), Color(red: 0.47, green: 0.98, blue: 0.47), Color(red: 0.13, green: 0.88, blue: 0.82), Color(red: 0.4, green: 0.81, blue: 0.92), Color(red: 0.27, green: 0.46, blue: 0.93), Color(red: 0.74, green: 0.5, blue: 0.87), Color(red: 1.0, green: 0.29, blue: 0.71), Color(red: 1.0, green: 0.63, blue: 0.67)],
+        [Color(red: 1.0, green: 0.59, blue: 0), Color(red: 1.0, green: 0.42, blue: 0.23), Color(red: 0.35, green: 0.98, blue: 0.35), Color(red: 0, green: 0.88, blue: 0.82), Color(red: 0.28, green: 0.81, blue: 0.92), Color(red: 0.14, green: 0.34, blue: 0.93), Color(red: 0.62, green: 0.38, blue: 0.87), Color(red: 1.0, green: 0.16, blue: 0.71), Color(red: 1.0, green: 0.5, blue: 0.55)],
+        [Color(red: 1.0, green: 0.47, blue: 0), Color(red: 1.0, green: 0.3, blue: 0.1), Color(red: 0.22, green: 0.98, blue: 0.22), Color(red: 0, green: 0.75, blue: 0.69), Color(red: 0.15, green: 0.81, blue: 0.92), Color(red: 0.02, green: 0.21, blue: 0.93), Color(red: 0.49, green: 0.25, blue: 0.87), Color(red: 1.0, green: 0.04, blue: 0.71), Color(red: 1.0, green: 0.38, blue: 0.42)]
+    ]
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Color grid
+            VStack(spacing: 4) {
+                ForEach(colors, id: \.self) { row in
+                    HStack(spacing: 4) {
+                        ForEach(row, id: \.self) { color in
+                            Button(action: {
+                                selectedColor = color
+                                hexValue = color.toHex() ?? ""
+                            }) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(color)
+                                    .frame(width: 16, height: 16)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                }
+            }
+            .padding(8)
+            
+            Divider()
+            
+            // Color wheel and hex input
+            HStack {
+                Text("#")
+                    .foregroundColor(.secondary)
+                TextField("", text: $hexValue)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .frame(width: 60)
+                    .onChange(of: hexValue) { newValue in
+                        if let color = Color(hex: newValue) {
+                            selectedColor = color
+                        }
+                    }
+                
+                Spacer()
+                
+                ColorPicker("", selection: $selectedColor, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 28, height: 28)
+            }
+            .padding(.horizontal, 8)
+            
+            Divider()
+            
+            // Opacity slider
+            HStack {
+                Text("\(Int(opacity * 100))%")
+                    .foregroundColor(.secondary)
+                    .frame(width: 40, alignment: .leading)
+                
+                Slider(value: $opacity, in: 0...1)
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(width: 180)
+        .background(Color(.windowBackgroundColor))
+        .onAppear {
+            hexValue = selectedColor.toHex() ?? ""
+        }
+    }
+}
+
+// Add these extensions for color handling
+extension Color {
+    init?(hex: String) {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+        
+        var rgb: UInt64 = 0
+        
+        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
+        
+        self.init(
+            red: Double((rgb & 0xFF0000) >> 16) / 255.0,
+            green: Double((rgb & 0x00FF00) >> 8) / 255.0,
+            blue: Double(rgb & 0x0000FF) / 255.0
+        )
+    }
+    
+    func toHex() -> String? {
+        let uic = NSColor(self)
+        guard let components = uic.cgColor.components else { return nil }
+        
+        let r = Float(components[0])
+        let g = Float(components[1])
+        let b = Float(components[2])
+        
+        return String(format: "%02X%02X%02X",
+            Int(r * 255),
+            Int(g * 255),
+            Int(b * 255)
+        )
     }
 }
 

@@ -779,4 +779,214 @@ class CanvasViewModel: ObservableObject {
         
         return false
     }
+    
+    func findTopicIndex(_ id: UUID) -> Int? {
+        // First check main topics
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            return index
+        }
+        
+        // Then check subtopics
+        for (index, topic) in topics.enumerated() {
+            if findTopicInSubtopics(id: id, in: topic) != nil {
+                return index
+            }
+        }
+        
+        return nil
+    }
+    
+    private func findTopicInSubtopics(id: UUID, in topic: Topic) -> Topic? {
+        if topic.id == id {
+            return topic
+        }
+        
+        for subtopic in topic.subtopics {
+            if let found = findTopicInSubtopics(id: id, in: subtopic) {
+                return found
+            }
+        }
+        
+        return nil
+    }
+    
+    func updateTopicBackgroundColor(_ id: UUID, color: Color) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].backgroundColor = color
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBackgroundColor(id, color, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBackgroundColor(_ id: UUID, _ color: Color, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].backgroundColor = color
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBackgroundColor(id, color, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicBackgroundOpacity(_ id: UUID, opacity: Double) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].backgroundOpacity = opacity
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBackgroundOpacity(id, opacity, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBackgroundOpacity(_ id: UUID, _ opacity: Double, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].backgroundOpacity = opacity
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBackgroundOpacity(id, opacity, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicBorderColor(_ id: UUID, color: Color) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].borderColor = color
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBorderColor(id, color, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBorderColor(_ id: UUID, _ color: Color, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].borderColor = color
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBorderColor(id, color, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicBorderOpacity(_ id: UUID, opacity: Double) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].borderOpacity = opacity
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBorderOpacity(id, opacity, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBorderOpacity(_ id: UUID, _ opacity: Double, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].borderOpacity = opacity
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBorderOpacity(id, opacity, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicBorderWidth(_ id: UUID, width: Topic.BorderWidth) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].borderWidth = width
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBorderWidth(id, width, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBorderWidth(_ id: UUID, _ width: Topic.BorderWidth, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].borderWidth = width
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBorderWidth(id, width, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
 } 

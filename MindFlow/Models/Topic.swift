@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct Topic: Identifiable, Equatable {
     enum Shape {
@@ -22,6 +23,26 @@ struct Topic: Identifiable, Equatable {
         case rightArrow
     }
     
+    enum BorderWidth: Double, CaseIterable {
+        case none = 0
+        case extraThin = 0.5
+        case thin = 1
+        case medium = 2
+        case bold = 3
+        case extraBold = 4
+        
+        var displayName: String {
+            switch self {
+            case .none: return "None"
+            case .extraThin: return "Extra Thin"
+            case .thin: return "Thin"
+            case .medium: return "Medium"
+            case .bold: return "Bold"
+            case .extraBold: return "Extra Bold"
+            }
+        }
+    }
+    
     let id: UUID
     var name: String
     var position: CGPoint
@@ -31,6 +52,11 @@ struct Topic: Identifiable, Equatable {
     var isEditing: Bool
     var relations: [Topic]
     var shape: Shape
+    var backgroundColor: Color
+    var backgroundOpacity: Double
+    var borderColor: Color
+    var borderOpacity: Double
+    var borderWidth: BorderWidth
     
     init(
         id: UUID = UUID(),
@@ -41,7 +67,12 @@ struct Topic: Identifiable, Equatable {
         isSelected: Bool = false,
         isEditing: Bool = false,
         relations: [Topic] = [],
-        shape: Shape = .roundedRectangle
+        shape: Shape = .roundedRectangle,
+        backgroundColor: Color = .blue,
+        backgroundOpacity: Double = 0.1,
+        borderColor: Color = .blue,
+        borderOpacity: Double = 0.3,
+        borderWidth: BorderWidth = .medium
     ) {
         self.id = id
         self.name = name
@@ -52,6 +83,11 @@ struct Topic: Identifiable, Equatable {
         self.isEditing = isEditing
         self.relations = relations
         self.shape = shape
+        self.backgroundColor = backgroundColor
+        self.backgroundOpacity = backgroundOpacity
+        self.borderColor = borderColor
+        self.borderOpacity = borderOpacity
+        self.borderWidth = borderWidth
     }
     
     // Implement Equatable
@@ -64,7 +100,12 @@ struct Topic: Identifiable, Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.isEditing == rhs.isEditing &&
         lhs.relations == rhs.relations &&
-        lhs.shape == rhs.shape
+        lhs.shape == rhs.shape &&
+        lhs.backgroundColor == rhs.backgroundColor &&
+        lhs.backgroundOpacity == rhs.backgroundOpacity &&
+        lhs.borderColor == rhs.borderColor &&
+        lhs.borderOpacity == rhs.borderOpacity &&
+        lhs.borderWidth == rhs.borderWidth
     }
 }
 
