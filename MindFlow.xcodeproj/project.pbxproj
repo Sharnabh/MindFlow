@@ -6,8 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CED8ED182D83F85D00F37456 /* MindFlow.pages in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED172D83F85D00F37456 /* MindFlow.pages */; };
+		CED8ED1A2D83FA5600F37456 /* MindFlow.docx in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED192D83FA5600F37456 /* MindFlow.docx */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		CED8ED052D83F83C00F37456 /* MindFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MindFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CED8ED172D83F85D00F37456 /* MindFlow.pages */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.pages; sourceTree = "<group>"; };
+		CED8ED192D83FA5600F37456 /* MindFlow.docx */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.docx; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +41,8 @@
 			children = (
 				CED8ED072D83F83C00F37456 /* MindFlow */,
 				CED8ED062D83F83C00F37456 /* Products */,
+				CED8ED172D83F85D00F37456 /* MindFlow.pages */,
+				CED8ED192D83FA5600F37456 /* MindFlow.docx */,
 			);
 			sourceTree = "<group>";
 		};
@@ -109,6 +118,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CED8ED1A2D83FA5600F37456 /* MindFlow.docx in Resources */,
+				CED8ED182D83F85D00F37456 /* MindFlow.pages in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

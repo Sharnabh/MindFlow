@@ -1,0 +1,747 @@
+import SwiftUI
+import AppKit
+
+class CanvasViewModel: ObservableObject {
+    @Published var topics: [Topic] = []
+    @Published var selectedTopicId: UUID?
+    @Published var relationDragState: (fromId: UUID, toPosition: CGPoint)?
+    @Published var topicStyle: TopicStyle = .default
+    
+    private var mainTopicCount = 0
+    private let subtopicSpacing: CGFloat = 200 // Vertical spacing between topics at the same level
+    private let subtopicOffset: CGFloat = 150 // Reduced horizontal offset between levels
+    private let topicHeight: CGFloat = 60 // Height of a topic node
+    private let minTopicWidth: CGFloat = 150 // Minimum width of a topic
+    private let horizontalSpacing: CGFloat = 200 // Minimum horizontal spacing between main topics
+    private var isDragging = false
+    
+    // MARK: - Topic Management
+    
+    func addMainTopic(at position: CGPoint) {
+        mainTopicCount += 1
+        let topic = Topic.createMainTopic(at: position, count: mainTopicCount)
+        topics.append(topic)
+        selectedTopicId = topic.id
+    }
+    
+    func addSubtopic(to parentTopic: Topic) {
+        print("Adding subtopic to parent: \(parentTopic.id), isMainTopic: \(parentTopic.parentId == nil)")
+        if parentTopic.parentId == nil {
+            // For main topics, add directly to the topics array
+            guard let parentIndex = topics.firstIndex(where: { $0.id == parentTopic.id }) else { return }
+            addSubtopicToParent(parentTopic, at: parentIndex)
+        } else {
+            // For nested subtopics, recursively find the parent and add the subtopic
+            addNestedSubtopic(to: parentTopic)
+        }
+    }
+    
+    private func addSubtopicToParent(_ parentTopic: Topic, at parentIndex: Int) {
+        print("Adding direct subtopic to main topic at index: \(parentIndex)")
+        let subtopicCount = topics[parentIndex].subtopics.count
+        
+        // Position the new subtopic relative to its parent
+        let subtopicPosition = calculateNewSubtopicPosition(for: parentTopic, subtopicCount: subtopicCount)
+        
+        let subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+        topics[parentIndex].subtopics.append(subtopic)
+        
+        // Reposition all subtopics to ensure proper spacing
+        var updatedTopic = topics[parentIndex]
+        positionSubtree(in: &updatedTopic, parentX: updatedTopic.position.x, startY: updatedTopic.position.y)
+        topics[parentIndex] = updatedTopic
+        
+        selectedTopicId = subtopic.id
+    }
+    
+    private func addNestedSubtopic(to parentTopic: Topic) {
+        print("Adding nested subtopic to parent: \(parentTopic.id)")
+        for topicIndex in 0..<topics.count {
+            if var mainTopic = findAndUpdateTopicHierarchy(parentId: parentTopic.id, in: topics[topicIndex]) {
+                topics[topicIndex] = mainTopic
+                print("Updated main topic hierarchy at index: \(topicIndex)")
+                return
+            }
+        }
+        print("Failed to find parent topic in hierarchy")
+    }
+    
+    private func findAndUpdateTopicHierarchy(parentId: UUID, in topic: Topic) -> Topic? {
+        var updatedTopic = topic
+        
+        if topic.id == parentId {
+            print("Found target topic, adding new subtopic")
+            let subtopicCount = topic.subtopics.count
+            
+            // Position the new subtopic relative to its parent
+            let subtopicPosition = calculateNewSubtopicPosition(for: topic, subtopicCount: subtopicCount)
+            
+            let subtopic = topic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+            updatedTopic.subtopics.append(subtopic)
+            selectedTopicId = subtopic.id
+            return updatedTopic
+        }
+        
+        for i in 0..<topic.subtopics.count {
+            if let updatedSubtopic = findAndUpdateTopicHierarchy(parentId: parentId, in: topic.subtopics[i]) {
+                updatedTopic.subtopics[i] = updatedSubtopic
+                return updatedTopic
+            }
+        }
+        
+        return nil
+    }
+    
+    private func calculateNewSubtopicPosition(for parentTopic: Topic, subtopicCount: Int) -> CGPoint {
+        // Calculate the width of the parent topic
+        let parentWidth = max(minTopicWidth, CGFloat(parentTopic.name.count * 10))
+        
+        // Adjust base offset based on number of subtopics to prevent overlapping
+        let minRadius = subtopicOffset + parentWidth/2
+        let numSubtopics = subtopicCount + 1 // Including the new subtopic
+        let radius = max(minRadius, minRadius * (1.0 + CGFloat(numSubtopics) * 0.1))
+        
+        // Calculate angle for this subtopic
+        // Distribute subtopics within a 330-degree arc to prevent overlap
+        let totalAngle = 330.0 // Leave 30 degrees gap
+        let angleStep = totalAngle / Double(max(1, numSubtopics - 1))
+        let angleInDegrees = Double(subtopicCount) * angleStep
+        let angleInRadians = angleInDegrees * .pi / 180.0
+        
+        // Calculate position using polar coordinates
+        let x = parentTopic.position.x + radius * cos(angleInRadians)
+        let y = parentTopic.position.y + radius * sin(angleInRadians)
+        
+        return CGPoint(x: x, y: y)
+    }
+    
+    func updateTopicName(_ id: UUID, newName: String) {
+        // Update main topic name
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].name = newName
+            return
+        }
+        
+        // Update subtopic name recursively
+        for i in 0..<topics.count {
+            if updateSubtopicName(id, newName, in: &topics[i]) {
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicName(_ id: UUID, _ newName: String, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].name = newName
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicName(id, newName, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func selectTopic(id: UUID?) {
+        // If we're selecting a different topic, clear editing state first
+        if selectedTopicId != id {
+            setTopicEditing(selectedTopicId, isEditing: false)
+        }
+        selectedTopicId = id
+    }
+    
+    func setTopicEditing(_ id: UUID?, isEditing: Bool) {
+        // Clear previous editing state
+        for i in 0..<topics.count {
+            clearEditingStateRecursively(in: &topics[i])
+        }
+        
+        // Set new editing state
+        if let id = id {
+            // Update main topic
+            if let index = topics.firstIndex(where: { $0.id == id }) {
+                topics[index].isEditing = isEditing
+                return
+            }
+            
+            // Update subtopic
+            for i in 0..<topics.count {
+                if setSubtopicEditing(id, isEditing, in: &topics[i]) {
+                    break
+                }
+            }
+        }
+    }
+    
+    private func clearEditingStateRecursively(in topic: inout Topic) {
+        topic.isEditing = false
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            clearEditingStateRecursively(in: &subtopic)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    private func setSubtopicEditing(_ id: UUID, _ isEditing: Bool, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].isEditing = isEditing
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if setSubtopicEditing(id, isEditing, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // MARK: - Topic Positioning
+    
+    private func repositionAllTopics() {
+        guard !topics.isEmpty else { return }
+        
+        // Start with the first topic's position as reference
+        var currentY = topics[0].position.y
+        var maxX = topics[0].position.x
+        
+        // Position each main topic and its subtree
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            
+            // Calculate the width needed for this topic's subtree
+            let subtreeWidth = calculateSubtreeWidth(topic)
+            let subtreeHeight = calculateSubtreeHeight(topic)
+            
+            // Ensure horizontal spacing from previous topic
+            if i > 0 {
+                topic.position = CGPoint(
+                    x: maxX + horizontalSpacing + subtreeWidth/2,
+                    y: currentY + subtreeHeight/2
+                )
+            }
+            
+            // Position all subtopics in this topic's subtree
+            if !topic.subtopics.isEmpty {
+                positionSubtree(in: &topic, parentX: topic.position.x, startY: currentY)
+            }
+            
+            topics[i] = topic
+            
+            // Update maxX for next topic
+            maxX = topic.position.x + subtreeWidth/2
+            
+            // Move to the next vertical position with proper spacing
+            currentY += subtreeHeight + subtopicSpacing
+        }
+    }
+    
+    private func calculateSubtreeWidth(_ topic: Topic) -> CGFloat {
+        let topicWidth = max(minTopicWidth, CGFloat(topic.name.count * 10))
+        
+        if topic.subtopics.isEmpty {
+            return topicWidth
+        }
+        
+        // Calculate maximum width needed for subtopics
+        let subtopicsWidth = topic.subtopics.reduce(0) { maxWidth, subtopic in
+            max(maxWidth, calculateSubtreeWidth(subtopic))
+        }
+        
+        // Return the maximum of topic width and subtopics width plus offset
+        return max(topicWidth, subtopicsWidth) + subtopicOffset
+    }
+    
+    private func calculateSubtreeHeight(_ topic: Topic) -> CGFloat {
+        let topicHeight = self.topicHeight
+        
+        if topic.subtopics.isEmpty {
+            return topicHeight
+        }
+        
+        // Calculate total height needed for subtopics including spacing
+        var totalHeight: CGFloat = 0
+        for (index, subtopic) in topic.subtopics.enumerated() {
+            let subtreeHeight = calculateSubtreeHeight(subtopic)
+            totalHeight += subtreeHeight
+            
+            // Add spacing after each subtopic except the last one
+            if index < topic.subtopics.count - 1 {
+                totalHeight += subtopicSpacing
+            }
+        }
+        
+        return max(topicHeight, totalHeight)
+    }
+    
+    private func positionSubtree(in topic: inout Topic, parentX: CGFloat, startY: CGFloat) {
+        let parentWidth = max(minTopicWidth, CGFloat(topic.name.count * 10))
+        let numSubtopics = topic.subtopics.count
+        
+        // Adjust radius based on number of subtopics
+        let minRadius = subtopicOffset + parentWidth/2
+        let radius = max(minRadius, minRadius * (1.0 + CGFloat(numSubtopics) * 0.1))
+        
+        // Position each subtopic radially, starting from right side
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            
+            // Calculate angle for this subtopic using dynamic distribution
+            let totalAngle = 330.0 // Leave 30 degrees gap
+            let angleStep = totalAngle / Double(max(1, numSubtopics - 1))
+            let angleInDegrees = Double(i) * angleStep
+            let angleInRadians = angleInDegrees * .pi / 180.0
+            
+            // Position the subtopic using polar coordinates
+            subtopic.position = CGPoint(
+                x: topic.position.x + radius * cos(angleInRadians),
+                y: topic.position.y + radius * sin(angleInRadians)
+            )
+            
+            // Recursively position this subtopic's subtree
+            if !subtopic.subtopics.isEmpty {
+                positionSubtree(in: &subtopic, parentX: subtopic.position.x, startY: subtopic.position.y)
+            }
+            
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    // MARK: - Drag Handling
+    
+    func updateDraggedTopicPosition(_ topicId: UUID, _ newPosition: CGPoint) {
+        isDragging = true
+        
+        // First find and update the topic's position
+        if let index = topics.firstIndex(where: { $0.id == topicId }) {
+            // Update main topic
+            var topic = topics[index]
+            let offset = CGPoint(
+                x: newPosition.x - topic.position.x,
+                y: newPosition.y - topic.position.y
+            )
+            updatePositionsInTopic(topic: &topic, offset: offset)
+            topics[index] = topic
+            
+            // Update all relations immediately during drag
+            updateAllRelations()
+            
+            // Update preview line if this topic is part of the current relation drag
+            if let dragState = relationDragState {
+                if dragState.fromId == topicId {
+                    relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
+                }
+            }
+        } else {
+            // Update subtopic
+            for i in 0..<topics.count {
+                var mainTopic = topics[i]
+                if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &mainTopic) {
+                    topics[i] = mainTopic
+                    
+                    // Update all relations immediately during drag
+                    updateAllRelations()
+                    
+                    // Update preview line if this topic is part of the current relation drag
+                    if let dragState = relationDragState {
+                        if dragState.fromId == topicId {
+                            relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
+                        }
+                    }
+                    break
+                }
+            }
+        }
+    }
+    
+    private func updatePositionsInTopic(topic: inout Topic, offset: CGPoint) {
+        // Update the topic's position
+        topic.position = CGPoint(
+            x: topic.position.x + offset.x,
+            y: topic.position.y + offset.y
+        )
+        
+        // Update all subtopics recursively
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            updatePositionsInTopic(topic: &subtopic, offset: offset)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    private func updateSubtopicPositionRecursively(topicId: UUID, newPosition: CGPoint, in topic: inout Topic) -> Bool {
+        // Check direct subtopics
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == topicId {
+                let offset = CGPoint(
+                    x: newPosition.x - topic.subtopics[i].position.x,
+                    y: newPosition.y - topic.subtopics[i].position.y
+                )
+                updatePositionsInTopic(topic: &topic.subtopics[i], offset: offset)
+                return true
+            }
+            
+            // Check nested subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        return false
+    }
+    
+    private func updateAllRelations() {
+        // First get all topics with their current positions
+        var allTopics: [Topic] = []
+        
+        // Add main topics
+        allTopics.append(contentsOf: topics)
+        
+        // Add all subtopics
+        for topic in topics {
+            allTopics.append(contentsOf: getAllSubtopics(from: topic))
+        }
+        
+        // Update relations in main topics
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            updateRelationsInTopic(topic: &topic, allTopics: allTopics)
+            topics[i] = topic
+        }
+        
+        // Update relations in all subtopics
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            updateRelationsInSubtopics(topic: &topic, allTopics: allTopics)
+            topics[i] = topic
+        }
+    }
+    
+    private func getAllSubtopics(from topic: Topic) -> [Topic] {
+        var subtopics: [Topic] = []
+        for subtopic in topic.subtopics {
+            subtopics.append(subtopic)
+            subtopics.append(contentsOf: getAllSubtopics(from: subtopic))
+        }
+        return subtopics
+    }
+    
+    private func updateRelationsInTopic(topic: inout Topic, allTopics: [Topic]) {
+        // Update relations in the topic
+        for i in 0..<topic.relations.count {
+            let relationId = topic.relations[i].id
+            if let updatedTopic = allTopics.first(where: { $0.id == relationId }) {
+                topic.relations[i] = updatedTopic
+            }
+        }
+    }
+    
+    private func updateRelationsInSubtopics(topic: inout Topic, allTopics: [Topic]) {
+        // Update relations in each subtopic
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            updateRelationsInTopic(topic: &subtopic, allTopics: allTopics)
+            updateRelationsInSubtopics(topic: &subtopic, allTopics: allTopics)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    func handleDragEnd(_ topicId: UUID) {
+        isDragging = false
+        // Optionally add any cleanup or final positioning logic here
+    }
+    
+    // MARK: - Topic Finding
+    
+    private func findTopicAndPath(_ id: UUID, in topic: Topic) -> (Topic, [Int])? {
+        if topic.id == id {
+            return (topic, [])
+        }
+        
+        for (index, subtopic) in topic.subtopics.enumerated() {
+            if let (found, path) = findTopicAndPath(id, in: subtopic) {
+                return (found, [index] + path)
+            }
+        }
+        
+        return nil
+    }
+    
+    func getSelectedTopic() -> Topic? {
+        guard let id = selectedTopicId else { return nil }
+        return findTopic(id: id)
+    }
+    
+    // MARK: - Keyboard Events
+    
+    func handleKeyPress(_ event: NSEvent, at position: CGPoint) {
+        // Check if any topic is being edited
+        let isAnyTopicEditing = topics.contains { topic in
+            isTopicOrSubtopicsEditing(topic)
+        }
+        
+        // If a topic is being edited, don't handle any keyboard events
+        if isAnyTopicEditing {
+            return
+        }
+        
+        switch event.keyCode {
+        case 36: // Return key
+            addMainTopic(at: position)
+            
+        case 48: // Tab key
+            if let selectedTopic = getSelectedTopic() {
+                print("Selected topic for subtopic creation: \(selectedTopic.id)")
+                addSubtopic(to: selectedTopic)
+                NSApp.keyWindow?.makeFirstResponder(nil) // Remove focus from any UI element
+            }
+            
+        case 49: // Space bar
+            if let selectedId = selectedTopicId {
+                setTopicEditing(selectedId, isEditing: true)
+            }
+            
+        case 51: // Delete/Backspace key
+            if let selectedId = selectedTopicId {
+                deleteTopic(id: selectedId)
+                selectedTopicId = nil
+            }
+            
+        default:
+            break
+        }
+    }
+    
+    private func isTopicOrSubtopicsEditing(_ topic: Topic) -> Bool {
+        if topic.isEditing {
+            return true
+        }
+        return topic.subtopics.contains { isTopicOrSubtopicsEditing($0) }
+    }
+    
+    // Handle relationship drag
+    func handleRelationDragChanged(_ fromId: UUID, toPosition: CGPoint) {
+        // If the source topic is being dragged, use its current position
+        if let fromTopic = findTopic(id: fromId) {
+            relationDragState = (fromId: fromId, toPosition: toPosition)
+        }
+    }
+    
+    func handleRelationDragEnded(_ fromId: UUID) {
+        defer { relationDragState = nil }
+        
+        guard let toPosition = relationDragState?.toPosition,
+              let targetTopic = findTopicAt(position: toPosition) else { return }
+        
+        // Don't create relation to self or if already exists
+        guard fromId != targetTopic.id else { return }
+        
+        // Add relation to both topics
+        if var fromTopic = findTopic(id: fromId) {
+            // Check if relation already exists
+            if !fromTopic.relations.contains(where: { $0.id == targetTopic.id }) {
+                fromTopic.addRelation(targetTopic)
+                updateTopic(fromTopic)
+                
+                var updatedTargetTopic = targetTopic
+                updatedTargetTopic.addRelation(fromTopic)
+                updateTopic(updatedTargetTopic)
+                
+                // Update all relations to ensure proper positioning
+                updateAllRelations()
+            }
+        }
+    }
+    
+    private func updateTopic(_ updatedTopic: Topic) {
+        // Update in main topics
+        if let index = topics.firstIndex(where: { $0.id == updatedTopic.id }) {
+            topics[index] = updatedTopic
+            return
+        }
+        
+        // Update in subtopics
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateTopicInHierarchy(updatedTopic, in: &topic) {
+                topics[i] = topic
+            }
+        }
+    }
+    
+    private func updateTopicInHierarchy(_ updatedTopic: Topic, in topic: inout Topic) -> Bool {
+        // Check direct subtopics
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == updatedTopic.id {
+                topic.subtopics[i] = updatedTopic
+                return true
+            }
+            
+            // Check nested subtopics
+            var subtopic = topic.subtopics[i]
+            if updateTopicInHierarchy(updatedTopic, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        return false
+    }
+    
+    func findTopic(id: UUID) -> Topic? {
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == id }) {
+            return topic
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let found = findTopicInHierarchy(id: id, in: topic) {
+                return found
+            }
+        }
+        return nil
+    }
+    
+    private func findTopicInHierarchy(id: UUID, in topic: Topic) -> Topic? {
+        if topic.id == id {
+            return topic
+        }
+        
+        for subtopic in topic.subtopics {
+            if let found = findTopicInHierarchy(id: id, in: subtopic) {
+                return found
+            }
+        }
+        return nil
+    }
+    
+    private func findTopicAt(position: CGPoint) -> Topic? {
+        // Check main topics
+        for topic in topics {
+            if getTopicBox(topic: topic).contains(position) {
+                return topic
+            }
+            
+            if let found = findTopicAtPositionInHierarchy(position: position, in: topic) {
+                return found
+            }
+        }
+        return nil
+    }
+    
+    private func findTopicAtPositionInHierarchy(position: CGPoint, in topic: Topic) -> Topic? {
+        for subtopic in topic.subtopics {
+            if getTopicBox(topic: subtopic).contains(position) {
+                return subtopic
+            }
+            
+            if let found = findTopicAtPositionInHierarchy(position: position, in: subtopic) {
+                return found
+            }
+        }
+        return nil
+    }
+    
+    private func getTopicBox(topic: Topic) -> CGRect {
+        let width = max(120, CGFloat(topic.name.count * 10))
+        let height: CGFloat = 40
+        return CGRect(
+            x: topic.position.x - width/2,
+            y: topic.position.y - height/2,
+            width: width,
+            height: height
+        )
+    }
+    
+    // MARK: - Topic Deletion
+    
+    private func deleteTopic(id: UUID) {
+        // First try to delete from main topics
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            // Remove relations to this topic from all other topics
+            removeRelationsToTopic(id)
+            // Remove the topic and all its subtopics
+            topics.remove(at: index)
+            return
+        }
+        
+        // If not found in main topics, try to delete from subtopics
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if deleteSubtopic(id: id, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func deleteSubtopic(id: UUID, in topic: inout Topic) -> Bool {
+        // Check direct subtopics
+        if let index = topic.subtopics.firstIndex(where: { $0.id == id }) {
+            // Remove relations to this subtopic and its children from all topics
+            removeRelationsToTopic(id)
+            removeRelationsToSubtopics(topic.subtopics[index])
+            // Remove the subtopic
+            topic.subtopics.remove(at: index)
+            return true
+        }
+        
+        // Check nested subtopics
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            if deleteSubtopic(id: id, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    private func removeRelationsToTopic(_ id: UUID) {
+        // Remove relations from main topics
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            topic.relations.removeAll { $0.id == id }
+            topics[i] = topic
+        }
+        
+        // Remove relations from subtopics
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            removeRelationsToTopicInSubtopics(id, in: &topic)
+            topics[i] = topic
+        }
+    }
+    
+    private func removeRelationsToTopicInSubtopics(_ id: UUID, in topic: inout Topic) {
+        // Remove relations in current topic's subtopics
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            subtopic.relations.removeAll { $0.id == id }
+            removeRelationsToTopicInSubtopics(id, in: &subtopic)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    private func removeRelationsToSubtopics(_ topic: Topic) {
+        // Remove relations to all subtopics recursively
+        for subtopic in topic.subtopics {
+            removeRelationsToTopic(subtopic.id)
+            removeRelationsToSubtopics(subtopic)
+        }
+    }
+} 
