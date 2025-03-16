@@ -112,7 +112,16 @@ private struct TopicContent: View {
         let size = calculateSize()
         return TextField("", text: $editingName)
             .textFieldStyle(.plain)
-            .foregroundColor(.black)
+            .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
+            .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
+            .bold(topic.textStyles.contains(.bold))
+            .italic(topic.textStyles.contains(.italic))
+            .strikethrough(topic.textStyles.contains(.strikethrough))
+            .underline(topic.textStyles.contains(.underline))
+            .textCase(topic.textCase == .uppercase ? .uppercase :
+                     topic.textCase == .lowercase ? .lowercase :
+                     nil)
+            .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .frame(minWidth: size.width, maxWidth: size.width)
@@ -137,7 +146,6 @@ private struct TopicContent: View {
                 isFocused = false
                 onEditingChange(false)
             }
-            .multilineTextAlignment(.center)
             .onKeyPress(.tab) {
                 isFocused = true
                 return .handled
@@ -147,8 +155,17 @@ private struct TopicContent: View {
     
     private func createTextDisplay() -> some View {
         let size = calculateSize()
-        return Text(topic.name)
-            .foregroundColor(.black)
+        return Text(topic.textCase == .uppercase ? topic.name.uppercased() :
+                   topic.textCase == .lowercase ? topic.name.lowercased() :
+                   topic.textCase == .capitalize ? topic.name.capitalized :
+                   topic.name)
+            .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
+            .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
+            .bold(topic.textStyles.contains(.bold))
+            .italic(topic.textStyles.contains(.italic))
+            .strikethrough(topic.textStyles.contains(.strikethrough))
+            .underline(topic.textStyles.contains(.underline))
+            .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .frame(width: size.width)
@@ -570,7 +587,7 @@ private struct Arrow: Shape {
 
 // Helper function to get a topic's bounding box
 func getTopicBox(topic: Topic) -> CGRect {
-    let width = max(120, CGFloat(topic.name.count * 10))
+    let width = max(120, CGFloat(topic.name.count * 10)) + 32 // Add padding for shape
     let height: CGFloat = 40 // Total height including vertical padding
     return CGRect(
         x: topic.position.x - width/2,
@@ -635,51 +652,80 @@ func calculateTopicIntersection(from: Topic, to: Topic) -> (start: CGPoint, end:
     let fromCenter = from.position
     let toCenter = to.position
     
-    // Function to find intersection with a box
-    func findBoxIntersection(box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
-        let dx = towards.x - from.x
-        let dy = towards.y - from.y
+    // Calculate angle between centers
+    let angle = atan2(toCenter.y - fromCenter.y, toCenter.x - fromCenter.x)
+    
+    // Function to find intersection with a box based on shape
+    func findShapeIntersection(topic: Topic, box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
+        let halfWidth = box.width / 2
+        let halfHeight = box.height / 2
+        let center = topic.position
         
-        // Handle zero direction vector
-        if abs(dx) < 0.001 && abs(dy) < 0.001 {
-            return from
-        }
-        
-        // Calculate intersections with all edges
-        var intersections: [CGPoint] = []
-        
-        // Check left and right edges
-        for x in [box.minX, box.maxX] {
-            if abs(dx) > 0.001 {  // Avoid division by zero
-                let t = (x - from.x) / dx
-                let y = from.y + t * dy
-                if y >= box.minY && y <= box.maxY {
-                    intersections.append(CGPoint(x: x, y: y))
+        switch topic.shape {
+        case .circle:
+            // For circle/capsule, use radius-based intersection
+            let radius = min(halfWidth, halfHeight)
+            return CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            
+        case .diamond:
+            // For diamond, calculate intersection with edges
+            let dx = abs(cos(angle))
+            let dy = abs(sin(angle))
+            let scale = min(halfWidth / dx, halfHeight / dy)
+            return CGPoint(
+                x: center.x + cos(angle) * scale,
+                y: center.y + sin(angle) * scale
+            )
+            
+        default:
+            // For rectangular shapes, use box intersection
+            let dx = towards.x - from.x
+            let dy = towards.y - from.y
+            
+            // Handle zero direction vector
+            if abs(dx) < 0.001 && abs(dy) < 0.001 {
+                return from
+            }
+            
+            // Calculate intersections with all edges
+            var intersections: [CGPoint] = []
+            
+            // Check left and right edges
+            for x in [box.minX, box.maxX] {
+                if abs(dx) > 0.001 {  // Avoid division by zero
+                    let t = (x - from.x) / dx
+                    let y = from.y + t * dy
+                    if y >= box.minY && y <= box.maxY {
+                        intersections.append(CGPoint(x: x, y: y))
+                    }
                 }
             }
-        }
-        
-        // Check top and bottom edges
-        for y in [box.minY, box.maxY] {
-            if abs(dy) > 0.001 {  // Avoid division by zero
-                let t = (y - from.y) / dy
-                let x = from.x + t * dx
-                if x >= box.minX && x <= box.maxX {
-                    intersections.append(CGPoint(x: x, y: y))
+            
+            // Check top and bottom edges
+            for y in [box.minY, box.maxY] {
+                if abs(dy) > 0.001 {  // Avoid division by zero
+                    let t = (y - from.y) / dy
+                    let x = from.x + t * dx
+                    if x >= box.minX && x <= box.maxX {
+                        intersections.append(CGPoint(x: x, y: y))
+                    }
                 }
             }
+            
+            // Find the intersection point closest to the target point
+            return intersections.min(by: { p1, p2 in
+                let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
+                let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
+                return d1 < d2
+            }) ?? from
         }
-        
-        // Find the intersection point closest to the target point
-        return intersections.min(by: { p1, p2 in
-            let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
-            let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
-            return d1 < d2
-        }) ?? from
     }
     
-    let fromIntersect = findBoxIntersection(box: fromBox, from: fromCenter, towards: toCenter)
-    let toIntersect = findBoxIntersection(box: toBox, from: toCenter, towards: fromCenter)
+    let fromIntersect = findShapeIntersection(topic: from, box: fromBox, from: fromCenter, towards: toCenter)
+    let toIntersect = findShapeIntersection(topic: to, box: toBox, from: toCenter, towards: fromCenter)
     
     return (fromIntersect, toIntersect)
 }
@@ -692,59 +738,88 @@ func calculateIntersection(from topic: Topic, toPosition: CGPoint, topics: [Topi
     let fromCenter = topic.position
     let toCenter = toPosition
     
-    // Function to find intersection with a box
-    func findBoxIntersection(box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
-        let dx = towards.x - from.x
-        let dy = towards.y - from.y
+    // Calculate angle between centers
+    let angle = atan2(toCenter.y - fromCenter.y, toCenter.x - fromCenter.x)
+    
+    // Function to find intersection with a box based on shape
+    func findShapeIntersection(topic: Topic, box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
+        let halfWidth = box.width / 2
+        let halfHeight = box.height / 2
+        let center = topic.position
         
-        // Handle zero direction vector
-        if abs(dx) < 0.001 && abs(dy) < 0.001 {
-            return from
-        }
-        
-        // Calculate intersections with all edges
-        var intersections: [CGPoint] = []
-        
-        // Check left and right edges
-        for x in [box.minX, box.maxX] {
-            if abs(dx) > 0.001 {  // Avoid division by zero
-                let t = (x - from.x) / dx
-                let y = from.y + t * dy
-                if y >= box.minY && y <= box.maxY {
-                    intersections.append(CGPoint(x: x, y: y))
+        switch topic.shape {
+        case .circle:
+            // For circle/capsule, use radius-based intersection
+            let radius = min(halfWidth, halfHeight)
+            return CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            
+        case .diamond:
+            // For diamond, calculate intersection with edges
+            let dx = abs(cos(angle))
+            let dy = abs(sin(angle))
+            let scale = min(halfWidth / dx, halfHeight / dy)
+            return CGPoint(
+                x: center.x + cos(angle) * scale,
+                y: center.y + sin(angle) * scale
+            )
+            
+        default:
+            // For rectangular shapes, use box intersection
+            let dx = towards.x - from.x
+            let dy = towards.y - from.y
+            
+            // Handle zero direction vector
+            if abs(dx) < 0.001 && abs(dy) < 0.001 {
+                return from
+            }
+            
+            // Calculate intersections with all edges
+            var intersections: [CGPoint] = []
+            
+            // Check left and right edges
+            for x in [box.minX, box.maxX] {
+                if abs(dx) > 0.001 {  // Avoid division by zero
+                    let t = (x - from.x) / dx
+                    let y = from.y + t * dy
+                    if y >= box.minY && y <= box.maxY {
+                        intersections.append(CGPoint(x: x, y: y))
+                    }
                 }
             }
-        }
-        
-        // Check top and bottom edges
-        for y in [box.minY, box.maxY] {
-            if abs(dy) > 0.001 {  // Avoid division by zero
-                let t = (y - from.y) / dy
-                let x = from.x + t * dx
-                if x >= box.minX && x <= box.maxX {
-                    intersections.append(CGPoint(x: x, y: y))
+            
+            // Check top and bottom edges
+            for y in [box.minY, box.maxY] {
+                if abs(dy) > 0.001 {  // Avoid division by zero
+                    let t = (y - from.y) / dy
+                    let x = from.x + t * dx
+                    if x >= box.minX && x <= box.maxX {
+                        intersections.append(CGPoint(x: x, y: y))
+                    }
                 }
             }
+            
+            // Find the intersection point closest to the target point
+            return intersections.min(by: { p1, p2 in
+                let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
+                let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
+                return d1 < d2
+            }) ?? from
         }
-        
-        // Find the intersection point closest to the target point
-        return intersections.min(by: { p1, p2 in
-            let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
-            let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
-            return d1 < d2
-        }) ?? from
     }
     
     // Find target topic at position
     if let targetTopic = findTopicAt(position: toPosition, in: topics) {
         let toBox = getTopicBox(topic: targetTopic)
-        let fromIntersect = findBoxIntersection(box: fromBox, from: fromCenter, towards: targetTopic.position)
-        let toIntersect = findBoxIntersection(box: toBox, from: targetTopic.position, towards: fromCenter)
+        let fromIntersect = findShapeIntersection(topic: topic, box: fromBox, from: fromCenter, towards: targetTopic.position)
+        let toIntersect = findShapeIntersection(topic: targetTopic, box: toBox, from: targetTopic.position, towards: fromCenter)
         return (fromIntersect, toIntersect)
     }
     
     // If no target topic found, just connect to the cursor position
-    let fromIntersect = findBoxIntersection(box: fromBox, from: fromCenter, towards: toCenter)
+    let fromIntersect = findShapeIntersection(topic: topic, box: fromBox, from: fromCenter, towards: toCenter)
     return (fromIntersect, toCenter)
 }
 
@@ -794,7 +869,7 @@ private struct ConnectionLinesView: View {
             Group {
                 // Draw lines to immediate subtopics
                 ForEach(topic.subtopics) { subtopic in
-                    ConnectionLine(from: topic, to: subtopic, color: .blue)
+                    ConnectionLine(from: topic, to: subtopic, color: subtopic.borderColor)
                 }
                 
                 // Draw relationship lines (only draw if we're the source topic)
@@ -825,7 +900,7 @@ private struct ConnectionLine: View {
             path.move(to: points.start)
             path.addLine(to: points.end)
         }
-        .stroke(color.opacity(0.3), lineWidth: 1)
+        .stroke(color.opacity(1.0), lineWidth: 1)
     }
 }
 

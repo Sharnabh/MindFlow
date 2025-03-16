@@ -58,6 +58,16 @@ struct Topic: Identifiable, Equatable {
     var borderOpacity: Double
     var borderWidth: BorderWidth
     
+    // Text formatting properties
+    var font: String = "System"
+    var fontSize: CGFloat = 16
+    var fontWeight: Font.Weight = .medium
+    var foregroundColor: Color = .white
+    var foregroundOpacity: Double = 1.0
+    var textStyles: Set<TextStyle> = []
+    var textCase: TextCase = .none
+    var textAlignment: TextAlignment = .center
+    
     init(
         id: UUID = UUID(),
         name: String,
@@ -69,10 +79,18 @@ struct Topic: Identifiable, Equatable {
         relations: [Topic] = [],
         shape: Shape = .roundedRectangle,
         backgroundColor: Color = .blue,
-        backgroundOpacity: Double = 0.1,
+        backgroundOpacity: Double = 1.0,
         borderColor: Color = .blue,
-        borderOpacity: Double = 0.3,
-        borderWidth: BorderWidth = .medium
+        borderOpacity: Double = 1.0,
+        borderWidth: BorderWidth = .medium,
+        font: String = "System",
+        fontSize: CGFloat = 16,
+        fontWeight: Font.Weight = .medium,
+        foregroundColor: Color = .white,
+        foregroundOpacity: Double = 1.0,
+        textStyles: Set<TextStyle> = [],
+        textCase: TextCase = .none,
+        textAlignment: TextAlignment = .center
     ) {
         self.id = id
         self.name = name
@@ -88,6 +106,14 @@ struct Topic: Identifiable, Equatable {
         self.borderColor = borderColor
         self.borderOpacity = borderOpacity
         self.borderWidth = borderWidth
+        self.font = font
+        self.fontSize = fontSize
+        self.fontWeight = fontWeight
+        self.foregroundColor = foregroundColor
+        self.foregroundOpacity = foregroundOpacity
+        self.textStyles = textStyles
+        self.textCase = textCase
+        self.textAlignment = textAlignment
     }
     
     // Implement Equatable
@@ -105,7 +131,15 @@ struct Topic: Identifiable, Equatable {
         lhs.backgroundOpacity == rhs.backgroundOpacity &&
         lhs.borderColor == rhs.borderColor &&
         lhs.borderOpacity == rhs.borderOpacity &&
-        lhs.borderWidth == rhs.borderWidth
+        lhs.borderWidth == rhs.borderWidth &&
+        lhs.font == rhs.font &&
+        lhs.fontSize == rhs.fontSize &&
+        lhs.fontWeight == rhs.fontWeight &&
+        lhs.foregroundColor == rhs.foregroundColor &&
+        lhs.foregroundOpacity == rhs.foregroundOpacity &&
+        lhs.textStyles == rhs.textStyles &&
+        lhs.textCase == rhs.textCase &&
+        lhs.textAlignment == rhs.textAlignment
     }
 }
 
@@ -121,7 +155,11 @@ extension Topic {
         Topic(
             name: "Subtopic \(count)",
             position: position,
-            parentId: self.id
+            parentId: self.id,
+            backgroundColor: self.backgroundColor,
+            backgroundOpacity: self.backgroundOpacity,
+            borderColor: self.borderColor,
+            borderOpacity: self.borderOpacity
         )
     }
     

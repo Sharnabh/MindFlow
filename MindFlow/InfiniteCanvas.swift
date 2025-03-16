@@ -12,6 +12,7 @@ struct InfiniteCanvas: View {
     @State private var isSidebarOpen: Bool = false // Track sidebar state
     @State private var isShowingColorPicker: Bool = false // Track color picker state
     @State private var isShowingBorderColorPicker: Bool = false // Track border color picker state
+    @State private var isShowingForegroundColorPicker: Bool = false // Track foreground color picker state
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -220,28 +221,28 @@ struct InfiniteCanvas: View {
                 
                 // Sidebar
                 if isSidebarOpen {
-                    HStack(spacing: 0) {
-                        Spacer()
-                        VStack(spacing: 0) {
-                            // Sidebar content
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(height: topBarHeight)
+                        
+                        HStack(spacing: 0) {
+                            Spacer()
                             Rectangle()
                                 .fill(Color(.windowBackgroundColor))
                                 .frame(width: sidebarWidth)
                                 .overlay(
                                     VStack(spacing: 16) {
                                         // Sidebar header
-                                        Rectangle()
-                                            .fill(Color(.windowBackgroundColor))
-                                            .frame(height: topBarHeight)
-                                            .overlay(
-                                                Text("Style")
-                                                    .foregroundColor(.primary)
-                                                    .font(.headline)
-                                                    .padding(.leading)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                            )
+                                        Text("Style")
+                                            .foregroundColor(.primary)
+                                            .font(.headline)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.top, 12)
+                                            .padding(.horizontal)
                                         
                                         Divider()
+                                            .padding(.horizontal)
                                         
                                         // Shape selector
                                         if let selectedTopic = viewModel.getSelectedTopic() {
@@ -376,9 +377,201 @@ struct InfiniteCanvas: View {
                                                 .padding()
                                         }
                                         
+                                        // Text section
+                                        VStack(spacing: 16) {
+                                            // Section header
+                                            Text("Text")
+                                                .foregroundColor(.primary)
+                                                .font(.headline)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.top, 12)
+                                                .padding(.horizontal)
+                                            
+                                            Divider()
+                                                .padding(.horizontal)
+                                            
+                                            // Row 1: Font style and size
+                                            HStack(spacing: 8) {
+                                                Menu {
+                                                    ForEach(["Apple SD Gothic", "System", "Helvetica", "Arial", "Times New Roman"], id: \.self) { font in
+                                                        Button(action: {
+                                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                viewModel.updateTopicFont(selectedTopic.id, font: font)
+                                                            }
+                                                        }) {
+                                                            Text(font)
+                                                        }
+                                                    }
+                                                } label: {
+                                                    HStack {
+                                                        Text(viewModel.getSelectedTopic()?.font ?? "System")
+                                                            .lineLimit(1)
+                                                            .truncationMode(.tail)
+                                                        Spacer()
+                                                        Image(systemName: "chevron.down")
+                                                            .font(.system(size: 10))
+                                                    }
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 6)
+                                                    .frame(width: 120)
+                                                    .background(Color(.darkGray))
+                                                    .cornerRadius(6)
+                                                }
+                                                
+                                                Menu {
+                                                    ForEach([8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64], id: \.self) { size in
+                                                        Button(action: {
+                                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                viewModel.updateTopicFontSize(selectedTopic.id, size: CGFloat(size))
+                                                            }
+                                                        }) {
+                                                            Text("\(size)")
+                                                        }
+                                                    }
+                                                } label: {
+                                                    HStack {
+                                                        Text("\(Int(viewModel.getSelectedTopic()?.fontSize ?? 16))")
+                                                        Spacer()
+                                                        Image(systemName: "chevron.down")
+                                                            .font(.system(size: 10))
+                                                    }
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 6)
+                                                    .frame(width: 60)
+                                                    .background(Color(.darkGray))
+                                                    .cornerRadius(6)
+                                                }
+                                            }
+                                            .padding(.horizontal)
+                                            
+                                            // Row 2: Font weight and foreground color
+                                            HStack(spacing: 8) {
+                                                Menu {
+                                                    ForEach(Font.Weight.allCases, id: \.self) { weight in
+                                                        Button(action: {
+                                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                viewModel.updateTopicFontWeight(selectedTopic.id, weight: weight)
+                                                            }
+                                                        }) {
+                                                            Text(weight.displayName)
+                                                        }
+                                                    }
+                                                } label: {
+                                                    HStack {
+                                                        Text(viewModel.getSelectedTopic()?.fontWeight.displayName ?? "Medium")
+                                                        Spacer()
+                                                        Image(systemName: "chevron.down")
+                                                            .font(.system(size: 10))
+                                                    }
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 6)
+                                                    .frame(width: 120)
+                                                    .background(Color(.darkGray))
+                                                    .cornerRadius(6)
+                                                }
+                                                
+                                                Button(action: {
+                                                    isShowingForegroundColorPicker.toggle()
+                                                }) {
+                                                    RoundedRectangle(cornerRadius: 2)
+                                                        .fill(viewModel.getSelectedTopic()?.foregroundColor ?? .white)
+                                                        .frame(width: 50, height: 28)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                        )
+                                                }
+                                                .buttonStyle(PlainButtonStyle())
+                                                .popover(isPresented: $isShowingForegroundColorPicker, arrowEdge: .bottom) {
+                                                    if let selectedTopic = viewModel.getSelectedTopic() {
+                                                        ColorPickerView(
+                                                            selectedColor: Binding(
+                                                                get: { selectedTopic.foregroundColor },
+                                                                set: { newColor in
+                                                                    viewModel.updateTopicForegroundColor(selectedTopic.id, color: newColor)
+                                                                }
+                                                            ),
+                                                            opacity: Binding(
+                                                                get: { selectedTopic.foregroundOpacity },
+                                                                set: { newOpacity in
+                                                                    viewModel.updateTopicForegroundOpacity(selectedTopic.id, opacity: newOpacity)
+                                                                }
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            .padding(.horizontal)
+                                            
+                                            // Row 3: Text style controls
+                                            HStack(spacing: 0) {
+                                                ForEach(TextStyle.allCases, id: \.self) { style in
+                                                    Button(action: {
+                                                        if let selectedTopic = viewModel.getSelectedTopic() {
+                                                            let isEnabled = !(selectedTopic.textStyles.contains(style))
+                                                            viewModel.updateTopicTextStyle(selectedTopic.id, style: style, isEnabled: isEnabled)
+                                                        }
+                                                    }) {
+                                                        Image(systemName: style.iconName)
+                                                            .foregroundColor(.white)
+                                                            .frame(maxWidth: .infinity, minHeight: 28)
+                                                            .background(viewModel.getSelectedTopic()?.textStyles.contains(style) ?? false ? Color.gray.opacity(0.3) : Color.clear)
+                                                            .contentShape(Rectangle())
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    
+                                                    if style != .underline {
+                                                        Divider()
+                                                            .frame(height: 16)
+                                                            .background(Color.black.opacity(0.2))
+                                                    }
+                                                }
+                                                
+                                                Divider()
+                                                    .frame(height: 16)
+                                                    .background(Color.black.opacity(0.2))
+                                                
+                                                Button(action: {
+                                                    if let selectedTopic = viewModel.getSelectedTopic() {
+                                                        let nextCase = TextCase.allCases.first { $0 != selectedTopic.textCase } ?? .none
+                                                        viewModel.updateTopicTextCase(selectedTopic.id, textCase: nextCase)
+                                                    }
+                                                }) {
+                                                    Image(systemName: "textformat")
+                                                        .foregroundColor(.white)
+                                                        .frame(maxWidth: .infinity, minHeight: 28)
+                                                        .contentShape(Rectangle())
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                            .padding(.vertical, 2)
+                                            .padding(.horizontal, 4)
+                                            .background(Color(.darkGray))
+                                            .cornerRadius(6)
+                                            .padding(.horizontal)
+                                            
+                                            // Row 4: Text alignment
+                                            Picker("", selection: Binding(
+                                                get: { viewModel.getSelectedTopic()?.textAlignment ?? .center },
+                                                set: { alignment in
+                                                    if let selectedTopic = viewModel.getSelectedTopic() {
+                                                        viewModel.updateTopicTextAlignment(selectedTopic.id, alignment: alignment)
+                                                    }
+                                                }
+                                            )) {
+                                                ForEach(TextAlignment.allCases, id: \.self) { alignment in
+                                                    Image(systemName: alignment.iconName)
+                                                        .tag(alignment)
+                                                }
+                                            }
+                                            .pickerStyle(.segmented)
+                                            .padding(.horizontal)
+                                        }
+                                        
                                         Spacer()
                                     }
                                 )
+                                .shadow(color: .black.opacity(0.1), radius: 2, x: -1, y: 0)
                         }
                     }
                 }
@@ -477,17 +670,17 @@ struct MinimapView: View {
                                 path.move(to: startPoint)
                                 path.addLine(to: endPoint)
                             },
-                            with: .color(.blue.opacity(0.3)),
+                            with: .color(topic.borderColor.opacity(1.0)),
                             lineWidth: 1
                         )
                         
                         // Recursively draw subtopics
-                        drawTopic(subtopic, color: .blue.opacity(0.6))
+                        drawTopic(subtopic, color: topic.borderColor.opacity(1.0))
                     }
                 }
                 
                 // Draw main topic
-                drawTopic(topic, color: .blue)
+                drawTopic(topic, color: topic.borderColor)
             }
             
             // Draw visible area rectangle
@@ -989,17 +1182,26 @@ private struct TopicContent: View {
         let width = calculateWidth()
         return TextField("", text: $editingName)
             .textFieldStyle(.plain)
-            .foregroundColor(.black)
+            .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
+            .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
+            .bold(topic.textStyles.contains(.bold))
+            .italic(topic.textStyles.contains(.italic))
+            .strikethrough(topic.textStyles.contains(.strikethrough))
+            .underline(topic.textStyles.contains(.underline))
+            .textCase(topic.textCase == .uppercase ? .uppercase :
+                     topic.textCase == .lowercase ? .lowercase :
+                     nil)
+            .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .frame(minWidth: width, maxWidth: width)
             .background(
                 createBackground()
-                    .frame(width: width + 32, height: 40) // Add padding to shape
+                    .frame(width: width + 32, height: 40)
             )
             .overlay(
                 createBorder()
-                    .frame(width: width + 32, height: 40) // Match shape size
+                    .frame(width: width + 32, height: 40)
             )
             .focused($isFocused)
             .onChange(of: editingName) { newValue in
@@ -1014,7 +1216,6 @@ private struct TopicContent: View {
                 isFocused = false
                 onEditingChange(false)
             }
-            .multilineTextAlignment(.center)
             .onKeyPress(.tab) {
                 isFocused = true
                 return .handled
@@ -1023,19 +1224,28 @@ private struct TopicContent: View {
     }
     
     private func createTextDisplay() -> some View {
-        let width = calculateWidth()
-        return Text(topic.name)
-            .foregroundColor(.black)
+        let size = calculateWidth()
+        return Text(topic.textCase == .uppercase ? topic.name.uppercased() :
+                   topic.textCase == .lowercase ? topic.name.lowercased() :
+                   topic.textCase == .capitalize ? topic.name.capitalized :
+                   topic.name)
+            .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
+            .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
+            .bold(topic.textStyles.contains(.bold))
+            .italic(topic.textStyles.contains(.italic))
+            .strikethrough(topic.textStyles.contains(.strikethrough))
+            .underline(topic.textStyles.contains(.underline))
+            .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .frame(width: width)
+            .frame(width: size)
             .background(
                 createBackground()
-                    .frame(width: width + 32, height: 40) // Add padding to shape
+                    .frame(width: size + 32, height: 40)
             )
             .overlay(
                 createBorder()
-                    .frame(width: width + 32, height: 40) // Match shape size
+                    .frame(width: size + 32, height: 40)
             )
     }
     
@@ -1278,6 +1488,80 @@ extension Color {
             Int(g * 255),
             Int(b * 255)
         )
+    }
+}
+
+// Add these enums before the ColorPickerView struct
+enum TextStyle: CaseIterable {
+    case bold
+    case italic
+    case strikethrough
+    case underline
+    
+    var iconName: String {
+        switch self {
+        case .bold: return "bold"
+        case .italic: return "italic"
+        case .strikethrough: return "strikethrough"
+        case .underline: return "underline"
+        }
+    }
+}
+
+enum TextCase: CaseIterable {
+    case none
+    case uppercase
+    case lowercase
+    case capitalize
+    
+    var displayName: String {
+        switch self {
+        case .none: return "Default"
+        case .uppercase: return "UPPERCASE"
+        case .lowercase: return "lowercase"
+        case .capitalize: return "Capitalize"
+        }
+    }
+}
+
+enum TextAlignment: CaseIterable {
+    case left
+    case center
+    case right
+    
+    var iconName: String {
+        switch self {
+        case .left: return "text.alignleft"
+        case .center: return "text.aligncenter"
+        case .right: return "text.alignright"
+        }
+    }
+}
+
+extension Font.Weight: CaseIterable {
+    public static var allCases: [Font.Weight] = [
+        .thin,
+        .ultraLight,
+        .light,
+        .regular,
+        .medium,
+        .semibold,
+        .bold,
+        .heavy
+    ]
+    
+    var displayName: String {
+        switch self {
+        case .thin: return "Thin"
+        case .ultraLight: return "Extra Light"
+        case .light: return "Light"
+        case .regular: return "Regular"
+        case .medium: return "Medium"
+        case .semibold: return "Semibold"
+        case .bold: return "Bold"
+        case .heavy: return "Extra Bold"
+        default: return "Regular"
+        }
     }
 }
 
