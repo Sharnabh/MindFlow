@@ -6,6 +6,11 @@ class CanvasViewModel: ObservableObject {
     @Published var selectedTopicId: UUID?
     @Published var relationDragState: (fromId: UUID, toPosition: CGPoint)?
     
+    // History for undo/redo
+    private var history: [[Topic]] = []
+    private var currentHistoryIndex: Int = -1
+    private let maxHistorySize: Int = 50
+    
     private var mainTopicCount = 0
     private let subtopicSpacing: CGFloat = 200 // Vertical spacing between topics at the same level
     private let subtopicOffset: CGFloat = 150 // Reduced horizontal offset between levels
@@ -14,9 +19,16 @@ class CanvasViewModel: ObservableObject {
     private let horizontalSpacing: CGFloat = 200 // Minimum horizontal spacing between main topics
     private var isDragging = false
     
+    init() {
+        // Initialize history with current empty state
+        history.append([])
+        currentHistoryIndex = 0
+    }
+    
     // MARK: - Topic Management
     
     func addMainTopic(at position: CGPoint) {
+        saveState()
         mainTopicCount += 1
         let topic = Topic.createMainTopic(at: position, count: mainTopicCount)
         topics.append(topic)
@@ -24,6 +36,7 @@ class CanvasViewModel: ObservableObject {
     }
     
     func addSubtopic(to parentTopic: Topic) {
+        saveState()
         print("Adding subtopic to parent: \(parentTopic.id), isMainTopic: \(parentTopic.parentId == nil)")
         if parentTopic.parentId == nil {
             // For main topics, add directly to the topics array
@@ -92,29 +105,83 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func calculateNewSubtopicPosition(for parentTopic: Topic, subtopicCount: Int) -> CGPoint {
-        // Calculate the width of the parent topic
-        let parentWidth = max(minTopicWidth, CGFloat(parentTopic.name.count * 10))
+        // Constants for spacing
+        let horizontalSpacing: CGFloat = 200 // Space between parent and child
+        let verticalSpacing: CGFloat = 60 // Space between siblings
         
-        // Adjust base offset based on number of subtopics to prevent overlapping
-        let minRadius = subtopicOffset + parentWidth/2
-        let numSubtopics = subtopicCount + 1 // Including the new subtopic
-        let radius = max(minRadius, minRadius * (1.0 + CGFloat(numSubtopics) * 0.1))
+        // Calculate the total height needed for all subtopics
+        let totalSubtopics = subtopicCount + 1 // Including the new subtopic
+        let totalHeight = verticalSpacing * CGFloat(totalSubtopics - 1)
         
-        // Calculate angle for this subtopic
-        // Distribute subtopics within a 330-degree arc to prevent overlap
-        let totalAngle = 330.0 // Leave 30 degrees gap
-        let angleStep = totalAngle / Double(max(1, numSubtopics - 1))
-        let angleInDegrees = Double(subtopicCount) * angleStep
-        let angleInRadians = angleInDegrees * .pi / 180.0
+        // Calculate the starting Y position (top-most subtopic)
+        let startY = parentTopic.position.y + totalHeight/2
         
-        // Calculate position using polar coordinates
-        let x = parentTopic.position.x + radius * cos(angleInRadians)
-        let y = parentTopic.position.y + radius * sin(angleInRadians)
+        // Calculate this subtopic's Y position
+        let y = startY - (CGFloat(subtopicCount) * verticalSpacing)
         
-        return CGPoint(x: x, y: y)
+        // Position the subtopic to the right of the parent
+        let x = parentTopic.position.x + horizontalSpacing
+        
+        // After calculating the initial position, check for overlaps with existing subtopics
+        var newPosition = CGPoint(x: x, y: y)
+        
+        // Recursively check and adjust position if needed
+        newPosition = adjustPositionForOverlap(newPosition, parentTopic: parentTopic)
+        
+        return newPosition
+    }
+    
+    private func adjustPositionForOverlap(_ position: CGPoint, parentTopic: Topic) -> CGPoint {
+        var adjustedPosition = position
+        
+        // Check for overlaps with all topics
+        for topic in topics {
+            // Skip the parent topic itself
+            if topic.id == parentTopic.id {
+                continue
+            }
+            
+            // Check overlap with the topic and its subtopics recursively
+            if let newPos = checkAndAdjustOverlap(adjustedPosition, with: topic) {
+                adjustedPosition = newPos
+            }
+        }
+        
+        return adjustedPosition
+    }
+    
+    private func checkAndAdjustOverlap(_ position: CGPoint, with topic: Topic) -> CGPoint? {
+        let topicBox = getTopicBox(topic: topic)
+        let newTopicBox = CGRect(
+            x: position.x - 60,  // Half of typical topic width
+            y: position.y - 20,  // Half of typical topic height
+            width: 120,          // Typical topic width
+            height: 40           // Typical topic height
+        )
+        
+        // If there's an overlap, adjust the position
+        if topicBox.intersects(newTopicBox) {
+            // Move the position down by a bit more than the topic height
+            return CGPoint(x: position.x, y: position.y + 70)
+        }
+        
+        // Recursively check subtopics
+        for subtopic in topic.subtopics {
+            if let adjustedPos = checkAndAdjustOverlap(position, with: subtopic) {
+                return adjustedPos
+            }
+        }
+        
+        return nil
     }
     
     func updateTopicName(_ id: UUID, newName: String) {
+        // Skip saving state for minor text edits to avoid filling history
+        // with every keystroke during editing
+        if let topic = getTopicById(id), topic.name != newName && !newName.isEmpty {
+            saveState()
+        }
+        
         // Update main topic name
         if let index = topics.firstIndex(where: { $0.id == id }) {
             topics[index].name = newName
@@ -286,32 +353,31 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func positionSubtree(in topic: inout Topic, parentX: CGFloat, startY: CGFloat) {
-        let parentWidth = max(minTopicWidth, CGFloat(topic.name.count * 10))
         let numSubtopics = topic.subtopics.count
+        if numSubtopics == 0 { return }
         
-        // Adjust radius based on number of subtopics
-        let minRadius = subtopicOffset + parentWidth/2
-        let radius = max(minRadius, minRadius * (1.0 + CGFloat(numSubtopics) * 0.1))
+        // Constants for spacing
+        let horizontalSpacing: CGFloat = 200 // Space between parent and child
+        let verticalSpacing: CGFloat = 60 // Space between siblings
         
-        // Position each subtopic radially, starting from right side
-        for i in 0..<topic.subtopics.count {
+        // Calculate the total height needed for all subtopics
+        let totalHeight = verticalSpacing * CGFloat(numSubtopics - 1)
+        
+        // Calculate the starting Y position (top-most subtopic)
+        let topY = topic.position.y + totalHeight/2
+        
+        // Position each subtopic
+        for i in 0..<numSubtopics {
             var subtopic = topic.subtopics[i]
             
-            // Calculate angle for this subtopic using dynamic distribution
-            let totalAngle = 330.0 // Leave 30 degrees gap
-            let angleStep = totalAngle / Double(max(1, numSubtopics - 1))
-            let angleInDegrees = Double(i) * angleStep
-            let angleInRadians = angleInDegrees * .pi / 180.0
-            
-            // Position the subtopic using polar coordinates
-            subtopic.position = CGPoint(
-                x: topic.position.x + radius * cos(angleInRadians),
-                y: topic.position.y + radius * sin(angleInRadians)
-            )
+            // Calculate position
+            let x = topic.position.x + horizontalSpacing
+            let y = topY - (CGFloat(i) * verticalSpacing)
+            subtopic.position = CGPoint(x: x, y: y)
             
             // Recursively position this subtopic's subtree
             if !subtopic.subtopics.isEmpty {
-                positionSubtree(in: &subtopic, parentX: subtopic.position.x, startY: subtopic.position.y)
+                positionSubtree(in: &subtopic, parentX: x, startY: y)
             }
             
             topic.subtopics[i] = subtopic
@@ -480,8 +546,37 @@ class CanvasViewModel: ObservableObject {
     }
     
     func getSelectedTopic() -> Topic? {
-        guard let id = selectedTopicId else { return nil }
-        return findTopic(id: id)
+        guard let selectedId = selectedTopicId else { return nil }
+        
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == selectedId }) {
+            return topic
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let found = findTopicInSubtopics(id: selectedId, in: topic) {
+                return found
+            }
+        }
+        
+        return nil
+    }
+    
+    func getTopicById(_ id: UUID) -> Topic? {
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == id }) {
+            return topic
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let found = findTopicInSubtopics(id: id, in: topic) {
+                return found
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Keyboard Events
@@ -1261,6 +1356,27 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    func updateTopicBranchStyle(_ id: UUID, style: Topic.BranchStyle) {
+        // Update all topics to use the new style
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            updateBranchStyleRecursively(&topic, style)
+            topics[i] = topic
+        }
+    }
+    
+    private func updateBranchStyleRecursively(_ topic: inout Topic, _ style: Topic.BranchStyle) {
+        // Update the current topic
+        topic.branchStyle = style
+        
+        // Update all subtopics recursively
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            updateBranchStyleRecursively(&subtopic, style)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
     private func updateSubtopicTextCase(_ id: UUID, _ textCase: TextCase, in topic: inout Topic) -> Bool {
         // Check if this topic's subtopics contain the target
         for i in 0..<topic.subtopics.count {
@@ -1314,5 +1430,44 @@ class CanvasViewModel: ObservableObject {
         }
         
         return false
+    }
+    
+    // MARK: - Undo/Redo Functionality
+    
+    /// Save current state for undo history
+    private func saveState() {
+        // If we're not at the end of history, truncate it
+        if currentHistoryIndex < history.count - 1 {
+            history = Array(history[0...currentHistoryIndex])
+        }
+        
+        // Create a deep copy of the topics array
+        let topicsCopy = topics.map { $0.deepCopy() }
+        
+        // Add to history
+        history.append(topicsCopy)
+        currentHistoryIndex = history.count - 1
+        
+        // Limit history size
+        if history.count > maxHistorySize {
+            history.removeFirst()
+            currentHistoryIndex = history.count - 1
+        }
+    }
+    
+    /// Perform undo operation
+    func undo() {
+        guard currentHistoryIndex > 0 else { return }
+        
+        currentHistoryIndex -= 1
+        topics = history[currentHistoryIndex].map { $0.deepCopy() }
+    }
+    
+    /// Perform redo operation
+    func redo() {
+        guard currentHistoryIndex < history.count - 1 else { return }
+        
+        currentHistoryIndex += 1
+        topics = history[currentHistoryIndex].map { $0.deepCopy() }
     }
 } 

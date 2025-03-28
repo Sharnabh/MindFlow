@@ -652,80 +652,46 @@ func calculateTopicIntersection(from: Topic, to: Topic) -> (start: CGPoint, end:
     let fromCenter = from.position
     let toCenter = to.position
     
-    // Calculate angle between centers
-    let angle = atan2(toCenter.y - fromCenter.y, toCenter.x - fromCenter.x)
+    // Constants for automatic arrangement
+    let horizontalSpacing: CGFloat = 200 // Horizontal space between parent and child
+    let minVerticalSpacing: CGFloat = 60 // Minimum vertical space between siblings
     
-    // Function to find intersection with a box based on shape
-    func findShapeIntersection(topic: Topic, box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
-        let halfWidth = box.width / 2
-        let halfHeight = box.height / 2
-        let center = topic.position
+    // Function to find the best side intersection point
+    func findBestSideIntersection(box: CGRect, from: CGPoint, towards: CGPoint, isParentChild: Bool = false) -> CGPoint {
+        // For parent-child relationships, always use right side of parent and left side of child
+        if isParentChild {
+            if box == fromBox {
+                return CGPoint(x: box.maxX, y: box.midY) // Right side for parent
+            } else {
+                return CGPoint(x: box.minX, y: box.midY) // Left side for child
+            }
+        }
         
-        switch topic.shape {
-        case .circle:
-            // For circle/capsule, use radius-based intersection
-            let radius = min(halfWidth, halfHeight)
-            return CGPoint(
-                x: center.x + cos(angle) * radius,
-                y: center.y + sin(angle) * radius
-            )
-            
-        case .diamond:
-            // For diamond, calculate intersection with edges
-            let dx = abs(cos(angle))
-            let dy = abs(sin(angle))
-            let scale = min(halfWidth / dx, halfHeight / dy)
-            return CGPoint(
-                x: center.x + cos(angle) * scale,
-                y: center.y + sin(angle) * scale
-            )
-            
-        default:
-            // For rectangular shapes, use box intersection
-            let dx = towards.x - from.x
-            let dy = towards.y - from.y
-            
-            // Handle zero direction vector
-            if abs(dx) < 0.001 && abs(dy) < 0.001 {
-                return from
-            }
-            
-            // Calculate intersections with all edges
-            var intersections: [CGPoint] = []
-            
-            // Check left and right edges
-            for x in [box.minX, box.maxX] {
-                if abs(dx) > 0.001 {  // Avoid division by zero
-                    let t = (x - from.x) / dx
-                    let y = from.y + t * dy
-                    if y >= box.minY && y <= box.maxY {
-                        intersections.append(CGPoint(x: x, y: y))
-                    }
-                }
-            }
-            
-            // Check top and bottom edges
-            for y in [box.minY, box.maxY] {
-                if abs(dy) > 0.001 {  // Avoid division by zero
-                    let t = (y - from.y) / dy
-                    let x = from.x + t * dx
-                    if x >= box.minX && x <= box.maxX {
-                        intersections.append(CGPoint(x: x, y: y))
-                    }
-                }
-            }
-            
-            // Find the intersection point closest to the target point
-            return intersections.min(by: { p1, p2 in
-                let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
-                let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
-                return d1 < d2
-            }) ?? from
+        // For other relationships (like manually created ones), use the original angle-based logic
+        let leftCenter = CGPoint(x: box.minX, y: box.midY)
+        let rightCenter = CGPoint(x: box.maxX, y: box.midY)
+        let topCenter = CGPoint(x: box.midX, y: box.minY)
+        let bottomCenter = CGPoint(x: box.midX, y: box.maxY)
+        
+        let angle = atan2(towards.y - from.y, towards.x - from.x)
+        let normalizedAngle = (angle + .pi * 2).truncatingRemainder(dividingBy: .pi * 2)
+        
+        if normalizedAngle >= .pi * 7/4 || normalizedAngle < .pi * 1/4 {
+            return rightCenter
+        } else if normalizedAngle >= .pi * 1/4 && normalizedAngle < .pi * 3/4 {
+            return bottomCenter
+        } else if normalizedAngle >= .pi * 3/4 && normalizedAngle < .pi * 5/4 {
+            return leftCenter
+        } else {
+            return topCenter
         }
     }
     
-    let fromIntersect = findShapeIntersection(topic: from, box: fromBox, from: fromCenter, towards: toCenter)
-    let toIntersect = findShapeIntersection(topic: to, box: toBox, from: toCenter, towards: fromCenter)
+    // Check if this is a parent-child relationship by looking at the subtopics
+    let isParentChild = from.subtopics.contains(where: { $0.id == to.id })
+    
+    let fromIntersect = findBestSideIntersection(box: fromBox, from: fromCenter, towards: toCenter, isParentChild: isParentChild)
+    let toIntersect = findBestSideIntersection(box: toBox, from: toCenter, towards: fromCenter, isParentChild: isParentChild)
     
     return (fromIntersect, toIntersect)
 }
@@ -738,93 +704,202 @@ func calculateIntersection(from topic: Topic, toPosition: CGPoint, topics: [Topi
     let fromCenter = topic.position
     let toCenter = toPosition
     
-    // Calculate angle between centers
-    let angle = atan2(toCenter.y - fromCenter.y, toCenter.x - fromCenter.x)
-    
-    // Function to find intersection with a box based on shape
-    func findShapeIntersection(topic: Topic, box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
-        let halfWidth = box.width / 2
-        let halfHeight = box.height / 2
-        let center = topic.position
+    // Function to find the best side intersection point
+    func findBestSideIntersection(box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
+        // For dragging new connections, use the same angle-based logic
+        let leftCenter = CGPoint(x: box.minX, y: box.midY)
+        let rightCenter = CGPoint(x: box.maxX, y: box.midY)
+        let topCenter = CGPoint(x: box.midX, y: box.minY)
+        let bottomCenter = CGPoint(x: box.midX, y: box.maxY)
         
-        switch topic.shape {
-        case .circle:
-            // For circle/capsule, use radius-based intersection
-            let radius = min(halfWidth, halfHeight)
-            return CGPoint(
-                x: center.x + cos(angle) * radius,
-                y: center.y + sin(angle) * radius
-            )
-            
-        case .diamond:
-            // For diamond, calculate intersection with edges
-            let dx = abs(cos(angle))
-            let dy = abs(sin(angle))
-            let scale = min(halfWidth / dx, halfHeight / dy)
-            return CGPoint(
-                x: center.x + cos(angle) * scale,
-                y: center.y + sin(angle) * scale
-            )
-            
-        default:
-            // For rectangular shapes, use box intersection
-            let dx = towards.x - from.x
-            let dy = towards.y - from.y
-            
-            // Handle zero direction vector
-            if abs(dx) < 0.001 && abs(dy) < 0.001 {
-                return from
-            }
-            
-            // Calculate intersections with all edges
-            var intersections: [CGPoint] = []
-            
-            // Check left and right edges
-            for x in [box.minX, box.maxX] {
-                if abs(dx) > 0.001 {  // Avoid division by zero
-                    let t = (x - from.x) / dx
-                    let y = from.y + t * dy
-                    if y >= box.minY && y <= box.maxY {
-                        intersections.append(CGPoint(x: x, y: y))
-                    }
-                }
-            }
-            
-            // Check top and bottom edges
-            for y in [box.minY, box.maxY] {
-                if abs(dy) > 0.001 {  // Avoid division by zero
-                    let t = (y - from.y) / dy
-                    let x = from.x + t * dx
-                    if x >= box.minX && x <= box.maxX {
-                        intersections.append(CGPoint(x: x, y: y))
-                    }
-                }
-            }
-            
-            // Find the intersection point closest to the target point
-            return intersections.min(by: { p1, p2 in
-                let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
-                let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
-                return d1 < d2
-            }) ?? from
+        let angle = atan2(towards.y - from.y, towards.x - from.x)
+        let normalizedAngle = (angle + .pi * 2).truncatingRemainder(dividingBy: .pi * 2)
+        
+        if normalizedAngle >= .pi * 7/4 || normalizedAngle < .pi * 1/4 {
+            return rightCenter
+        } else if normalizedAngle >= .pi * 1/4 && normalizedAngle < .pi * 3/4 {
+            return bottomCenter
+        } else if normalizedAngle >= .pi * 3/4 && normalizedAngle < .pi * 5/4 {
+            return leftCenter
+        } else {
+            return topCenter
         }
     }
     
     // Find target topic at position
     if let targetTopic = findTopicAt(position: toPosition, in: topics) {
         let toBox = getTopicBox(topic: targetTopic)
-        let fromIntersect = findShapeIntersection(topic: topic, box: fromBox, from: fromCenter, towards: targetTopic.position)
-        let toIntersect = findShapeIntersection(topic: targetTopic, box: toBox, from: targetTopic.position, towards: fromCenter)
+        let fromIntersect = findBestSideIntersection(box: fromBox, from: fromCenter, towards: targetTopic.position)
+        let toIntersect = findBestSideIntersection(box: toBox, from: targetTopic.position, towards: fromCenter)
         return (fromIntersect, toIntersect)
     }
     
     // If no target topic found, just connect to the cursor position
-    let fromIntersect = findShapeIntersection(topic: topic, box: fromBox, from: fromCenter, towards: toCenter)
+    let fromIntersect = findBestSideIntersection(box: fromBox, from: fromCenter, towards: toCenter)
     return (fromIntersect, toCenter)
+}
+
+// Helper view to recursively render connection lines
+private struct ConnectionLinesView: View {
+    let topics: [Topic]
+    
+    // Helper function to check if any topic in the entire canvas has curved style
+    private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
+        // First check all root topics
+        for topic in topics {
+            if topic.branchStyle == .curved {
+                return true
+            }
+        }
+        
+        // Then check all subtopics recursively
+        for topic in topics {
+            if checkSubtopicsForCurvedStyle(topic) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // Helper function to check subtopics recursively
+    private func checkSubtopicsForCurvedStyle(_ topic: Topic) -> Bool {
+        // Check immediate subtopics
+        for subtopic in topic.subtopics {
+            if subtopic.branchStyle == .curved {
+                return true
+            }
+            
+            // Recursively check deeper subtopics
+            if checkSubtopicsForCurvedStyle(subtopic) {
+                return true
+            }
+        }
+        
+        // Check relations
+        for relation in topic.relations {
+            if relation.branchStyle == .curved {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    var body: some View {
+        // Check if any topic in the entire canvas has curved style
+        let shouldUseCurvedStyle = hasCurvedStyle(topics)
+        
+        // Draw all lines in a single layer
+        ForEach(topics) { topic in
+            Group {
+                // Draw lines to immediate subtopics
+                ForEach(topic.subtopics) { subtopic in
+                    ConnectionLine(from: topic, to: subtopic, color: subtopic.borderColor, forceCurved: shouldUseCurvedStyle)
+                }
+                
+                // Draw relationship lines (only draw if we're the source topic)
+                ForEach(topic.relations) { relatedTopic in
+                    if topic.id < relatedTopic.id {  // Only draw once for each relationship
+                        ConnectionLine(from: topic, to: relatedTopic, color: .purple, forceCurved: shouldUseCurvedStyle)
+                    }
+                }
+            }
+            
+            // Recursively draw lines for nested subtopics
+            if !topic.subtopics.isEmpty {
+                ConnectionLinesView(topics: topic.subtopics)
+            }
+        }
+    }
+}
+
+// Helper view for drawing a single connection line
+private struct ConnectionLine: View {
+    let from: Topic
+    let to: Topic
+    let color: Color
+    let forceCurved: Bool
+    
+    var body: some View {
+        let points = calculateTopicIntersection(from: from, to: to)
+        
+        // Use curved style if forced (meaning any topic has curved style)
+        if forceCurved {
+            // Draw curved path
+            Path { path in
+                path.move(to: points.start)
+                
+                // Calculate control points for the curve
+                let dx = points.end.x - points.start.x
+                let dy = points.end.y - points.start.y
+                let midX = points.start.x + dx * 0.5
+                
+                // Create control points that curve outward
+                let control1 = CGPoint(x: midX, y: points.start.y)
+                let control2 = CGPoint(x: midX, y: points.end.y)
+                
+                path.addCurve(to: points.end,
+                             control1: control1,
+                             control2: control2)
+            }
+            .stroke(color.opacity(1.0), lineWidth: 1)
+        } else {
+            // Draw straight line
+            Path { path in
+                path.move(to: points.start)
+                path.addLine(to: points.end)
+            }
+            .stroke(color.opacity(1.0), lineWidth: 1)
+        }
+    }
 }
 
 struct TopicsCanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    
+    // Helper function to check if any topic in the entire canvas has curved style
+    private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
+        // First check all root topics
+        for topic in topics {
+            if topic.branchStyle == .curved {
+                return true
+            }
+        }
+        
+        // Then check all subtopics recursively
+        for topic in topics {
+            if checkSubtopicsForCurvedStyle(topic) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // Helper function to check subtopics recursively
+    private func checkSubtopicsForCurvedStyle(_ topic: Topic) -> Bool {
+        // Check immediate subtopics
+        for subtopic in topic.subtopics {
+            if subtopic.branchStyle == .curved {
+                return true
+            }
+            
+            // Recursively check deeper subtopics
+            if checkSubtopicsForCurvedStyle(subtopic) {
+                return true
+            }
+        }
+        
+        // Check relations
+        for relation in topic.relations {
+            if relation.branchStyle == .curved {
+                return true
+            }
+        }
+        
+        return false
+    }
     
     var body: some View {
         ZStack {
@@ -847,60 +922,40 @@ struct TopicsCanvasView: View {
             // Draw temporary relation line if dragging
             if let (fromId, toPosition) = viewModel.relationDragState,
                let fromTopic = viewModel.findTopic(id: fromId) {
-                // Always show the line while dragging, but calculate endpoints based on target
+                // Check if target topic exists at the current position
+                let targetTopic = findTopicAt(position: toPosition, in: viewModel.topics)
                 let points = calculateIntersection(from: fromTopic, toPosition: toPosition, topics: viewModel.topics)
+                
+                // Use curved style if any topic in the canvas has curved style
+                if hasCurvedStyle(viewModel.topics) {
+                    // Draw curved path
                 Path { path in
                     path.move(to: points.start)
-                    path.addLine(to: points.end)
-                }
-                .stroke(Color.purple.opacity(0.5), lineWidth: 2)
-            }
-        }
-    }
-}
-
-// Helper view to recursively render connection lines
-private struct ConnectionLinesView: View {
-    let topics: [Topic]
-    
-    var body: some View {
-        // Draw all lines in a single layer
-        ForEach(topics) { topic in
-            Group {
-                // Draw lines to immediate subtopics
-                ForEach(topic.subtopics) { subtopic in
-                    ConnectionLine(from: topic, to: subtopic, color: subtopic.borderColor)
-                }
-                
-                // Draw relationship lines (only draw if we're the source topic)
-                ForEach(topic.relations) { relatedTopic in
-                    if topic.id < relatedTopic.id {  // Only draw once for each relationship
-                        ConnectionLine(from: topic, to: relatedTopic, color: .purple)
+                        
+                        // Calculate control points for the curve
+                        let dx = points.end.x - points.start.x
+                        let dy = points.end.y - points.start.y
+                        let midX = points.start.x + dx * 0.5
+                        
+                        // Create control points that curve outward
+                        let control1 = CGPoint(x: midX, y: points.start.y)
+                        let control2 = CGPoint(x: midX, y: points.end.y)
+                        
+                        path.addCurve(to: points.end,
+                                     control1: control1,
+                                     control2: control2)
                     }
+                    .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                } else {
+                    // Draw straight line
+                    Path { path in
+                        path.move(to: points.start)
+                        path.addLine(to: points.end)
+                    }
+                    .stroke(Color.purple.opacity(0.5), lineWidth: 2)
                 }
             }
-            
-            // Recursively draw lines for nested subtopics
-            if !topic.subtopics.isEmpty {
-                ConnectionLinesView(topics: topic.subtopics)
-            }
         }
-    }
-}
-
-// Helper view for drawing a single connection line
-private struct ConnectionLine: View {
-    let from: Topic
-    let to: Topic
-    let color: Color
-    
-    var body: some View {
-        let points = calculateTopicIntersection(from: from, to: to)
-        Path { path in
-            path.move(to: points.start)
-            path.addLine(to: points.end)
-        }
-        .stroke(color.opacity(1.0), lineWidth: 1)
     }
 }
 

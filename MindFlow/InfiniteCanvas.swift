@@ -13,6 +13,10 @@ struct InfiniteCanvas: View {
     @State private var isShowingColorPicker: Bool = false // Track color picker state
     @State private var isShowingBorderColorPicker: Bool = false // Track border color picker state
     @State private var isShowingForegroundColorPicker: Bool = false // Track foreground color picker state
+    @State private var isShowingBackgroundColorPicker: Bool = false // Track background color picker state
+    @State private var backgroundStyle: BackgroundStyle = .grid // Track background style
+    @State private var backgroundColor: Color = Color(.windowBackgroundColor) // Track background color
+    @State private var backgroundOpacity: Double = 1.0 // Track background opacity
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -22,6 +26,23 @@ struct InfiniteCanvas: View {
     private let minimapPadding: CGFloat = 16 // Padding from the edges
     private let topBarHeight: CGFloat = 40 // Height of the top bar
     private let sidebarWidth: CGFloat = 300 // Width of the sidebar
+    
+    // Background style enum
+    enum BackgroundStyle: String, CaseIterable, Identifiable {
+        case none = "None"
+        case grid = "Grid"
+        case dots = "Dots"
+        
+        var id: String { self.rawValue }
+        
+        var iconName: String {
+            switch self {
+            case .none: return "square"
+            case .grid: return "grid"
+            case .dots: return "circle.grid.3x3"
+            }
+        }
+    }
     
     // Convert screen coordinates to canvas coordinates
     private func screenToCanvasPosition(_ screenPosition: CGPoint) -> CGPoint {
@@ -103,7 +124,7 @@ struct InfiniteCanvas: View {
                         // Draw background
                         context.fill(
                             Path(CGRect(origin: .zero, size: size)),
-                            with: .color(Color(nsColor: .windowBackgroundColor))
+                            with: .color(backgroundColor.opacity(backgroundOpacity))
                         )
                         
                         // Calculate visible area in canvas coordinates
@@ -118,38 +139,70 @@ struct InfiniteCanvas: View {
                         let padding = max(size.width, size.height) / scale
                         let gridBounds = visibleArea.insetBy(dx: -padding, dy: -padding)
                         
-                        // Calculate grid line ranges
-                        let startX = floor(gridBounds.minX / gridSize) * gridSize
-                        let endX = ceil(gridBounds.maxX / gridSize) * gridSize
-                        let startY = floor(gridBounds.minY / gridSize) * gridSize
-                        let endY = ceil(gridBounds.maxY / gridSize) * gridSize
-                        
                         // Apply canvas transformations
                         context.translateBy(x: offset.x, y: offset.y)
                         context.scaleBy(x: scale, y: scale)
                         
-                        // Draw vertical grid lines
-                        for x in stride(from: startX, through: endX, by: gridSize) {
-                            context.stroke(
-                                Path { path in
-                                    path.move(to: CGPoint(x: x, y: startY))
-                                    path.addLine(to: CGPoint(x: x, y: endY))
-                                },
-                                with: .color(.gray.opacity(0.2)),
-                                lineWidth: 0.5 / scale
-                            )
-                        }
-                        
-                        // Draw horizontal grid lines
-                        for y in stride(from: startY, through: endY, by: gridSize) {
-                            context.stroke(
-                                Path { path in
-                                    path.move(to: CGPoint(x: startX, y: y))
-                                    path.addLine(to: CGPoint(x: endX, y: y))
-                                },
-                                with: .color(.gray.opacity(0.2)),
-                                lineWidth: 0.5 / scale
-                            )
+                        // Draw the selected background style
+                        switch backgroundStyle {
+                        case .none:
+                            // No grid or pattern
+                            break
+                            
+                        case .grid:
+                            // Calculate grid line ranges
+                            let startX = floor(gridBounds.minX / gridSize) * gridSize
+                            let endX = ceil(gridBounds.maxX / gridSize) * gridSize
+                            let startY = floor(gridBounds.minY / gridSize) * gridSize
+                            let endY = ceil(gridBounds.maxY / gridSize) * gridSize
+                            
+                            // Draw vertical grid lines
+                            for x in stride(from: startX, through: endX, by: gridSize) {
+                                context.stroke(
+                                    Path { path in
+                                        path.move(to: CGPoint(x: x, y: startY))
+                                        path.addLine(to: CGPoint(x: x, y: endY))
+                                    },
+                                    with: .color(.gray.opacity(0.2)),
+                                    lineWidth: 0.5 / scale
+                                )
+                            }
+                            
+                            // Draw horizontal grid lines
+                            for y in stride(from: startY, through: endY, by: gridSize) {
+                                context.stroke(
+                                    Path { path in
+                                        path.move(to: CGPoint(x: startX, y: y))
+                                        path.addLine(to: CGPoint(x: endX, y: y))
+                                    },
+                                    with: .color(.gray.opacity(0.2)),
+                                    lineWidth: 0.5 / scale
+                                )
+                            }
+                            
+                        case .dots:
+                            // Calculate dot positions
+                            let dotSize: CGFloat = 2.0 / scale
+                            let startX = floor(gridBounds.minX / gridSize) * gridSize
+                            let endX = ceil(gridBounds.maxX / gridSize) * gridSize
+                            let startY = floor(gridBounds.minY / gridSize) * gridSize
+                            let endY = ceil(gridBounds.maxY / gridSize) * gridSize
+                            
+                            // Draw dots at grid intersections
+                            for x in stride(from: startX, through: endX, by: gridSize) {
+                                for y in stride(from: startY, through: endY, by: gridSize) {
+                                    let dotRect = CGRect(
+                                        x: x - (dotSize / 2),
+                                        y: y - (dotSize / 2),
+                                        width: dotSize,
+                                        height: dotSize
+                                    )
+                                    context.fill(
+                                        Path(ellipseIn: dotRect),
+                                        with: .color(.gray.opacity(0.3))
+                                    )
+                                }
+                            }
                         }
                     }
                     
@@ -208,12 +261,27 @@ struct InfiniteCanvas: View {
                     }
                 )
                 .frame(width: minimapSize, height: minimapSize)
-                .background(Color(.windowBackgroundColor).opacity(0.9))
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(backgroundColor.opacity(backgroundOpacity))
+                            .blur(radius: 1)
+                        
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(backgroundColor.opacity(backgroundOpacity * 0.8))
+                        
+                        // Subtle inner glow
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            .padding(1)
+                    }
+                )
                 .cornerRadius(8)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.6), lineWidth: 2.5)
                 )
+                .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 3)
                 .padding(minimapPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, topBarHeight + minimapPadding) // Add padding to position below top bar
@@ -244,8 +312,89 @@ struct InfiniteCanvas: View {
                                         Divider()
                                             .padding(.horizontal)
                                         
-                                        // Shape selector
+                                        // Canvas Background Style section
+                                        VStack(spacing: 16) {
+                                            // Section header
+                                            Text("Canvas Background")
+                                                .foregroundColor(.primary)
+                                                .font(.headline)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.top, 12)
+                                                .padding(.horizontal)
+                                            
+                                            Divider()
+                                                .padding(.horizontal)
+                                            
+                                            // Background style selector
+                                            HStack(spacing: 8) {
+                                                Text("Style")
+                                                    .foregroundColor(.primary)
+                                                    .font(.system(size: 13))
+                                                
+                                                Spacer()
+                                                
+                                                Picker("", selection: $backgroundStyle) {
+                                                    ForEach(BackgroundStyle.allCases) { style in
+                                                        HStack {
+                                                            Image(systemName: style.iconName)
+                                                                .font(.system(size: 14))
+                                                            Text(style.rawValue)
+                                                        }
+                                                        .tag(style)
+                                                    }
+                                                }
+                                                .pickerStyle(MenuPickerStyle())
+                                                .frame(width: 120)
+                                            }
+                                            .padding(.horizontal)
+                                            
+                                            // Background color control
+                                            HStack(spacing: 8) {
+                                                Text("Color")
+                                                    .foregroundColor(.primary)
+                                                    .font(.system(size: 13))
+                                                
+                                                Spacer()
+                                                
+                                                Button(action: {
+                                                    isShowingBackgroundColorPicker.toggle()
+                                                }) {
+                                                    RoundedRectangle(cornerRadius: 2)
+                                                        .fill(backgroundColor)
+                                                        .frame(width: 50, height: 28)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                        )
+                                                }
+                                                .buttonStyle(PlainButtonStyle())
+                                                .popover(isPresented: $isShowingBackgroundColorPicker, arrowEdge: .bottom) {
+                                                    ColorPickerView(
+                                                        selectedColor: $backgroundColor,
+                                                        opacity: $backgroundOpacity
+                                                    )
+                                                }
+                                            }
+                                            .padding(.horizontal)
+                                        }
+                                        
+                                        Divider()
+                                            .padding(.horizontal)
+                                        
+                                        // Topic styling - only shown when a topic is selected
                                         if let selectedTopic = viewModel.getSelectedTopic() {
+                                            // Topic Style header
+                                            Text("Topic Style")
+                                                .foregroundColor(.primary)
+                                                .font(.headline)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.top, 12)
+                                                .padding(.horizontal)
+                                            
+                                            Divider()
+                                                .padding(.horizontal)
+                                            
+                                            // Shape selector
                                             ShapeSelector(
                                                 selectedShape: selectedTopic.shape,
                                                 onShapeSelected: { shape in
@@ -290,7 +439,7 @@ struct InfiniteCanvas: View {
                                                     )
                                                 }
                                             }
-                                                        .padding(.horizontal)
+                                                    .padding(.horizontal)
                                             
                                             // Border control
                                             HStack(spacing: 8) {
@@ -376,6 +525,8 @@ struct InfiniteCanvas: View {
                                                 .foregroundColor(.secondary)
                                                 .padding()
                                         }
+                                        
+                                        // Spacer(minLength: 0)
                                         
                                         // Text section
                                         VStack(spacing: 16) {
@@ -568,7 +719,61 @@ struct InfiniteCanvas: View {
                                             .padding(.horizontal)
                                         }
                                         
-                                        Spacer()
+                                        // Branch Style section
+                                        VStack(spacing: 16) {
+                                            // Section header
+                                            Text("Branch Style")
+                                                .foregroundColor(.primary)
+                                                .font(.headline)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.top, 12)
+                                                .padding(.horizontal)
+                                            
+                                            Divider()
+                                                .padding(.horizontal)
+                                            
+                                            // Branch style dropdown
+                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                HStack(spacing: 8) {
+                                                    Menu {
+                                                        ForEach(Topic.BranchStyle.allCases, id: \.self) { style in
+                                                            Button(action: {
+                                                                viewModel.updateTopicBranchStyle(selectedTopic.id, style: style)
+                                                            }) {
+                                                                HStack {
+                                                                    if selectedTopic.branchStyle == style {
+                                                                        Image(systemName: "checkmark")
+                                                                            .frame(width: 16, alignment: .center)
+                                                                    } else {
+                                                                        Color.clear
+                                                                            .frame(width: 16)
+                                                                    }
+                                                                    Text(style.displayName)
+                                                                    Spacer()
+                                                                }
+                                                                .contentShape(Rectangle())
+                                                            }
+                                                        }
+                                                    } label: {
+                                                        HStack {
+                                                            Text(selectedTopic.branchStyle.displayName)
+                                                                .foregroundColor(.white)
+                                                            Spacer()
+                                                            Image(systemName: "chevron.down")
+                                                                .font(.system(size: 10))
+                                                        }
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 6)
+                                                        .frame(width: 120)
+                                                        .background(Color(.darkGray))
+                                                        .cornerRadius(6)
+                                                    }
+                                                }
+                                                .padding(.horizontal)
+                                            }
+                                        }
+                                        
+                                        Spacer(minLength: 20)
                                     }
                                 )
                                 .shadow(color: .black.opacity(0.1), radius: 2, x: -1, y: 0)
@@ -625,9 +830,23 @@ struct InfiniteCanvas: View {
                     }
                 }
                 KeyboardMonitor.shared.startMonitoring()
+                
+                // Add observer for undo command (Cmd+Z)
+                NotificationCenter.default.addObserver(forName: NSNotification.Name("UndoRequested"), object: nil, queue: .main) { _ in
+                    viewModel.undo()
+                }
+                
+                // Add observer for redo command (Cmd+Shift+Z)
+                NotificationCenter.default.addObserver(forName: NSNotification.Name("RedoRequested"), object: nil, queue: .main) { _ in
+                    viewModel.redo()
+                }
             }
             .onDisappear {
                 KeyboardMonitor.shared.stopMonitoring()
+                
+                // Remove observers
+                NotificationCenter.default.removeObserver(self, name: NSNotification.Name("UndoRequested"), object: nil)
+                NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RedoRequested"), object: nil)
             }
         }
         .ignoresSafeArea()
@@ -642,8 +861,24 @@ struct MinimapView: View {
     let size: CGSize
     let onTapLocation: (CGPoint) -> Void
     
+    // Helper function to check if any topic has curved style
+    private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
+        for topic in topics {
+            if topic.branchStyle == .curved {
+                return true
+            }
+            if hasCurvedStyle(topic.subtopics) {
+                return true
+            }
+        }
+        return false
+    }
+    
     var body: some View {
         Canvas { context, size in
+            // Check if any topic has curved style
+            let shouldUseCurvedStyle = hasCurvedStyle(topics)
+            
             // Draw topics as dots
             for topic in topics {
                 func drawTopic(_ topic: Topic, color: Color) {
@@ -665,14 +900,37 @@ struct MinimapView: View {
                         let startPoint = position
                         let endPoint = scaleToMinimap(subtopic.position)
                         
-                        context.stroke(
-                            Path { path in
-                                path.move(to: startPoint)
-                                path.addLine(to: endPoint)
-                            },
-                            with: .color(topic.borderColor.opacity(1.0)),
-                            lineWidth: 1
-                        )
+                        // Use curved style if any topic has curved style
+                        if shouldUseCurvedStyle {
+                            // Draw curved path
+                            let dx = endPoint.x - startPoint.x
+                            let dy = endPoint.y - startPoint.y
+                            let midX = startPoint.x + dx * 0.5
+                            
+                            let control1 = CGPoint(x: midX, y: startPoint.y)
+                            let control2 = CGPoint(x: midX, y: endPoint.y)
+                            
+                            context.stroke(
+                                Path { path in
+                                    path.move(to: startPoint)
+                                    path.addCurve(to: endPoint,
+                                                control1: control1,
+                                                control2: control2)
+                                },
+                                with: .color(topic.borderColor.opacity(1.0)),
+                                lineWidth: 1
+                            )
+                        } else {
+                            // Draw straight line
+                            context.stroke(
+                                Path { path in
+                                    path.move(to: startPoint)
+                                    path.addLine(to: endPoint)
+                                },
+                                with: .color(topic.borderColor.opacity(1.0)),
+                                lineWidth: 1
+                            )
+                        }
                         
                         // Recursively draw subtopics
                         drawTopic(subtopic, color: topic.borderColor.opacity(1.0))
@@ -1162,10 +1420,19 @@ private struct TopicContent: View {
     @FocusState var isFocused: Bool
     let onNameChange: (String) -> Void
     let onEditingChange: (Bool) -> Void
+    @State private var textHeight: CGFloat = 40
     
     private func calculateWidth() -> CGFloat {
         let text = topic.isEditing ? editingName : topic.name
-        return max(120, CGFloat(text.count * 10))
+        let lines = text.components(separatedBy: "\n")
+        let maxLineLength = lines.map { $0.count }.max() ?? 0
+        return max(120, CGFloat(maxLineLength * 10))
+    }
+    
+    private func calculateHeight() -> CGFloat {
+        let text = topic.isEditing ? editingName : topic.name
+        let lineCount = text.components(separatedBy: "\n").count
+        return max(40, CGFloat(lineCount * 24))
     }
     
     var body: some View {
@@ -1180,12 +1447,13 @@ private struct TopicContent: View {
     
     private func createTextField() -> some View {
         let width = calculateWidth()
-        return TextField("", text: $editingName)
-            .textFieldStyle(.plain)
+        let height = calculateHeight()
+        
+        return TextEditor(text: $editingName)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
             .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
-            .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
-            .bold(topic.textStyles.contains(.bold))
-            .italic(topic.textStyles.contains(.italic))
+            .font(getFontWithStyle())
             .strikethrough(topic.textStyles.contains(.strikethrough))
             .underline(topic.textStyles.contains(.underline))
             .textCase(topic.textCase == .uppercase ? .uppercase :
@@ -1194,59 +1462,125 @@ private struct TopicContent: View {
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .frame(minWidth: width, maxWidth: width)
+            .frame(width: width, height: height)
             .background(
                 createBackground()
-                    .frame(width: width + 32, height: 40)
+                    .frame(width: width + 32, height: height)
             )
             .overlay(
                 createBorder()
-                    .frame(width: width + 32, height: 40)
+                    .frame(width: width + 32, height: height)
             )
             .focused($isFocused)
             .onChange(of: editingName) { newValue in
                 onNameChange(newValue)
             }
-            .onSubmit {
-                onNameChange(editingName)
-                isFocused = false
-                onEditingChange(false)
-            }
             .onExitCommand {
                 isFocused = false
                 onEditingChange(false)
             }
-            .onKeyPress(.tab) {
-                isFocused = true
-                return .handled
+            .onAppear {
+                // Setup a local key monitor that specifically handles Return keys
+                setupReturnKeyMonitor()
             }
-            .submitLabel(.return)
+            .onDisappear {
+                // Remove the local monitor when not editing
+                removeReturnKeyMonitor()
+            }
+    }
+    
+    // Local key monitor using NSEvent directly for reliable Shift+Return detection
+    private func setupReturnKeyMonitor() {
+        // Handle Return key
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("ReturnKeyPressed"), object: nil, queue: .main) { notification in
+            if let userInfo = notification.userInfo,
+               let event = userInfo["event"] as? NSEvent,
+               event.keyCode == 36, // Return key
+               self.isFocused {
+                
+                if event.modifierFlags.contains(.shift) {
+                    // Shift+Return: add a new line
+                    DispatchQueue.main.async {
+                        self.editingName += "\n"
+                    }
+                } else {
+                    // Regular Return: commit changes
+                    DispatchQueue.main.async {
+                        self.onNameChange(self.editingName)
+                        self.isFocused = false
+                        self.onEditingChange(false)
+                    }
+                }
+            }
+        }
+        
+        // Handle Undo/Redo commands
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("UndoRequested"), object: nil, queue: .main) { _ in
+            if self.isFocused {
+                // When editing text, let the system handle Cmd+Z for text undo
+                // We don't need to do anything special here
+            }
+        }
+        
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("RedoRequested"), object: nil, queue: .main) { _ in
+            if self.isFocused {
+                // When editing text, let the system handle Cmd+Shift+Z for text redo
+                // We don't need to do anything special here
+            }
+        }
+    }
+    
+    private func removeReturnKeyMonitor() {
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ReturnKeyPressed"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("UndoRequested"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RedoRequested"), object: nil)
     }
     
     private func createTextDisplay() -> some View {
-        let size = calculateWidth()
+        let width = calculateWidth()
+        let height = calculateHeight()
+        
         return Text(topic.textCase == .uppercase ? topic.name.uppercased() :
                    topic.textCase == .lowercase ? topic.name.lowercased() :
                    topic.textCase == .capitalize ? topic.name.capitalized :
                    topic.name)
             .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
-            .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
-            .bold(topic.textStyles.contains(.bold))
-            .italic(topic.textStyles.contains(.italic))
+            .font(getFontWithStyle())
             .strikethrough(topic.textStyles.contains(.strikethrough))
             .underline(topic.textStyles.contains(.underline))
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .frame(width: size)
+            .frame(width: width)
             .background(
                 createBackground()
-                    .frame(width: size + 32, height: 40)
+                    .frame(width: width + 32, height: height)
             )
             .overlay(
                 createBorder()
-                    .frame(width: size + 32, height: 40)
+                    .frame(width: width + 32, height: height)
             )
+    }
+    
+    private func getFontWithStyle() -> Font {
+        // Start with base font
+        var font = Font.custom(topic.font, size: topic.fontSize, relativeTo: .body)
+        
+        // Apply italic
+        if topic.textStyles.contains(.italic) {
+            font = font.italic()
+        }
+        
+        // Apply weight - use bold from text styles if present, otherwise use the selected weight
+        if topic.textStyles.contains(.bold) {
+            font = font.weight(.bold)
+        } else {
+            font = font.weight(topic.fontWeight)
+        }
+        
+        return font
     }
     
     private func createBackground() -> some View {

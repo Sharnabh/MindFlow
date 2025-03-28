@@ -43,6 +43,15 @@ struct Topic: Identifiable, Equatable {
         }
     }
     
+    enum BranchStyle: String, CaseIterable {
+        case `default` = "Default"
+        case curved = "Curved"
+        
+        var displayName: String {
+            return self.rawValue
+        }
+    }
+    
     let id: UUID
     var name: String
     var position: CGPoint
@@ -57,6 +66,7 @@ struct Topic: Identifiable, Equatable {
     var borderColor: Color
     var borderOpacity: Double
     var borderWidth: BorderWidth
+    var branchStyle: BranchStyle = .default
     
     // Text formatting properties
     var font: String = "System"
@@ -83,6 +93,7 @@ struct Topic: Identifiable, Equatable {
         borderColor: Color = .blue,
         borderOpacity: Double = 1.0,
         borderWidth: BorderWidth = .medium,
+        branchStyle: BranchStyle = .default,
         font: String = "System",
         fontSize: CGFloat = 16,
         fontWeight: Font.Weight = .medium,
@@ -106,6 +117,7 @@ struct Topic: Identifiable, Equatable {
         self.borderColor = borderColor
         self.borderOpacity = borderOpacity
         self.borderWidth = borderWidth
+        self.branchStyle = branchStyle
         self.font = font
         self.fontSize = fontSize
         self.fontWeight = fontWeight
@@ -132,6 +144,7 @@ struct Topic: Identifiable, Equatable {
         lhs.borderColor == rhs.borderColor &&
         lhs.borderOpacity == rhs.borderOpacity &&
         lhs.borderWidth == rhs.borderWidth &&
+        lhs.branchStyle == rhs.branchStyle &&
         lhs.font == rhs.font &&
         lhs.fontSize == rhs.fontSize &&
         lhs.fontWeight == rhs.fontWeight &&
@@ -172,5 +185,39 @@ extension Topic {
     
     mutating func removeRelation(_ topicId: UUID) {
         relations.removeAll(where: { $0.id == topicId })
+    }
+    
+    /// Creates a deep copy of the Topic, including all of its subtopics
+    func deepCopy() -> Topic {
+        var copy = Topic(
+            id: self.id,
+            name: self.name,
+            position: self.position,
+            parentId: self.parentId,
+            subtopics: [],
+            isSelected: self.isSelected,
+            isEditing: self.isEditing,
+            relations: self.relations,
+            shape: self.shape,
+            backgroundColor: self.backgroundColor,
+            backgroundOpacity: self.backgroundOpacity,
+            borderColor: self.borderColor,
+            borderOpacity: self.borderOpacity,
+            borderWidth: self.borderWidth,
+            branchStyle: self.branchStyle,
+            font: self.font,
+            fontSize: self.fontSize,
+            fontWeight: self.fontWeight,
+            foregroundColor: self.foregroundColor,
+            foregroundOpacity: self.foregroundOpacity,
+            textStyles: self.textStyles,
+            textCase: self.textCase,
+            textAlignment: self.textAlignment
+        )
+        
+        // Recursively copy all subtopics
+        copy.subtopics = self.subtopics.map { $0.deepCopy() }
+        
+        return copy
     }
 } 
