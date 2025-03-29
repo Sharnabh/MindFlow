@@ -10,6 +10,7 @@ struct TopicView: View {
     let onEditingChange: (Bool) -> Void
     let onRelationDragChanged: ((CGPoint) -> Void)?
     let onRelationDragEnded: (() -> Void)?
+    let isRelationshipMode: Bool
     
     @GestureState private var dragOffset: CGSize = .zero
     @State private var editingName: String = ""
@@ -26,7 +27,7 @@ struct TopicView: View {
             onEditingChange: onEditingChange
         )
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-        .offset(dragOffset)
+        .offset(isControlPressed || isRelationshipMode ? .zero : dragOffset) // Only apply drag offset when not in relation mode
         .simultaneousGesture(
             TapGesture()
                 .onEnded {
@@ -52,17 +53,19 @@ struct TopicView: View {
     }
     
     private func createDragGesture() -> some Gesture {
-        DragGesture(minimumDistance: 5)  // Add a small minimum distance to differentiate from taps
+        DragGesture(minimumDistance: 5)
             .updating($dragOffset) { value, state, _ in
                 if !topic.isEditing {
-                    if isControlPressed {
+                    if isControlPressed || isRelationshipMode {
                         if let onRelationDragChanged = onRelationDragChanged {
+                            // For relation dragging, only update the visual line without moving the topic
                             onRelationDragChanged(CGPoint(
                                 x: topic.position.x + value.translation.width,
                                 y: topic.position.y + value.translation.height
                             ))
                         }
                     } else {
+                        // For normal dragging, update both the visual offset and topic position
                         state = value.translation
                         onDragChanged(CGPoint(
                             x: topic.position.x + value.translation.width,
@@ -73,7 +76,7 @@ struct TopicView: View {
             }
             .onEnded { value in
                 if !topic.isEditing {
-                    if isControlPressed {
+                    if isControlPressed || isRelationshipMode {
                         onRelationDragEnded?()
                     } else {
                         onDragEnded()
@@ -98,12 +101,35 @@ private struct TopicContent: View {
         return (width, height)
     }
     
+    // Recursively count all descendants
+    private func countAllDescendants(for topic: Topic) -> Int {
+        var count = 0
+        // Add direct subtopics
+        count += topic.subtopics.count
+        // Add all nested subtopics recursively
+        for subtopic in topic.subtopics {
+            count += countAllDescendants(for: subtopic)
+        }
+        return count
+    }
+    
     var body: some View {
         Group {
             if topic.isEditing {
                 createTextField()
             } else {
                 createTextDisplay()
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if topic.isCollapsed && !topic.subtopics.isEmpty {
+                let totalDescendants = countAllDescendants(for: topic)
+                Image(systemName: "\(totalDescendants).circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+                    .padding(4)
+                    .background(Circle().fill(Color.white.opacity(0.7)))
+                    .offset(x: 8, y: -8)
             }
         }
     }
@@ -114,12 +140,12 @@ private struct TopicContent: View {
             .textFieldStyle(.plain)
             .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
             .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
-            .bold(topic.textStyles.contains(.bold))
+            .fontWeight(topic.textStyles.contains(.bold) ? .bold : nil)
             .italic(topic.textStyles.contains(.italic))
             .strikethrough(topic.textStyles.contains(.strikethrough))
             .underline(topic.textStyles.contains(.underline))
-            .textCase(topic.textCase == .uppercase ? .uppercase :
-                     topic.textCase == .lowercase ? .lowercase :
+            .textCase(topic.textCase == .uppercase ? Text.Case.uppercase :
+                     topic.textCase == .lowercase ? Text.Case.lowercase :
                      nil)
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
@@ -161,7 +187,7 @@ private struct TopicContent: View {
                    topic.name)
             .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
             .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
-            .bold(topic.textStyles.contains(.bold))
+            .fontWeight(topic.textStyles.contains(.bold) ? .bold : nil)
             .italic(topic.textStyles.contains(.italic))
             .strikethrough(topic.textStyles.contains(.strikethrough))
             .underline(topic.textStyles.contains(.underline))
@@ -742,6 +768,8 @@ func calculateIntersection(from topic: Topic, toPosition: CGPoint, topics: [Topi
 // Helper view to recursively render connection lines
 private struct ConnectionLinesView: View {
     let topics: [Topic]
+    let onDeleteRelation: (UUID, UUID) -> Void
+    let selectedId: UUID?
     
     // Helper function to check if any topic in the entire canvas has curved style
     private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
@@ -793,22 +821,42 @@ private struct ConnectionLinesView: View {
         // Draw all lines in a single layer
         ForEach(topics) { topic in
             Group {
-                // Draw lines to immediate subtopics
-                ForEach(topic.subtopics) { subtopic in
-                    ConnectionLine(from: topic, to: subtopic, color: subtopic.borderColor, forceCurved: shouldUseCurvedStyle)
+                // Draw lines to immediate subtopics only if not collapsed
+                if !topic.isCollapsed {
+                    ForEach(topic.subtopics) { subtopic in
+                        ConnectionLine(
+                            from: topic,
+                            to: subtopic,
+                            color: subtopic.borderColor,
+                            forceCurved: shouldUseCurvedStyle,
+                            onDelete: {}, // No delete for parent-child relationships
+                            isRelationship: false, // This is a parent-child relationship
+                            selectedId: selectedId
+                        )
+                    }
                 }
                 
                 // Draw relationship lines (only draw if we're the source topic)
                 ForEach(topic.relations) { relatedTopic in
-                    if topic.id < relatedTopic.id {  // Only draw once for each relationship
-                        ConnectionLine(from: topic, to: relatedTopic, color: .purple, forceCurved: shouldUseCurvedStyle)
-                    }
+                    ConnectionLine(
+                        from: topic,
+                        to: relatedTopic,
+                        color: .purple,
+                        forceCurved: shouldUseCurvedStyle,
+                        onDelete: { onDeleteRelation(topic.id, relatedTopic.id) },
+                        isRelationship: true, // This is a relationship line
+                        selectedId: selectedId
+                    )
                 }
             }
             
-            // Recursively draw lines for nested subtopics
-            if !topic.subtopics.isEmpty {
-                ConnectionLinesView(topics: topic.subtopics)
+            // Recursively draw lines for nested subtopics only if not collapsed
+            if !topic.subtopics.isEmpty && !topic.isCollapsed {
+                ConnectionLinesView(
+                    topics: topic.subtopics,
+                    onDeleteRelation: onDeleteRelation,
+                    selectedId: selectedId
+                )
             }
         }
     }
@@ -820,43 +868,133 @@ private struct ConnectionLine: View {
     let to: Topic
     let color: Color
     let forceCurved: Bool
+    let onDelete: () -> Void
+    let isRelationship: Bool
+    let selectedId: UUID?
+    
+    @State private var isHovered = false
+    @State private var hoverPoint: CGPoint = .zero
     
     var body: some View {
         let points = calculateTopicIntersection(from: from, to: to)
         
-        // Use curved style if forced (meaning any topic has curved style)
-        if forceCurved {
-            // Draw curved path
-            Path { path in
-                path.move(to: points.start)
-                
-                // Calculate control points for the curve
-                let dx = points.end.x - points.start.x
-                let dy = points.end.y - points.start.y
-                let midX = points.start.x + dx * 0.5
-                
-                // Create control points that curve outward
-                let control1 = CGPoint(x: midX, y: points.start.y)
-                let control2 = CGPoint(x: midX, y: points.end.y)
-                
-                path.addCurve(to: points.end,
-                             control1: control1,
-                             control2: control2)
+        ZStack {
+            // Draw the line
+            Group {
+                if forceCurved {
+                    // Draw curved path
+                    Path { path in
+                        path.move(to: points.start)
+                        
+                        // Calculate control points for the curve
+                        let dx = points.end.x - points.start.x
+                        let dy = points.end.y - points.start.y
+                        let midX = points.start.x + dx * 0.5
+                        
+                        // Create control points that curve outward
+                        let control1 = CGPoint(x: midX, y: points.start.y)
+                        let control2 = CGPoint(x: midX, y: points.end.y)
+                        
+                        path.addCurve(to: points.end,
+                                     control1: control1,
+                                     control2: control2)
+                    }
+                    .stroke(color.opacity(1.0), lineWidth: 1)
+                } else {
+                    // Draw straight line
+                    Path { path in
+                        path.move(to: points.start)
+                        path.addLine(to: points.end)
+                    }
+                    .stroke(color.opacity(1.0), lineWidth: 1)
+                }
             }
-            .stroke(color.opacity(1.0), lineWidth: 1)
-        } else {
-            // Draw straight line
+            
+            // Add hover area with smaller width
             Path { path in
                 path.move(to: points.start)
                 path.addLine(to: points.end)
             }
-            .stroke(color.opacity(1.0), lineWidth: 1)
+            .stroke(Color.clear, lineWidth: 10) // 10px hover area
+            .onHover { hovering in
+                if hovering {
+                    // Get the current mouse position
+                    if let window = NSApp.keyWindow,
+                       let contentView = window.contentView {
+                        let mouseLocation = NSEvent.mouseLocation
+                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+                        let viewPoint = contentView.convert(windowPoint, from: nil)
+                        hoverPoint = viewPoint
+                        
+                        // Calculate distance from point to line
+                        let distance = distanceFromPointToLine(point: hoverPoint, lineStart: points.start, lineEnd: points.end)
+                        isHovered = distance < 10 // Show button if within 10px of the line
+                    }
+                } else {
+                    isHovered = false
+                }
+            }
+            
+            // Delete button - show for relationship lines when hovered or when connected topics are selected
+            if isRelationship && (isHovered || from.id == selectedId || to.id == selectedId) {
+                Button(action: onDelete) {
+                    ZStack {
+                        // Background circle with line color and very low opacity
+                        Circle()
+                            .fill(color.opacity(0.1))
+                            .frame(width: 24, height: 24)
+                        
+                        // Minus icon
+                        Image(systemName: "minus.circle.fill")
+                            .foregroundColor(color)
+                            .font(.system(size: 16))
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .position(
+                    x: (points.start.x + points.end.x) / 2,
+                    y: (points.start.y + points.end.y) / 2
+                )
+            }
         }
+    }
+    
+    // Helper function to calculate distance from a point to a line segment
+    private func distanceFromPointToLine(point: CGPoint, lineStart: CGPoint, lineEnd: CGPoint) -> CGFloat {
+        let dx = lineEnd.x - lineStart.x
+        let dy = lineEnd.y - lineStart.y
+        
+        // Calculate the length of the line segment
+        let lineLength = sqrt(dx * dx + dy * dy)
+        
+        // If the line segment is just a point, return the distance to that point
+        if lineLength == 0 {
+            return sqrt((point.x - lineStart.x) * (point.x - lineStart.x) + (point.y - lineStart.y) * (point.y - lineStart.y))
+        }
+        
+        // Calculate the projection of the point onto the line
+        let t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / (lineLength * lineLength)
+        
+        // If the projection is outside the line segment, return the distance to the nearest endpoint
+        if t < 0 {
+            return sqrt((point.x - lineStart.x) * (point.x - lineStart.x) + (point.y - lineStart.y) * (point.y - lineStart.y))
+        }
+        if t > 1 {
+            return sqrt((point.x - lineEnd.x) * (point.x - lineEnd.x) + (point.y - lineEnd.y) * (point.y - lineEnd.y))
+        }
+        
+        // Calculate the projection point
+        let projectionX = lineStart.x + t * dx
+        let projectionY = lineStart.y + t * dy
+        
+        // Return the distance from the point to the projection point
+        return sqrt((point.x - projectionX) * (point.x - projectionX) + (point.y - projectionY) * (point.y - projectionY))
     }
 }
 
 struct TopicsCanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    @Binding var isRelationshipMode: Bool
     
     // Helper function to check if any topic in the entire canvas has curved style
     private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
@@ -904,7 +1042,11 @@ struct TopicsCanvasView: View {
     var body: some View {
         ZStack {
             // Draw all connection lines first (background layer)
-            ConnectionLinesView(topics: viewModel.topics)
+            ConnectionLinesView(
+                topics: viewModel.topics,
+                onDeleteRelation: viewModel.removeRelation,
+                selectedId: viewModel.selectedTopicId
+            )
             
             // Draw all topics
             TopicsView(
@@ -916,7 +1058,8 @@ struct TopicsCanvasView: View {
                 onNameChange: viewModel.updateTopicName,
                 onEditingChange: viewModel.setTopicEditing,
                 onRelationDragChanged: viewModel.handleRelationDragChanged,
-                onRelationDragEnded: viewModel.handleRelationDragEnded
+                onRelationDragEnded: viewModel.handleRelationDragEnded,
+                isRelationshipMode: isRelationshipMode
             )
             
             // Draw temporary relation line if dragging
@@ -929,8 +1072,8 @@ struct TopicsCanvasView: View {
                 // Use curved style if any topic in the canvas has curved style
                 if hasCurvedStyle(viewModel.topics) {
                     // Draw curved path
-                Path { path in
-                    path.move(to: points.start)
+                    Path { path in
+                        path.move(to: points.start)
                         
                         // Calculate control points for the curve
                         let dx = points.end.x - points.start.x
@@ -970,6 +1113,7 @@ private struct TopicsView: View {
     let onEditingChange: (UUID, Bool) -> Void
     let onRelationDragChanged: ((UUID, CGPoint) -> Void)?
     let onRelationDragEnded: ((UUID) -> Void)?
+    let isRelationshipMode: Bool
     
     var body: some View {
         ZStack {
@@ -997,12 +1141,13 @@ private struct TopicsView: View {
                     },
                     onRelationDragEnded: onRelationDragEnded.map { handler in
                         { handler(topic.id) }
-                    }
+                    },
+                    isRelationshipMode: isRelationshipMode
                 )
                 .zIndex(topic.id == selectedId ? 1 : 0)
                 
-                // Draw subtopics for this topic
-                if !topic.subtopics.isEmpty {
+                // Draw subtopics for this topic only if not collapsed
+                if !topic.subtopics.isEmpty && !topic.isCollapsed {
                     TopicsView(
                         topics: topic.subtopics,
                         selectedId: selectedId,
@@ -1012,10 +1157,11 @@ private struct TopicsView: View {
                         onNameChange: onNameChange,
                         onEditingChange: onEditingChange,
                         onRelationDragChanged: onRelationDragChanged,
-                        onRelationDragEnded: onRelationDragEnded
+                        onRelationDragEnded: onRelationDragEnded,
+                        isRelationshipMode: isRelationshipMode
                     )
                 }
             }
         }
     }
-} 
+}

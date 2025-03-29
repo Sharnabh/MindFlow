@@ -23,6 +23,97 @@ class CanvasViewModel: ObservableObject {
         // Initialize history with current empty state
         history.append([])
         currentHistoryIndex = 0
+        
+        // Register for save notifications
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSaveRequest), name: NSNotification.Name("RequestTopicsForSave"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSaveAsRequest), name: NSNotification.Name("RequestTopicsForSaveAs"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleClearCanvas), name: NSNotification.Name("ClearCanvas"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleLoadRequest), name: NSNotification.Name("LoadMindMap"), object: nil)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Save/Load Functionality
+    
+    @objc private func handleSaveRequest() {
+        MindFlowFileManager.shared.saveCurrentFile(topics: getAllTopics()) { success, errorMessage in
+            DispatchQueue.main.async {
+                if let error = errorMessage {
+                    // Handle error - in a real app, you might want to show an alert
+                    print("Failed to save: \(error)")
+                }
+            }
+        }
+    }
+    
+    @objc private func handleSaveAsRequest() {
+        MindFlowFileManager.shared.saveFileAs(topics: getAllTopics()) { success, errorMessage in
+            DispatchQueue.main.async {
+                if let error = errorMessage {
+                    // Handle error - in a real app, you might want to show an alert
+                    print("Failed to save: \(error)")
+                }
+            }
+        }
+    }
+    
+    @objc private func handleLoadRequest() {
+        // First prompt to save if there are unsaved changes
+        if !topics.isEmpty {
+            // In a real app, you would show a dialog asking to save first
+            // For now, we'll just proceed with loading
+        }
+        
+        MindFlowFileManager.shared.loadFile { loadedTopics, errorMessage in
+            DispatchQueue.main.async {
+                if let topics = loadedTopics {
+                    self.loadTopics(topics)
+                } else if let error = errorMessage {
+                    // Handle error - in a real app, you might want to show an alert
+                    print("Failed to load: \(error)")
+                }
+            }
+        }
+    }
+    
+    /// Loads a set of topics into the canvas
+    private func loadTopics(_ loadedTopics: [Topic]) {
+        saveState() // Save current state for undo
+        
+        // Replace all topics with the loaded ones
+        topics = loadedTopics.map { topic in
+            var newTopic = topic
+            // Make sure transient properties are properly set
+            newTopic.isSelected = false
+            newTopic.isEditing = false
+            return newTopic
+        }
+        
+        // Reset current selection
+        selectedTopicId = nil
+        
+        // Recalculate main topic count
+        mainTopicCount = topics.count
+        
+        // No need to rebuild relations as they should be preserved in the file
+    }
+    
+    @objc private func handleClearCanvas() {
+        saveState() // Save current state for undo
+        
+        // Clear the canvas - reset all state
+        topics = []
+        selectedTopicId = nil
+        relationDragState = nil
+        mainTopicCount = 0
+    }
+    
+    /// Gets all topics from the canvas for saving
+    private func getAllTopics() -> [Topic] {
+        // Return a copy of the topics array
+        return topics.map { $0.deepCopy() }
     }
     
     // MARK: - Topic Management
@@ -526,7 +617,7 @@ class CanvasViewModel: ObservableObject {
     
     func handleDragEnd(_ topicId: UUID) {
         isDragging = false
-        // Optionally add any cleanup or final positioning logic here
+        saveState() // Save state after dragging ends
     }
     
     // MARK: - Topic Finding
@@ -656,6 +747,7 @@ class CanvasViewModel: ObservableObject {
                 
                 // Update all relations to ensure proper positioning
                 updateAllRelations()
+                saveState() // Save state after adding relation
             }
         }
     }
@@ -763,6 +855,7 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Topic Deletion
     
     private func deleteTopic(id: UUID) {
+        saveState() // Save state before deletion
         // First try to delete from main topics
         if let index = topics.firstIndex(where: { $0.id == id }) {
             // Remove relations to this topic from all other topics
@@ -1470,4 +1563,130 @@ class CanvasViewModel: ObservableObject {
         currentHistoryIndex += 1
         topics = history[currentHistoryIndex].map { $0.deepCopy() }
     }
-} 
+    
+    // MARK: - Relation Management
+    
+    /// Restores bidirectional relations after loading a state
+    private func restoreBidirectionalRelations() {
+        // Get all topics including subtopics
+        var allTopics = topics
+        for topic in topics {
+            allTopics.append(contentsOf: getAllSubtopics(from: topic))
+        }
+        
+        // For each topic, ensure its relations are bidirectional
+        for topic in allTopics {
+            for relatedTopic in topic.relations {
+                // If this topic is the source (id < related.id), ensure the target has a relation back
+                if topic.id < relatedTopic.id {
+                    if var targetTopic = findTopic(id: relatedTopic.id) {
+                        if !targetTopic.relations.contains(where: { $0.id == topic.id }) {
+                            targetTopic.addRelation(topic)
+                            updateTopic(targetTopic)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func removeRelation(from: UUID, to: UUID) {
+        saveState() // Save state before removing relation
+        
+        // Find and update both topics
+        if var fromTopic = findTopic(id: from) {
+            fromTopic.removeRelation(to)
+            updateTopic(fromTopic)
+        }
+        
+        if var toTopic = findTopic(id: to) {
+            toTopic.removeRelation(from)
+            updateTopic(toTopic)
+        }
+    }
+    
+    // MARK: - Topic Collapse Functionality
+    
+    func toggleCollapseState(topicId: UUID) {
+        saveState() // Save state before toggling collapse
+        
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == topicId }) {
+            topics[index].isCollapsed.toggle()
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if toggleSubtopicCollapseState(topicId, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func toggleSubtopicCollapseState(_ id: UUID, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].isCollapsed.toggle()
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if toggleSubtopicCollapseState(id, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func isTopicCollapsed(id: UUID) -> Bool {
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == id }) {
+            return topic.isCollapsed
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let collapsed = isSubtopicCollapsed(id, in: topic) {
+                return collapsed
+            }
+        }
+        
+        return false
+    }
+    
+    private func isSubtopicCollapsed(_ id: UUID, in topic: Topic) -> Bool? {
+        if topic.id == id {
+            return topic.isCollapsed
+        }
+        
+        for subtopic in topic.subtopics {
+            if let collapsed = isSubtopicCollapsed(id, in: subtopic) {
+                return collapsed
+            }
+        }
+        
+        return nil
+    }
+    
+    // Count all descendants (including all nested subtopics) for a topic
+    func countAllDescendants(for topic: Topic) -> Int {
+        var count = 0
+        
+        // Add direct subtopics
+        count += topic.subtopics.count
+        
+        // Add all nested subtopics recursively
+        for subtopic in topic.subtopics {
+            count += countAllDescendants(for: subtopic)
+        }
+        
+        return count
+    }
+}

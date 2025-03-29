@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 struct Topic: Identifiable, Equatable {
-    enum Shape {
+    enum Shape: Codable {
         case rectangle
         case roundedRectangle
         case circle
@@ -23,7 +23,7 @@ struct Topic: Identifiable, Equatable {
         case rightArrow
     }
     
-    enum BorderWidth: Double, CaseIterable {
+    enum BorderWidth: Double, CaseIterable, Codable {
         case none = 0
         case extraThin = 0.5
         case thin = 1
@@ -43,7 +43,7 @@ struct Topic: Identifiable, Equatable {
         }
     }
     
-    enum BranchStyle: String, CaseIterable {
+    enum BranchStyle: String, CaseIterable, Codable {
         case `default` = "Default"
         case curved = "Curved"
         
@@ -59,6 +59,7 @@ struct Topic: Identifiable, Equatable {
     var subtopics: [Topic]
     var isSelected: Bool
     var isEditing: Bool
+    var isCollapsed: Bool
     var relations: [Topic]
     var shape: Shape
     var backgroundColor: Color
@@ -86,6 +87,7 @@ struct Topic: Identifiable, Equatable {
         subtopics: [Topic] = [],
         isSelected: Bool = false,
         isEditing: Bool = false,
+        isCollapsed: Bool = false,
         relations: [Topic] = [],
         shape: Shape = .roundedRectangle,
         backgroundColor: Color = .blue,
@@ -110,6 +112,7 @@ struct Topic: Identifiable, Equatable {
         self.subtopics = subtopics
         self.isSelected = isSelected
         self.isEditing = isEditing
+        self.isCollapsed = isCollapsed
         self.relations = relations
         self.shape = shape
         self.backgroundColor = backgroundColor
@@ -137,6 +140,7 @@ struct Topic: Identifiable, Equatable {
         lhs.subtopics == rhs.subtopics &&
         lhs.isSelected == rhs.isSelected &&
         lhs.isEditing == rhs.isEditing &&
+        lhs.isCollapsed == rhs.isCollapsed &&
         lhs.relations == rhs.relations &&
         lhs.shape == rhs.shape &&
         lhs.backgroundColor == rhs.backgroundColor &&
@@ -197,7 +201,8 @@ extension Topic {
             subtopics: [],
             isSelected: self.isSelected,
             isEditing: self.isEditing,
-            relations: self.relations,
+            isCollapsed: self.isCollapsed,
+            relations: [],
             shape: self.shape,
             backgroundColor: self.backgroundColor,
             backgroundOpacity: self.backgroundOpacity,
@@ -215,8 +220,11 @@ extension Topic {
             textAlignment: self.textAlignment
         )
         
-        // Recursively copy all subtopics
+        // Recursively copy subtopics
         copy.subtopics = self.subtopics.map { $0.deepCopy() }
+        
+        // Copy relations (shallow copy is sufficient for references)
+        copy.relations = self.relations
         
         return copy
     }

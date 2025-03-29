@@ -1,6 +1,115 @@
 import SwiftUI
 import AppKit
 
+class InfiniteCanvasTouchBarDelegate: NSObject, NSTouchBarDelegate {
+    static let collapseButtonIdentifier = NSTouchBarItem.Identifier("com.mindflow.touchbar.collapse")
+    static let relationshipButtonIdentifier = NSTouchBarItem.Identifier("com.mindflow.touchbar.relationship")
+    static let touchBarIdentifier = NSTouchBar.CustomizationIdentifier("com.mindflow.touchbar.main")
+    
+    var viewModel: CanvasViewModel
+    var isRelationshipMode: Binding<Bool>
+    private var touchBar: NSTouchBar?
+    
+    init(viewModel: CanvasViewModel, isRelationshipMode: Binding<Bool>) {
+        self.viewModel = viewModel
+        self.isRelationshipMode = isRelationshipMode
+        super.init()
+        configureTouchBar()
+    }
+    
+    func configureTouchBar() {
+        let touchBar = NSTouchBar()
+        touchBar.delegate = self
+        touchBar.customizationIdentifier = InfiniteCanvasTouchBarDelegate.touchBarIdentifier
+        touchBar.defaultItemIdentifiers = [
+            .fixedSpaceSmall,
+            InfiniteCanvasTouchBarDelegate.collapseButtonIdentifier,
+            .fixedSpaceLarge,
+            InfiniteCanvasTouchBarDelegate.relationshipButtonIdentifier,
+            .fixedSpaceSmall
+        ]
+        
+        self.touchBar = touchBar
+        
+        // Set as the current touch bar
+        if let window = NSApplication.shared.mainWindow {
+            window.touchBar = touchBar
+        }
+    }
+    
+    func updateTouchBar() {
+        // Force the touch bar to update by recreating it
+        configureTouchBar()
+    }
+    
+    func touchBar(_ touchBar: NSTouchBar, makeItemForIdentifier identifier: NSTouchBarItem.Identifier) -> NSTouchBarItem? {
+        switch identifier {
+        case InfiniteCanvasTouchBarDelegate.collapseButtonIdentifier:
+            let item = NSCustomTouchBarItem(identifier: identifier)
+            
+            // Create button with only image initially
+            let button = NSButton(title: "", image: NSImage(systemSymbolName: "2.circle", accessibilityDescription: "Collapse/Expand") ?? NSImage(), target: self, action: #selector(toggleCollapse))
+            
+            // Set button style to separate text from image
+            button.bezelStyle = .rounded
+            button.imagePosition = .imageLeading
+            
+            // Update button appearance based on selection state
+            if let selectedId = viewModel.selectedTopicId,
+               let topic = viewModel.getTopicById(selectedId) {
+                let isCollapsed = viewModel.isTopicCollapsed(id: selectedId)
+                let totalDescendants = viewModel.countAllDescendants(for: topic)
+                
+                if totalDescendants > 0 {
+                    button.image = NSImage(systemSymbolName: "\(totalDescendants).circle", accessibilityDescription: "Collapse/Expand") ?? NSImage()
+                    button.title = isCollapsed ? " Expand" : " Collapse" // Add space before text
+                    button.isEnabled = true
+                } else {
+                    button.image = NSImage(systemSymbolName: "circle", accessibilityDescription: "Collapse/Expand") ?? NSImage()
+                    button.title = " Collapse" // Add space before text
+                    button.isEnabled = false
+                }
+            } else {
+                button.isEnabled = false
+            }
+            
+            item.view = button
+            return item
+            
+        case InfiniteCanvasTouchBarDelegate.relationshipButtonIdentifier:
+            let item = NSCustomTouchBarItem(identifier: identifier)
+            let button = NSButton(title: " Relationship", image: NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "Create Relationships") ?? NSImage(), target: self, action: #selector(toggleRelationshipMode))
+            
+            // Set button style to separate text from image
+            button.bezelStyle = .rounded
+            button.imagePosition = .imageLeading
+            
+            // Update button appearance based on mode state
+            if isRelationshipMode.wrappedValue {
+                button.bezelColor = NSColor.blue.withAlphaComponent(0.2)
+            }
+            
+            item.view = button
+            return item
+            
+        default:
+            return nil
+        }
+    }
+    
+    @objc func toggleCollapse() {
+        if let selectedId = viewModel.selectedTopicId {
+            viewModel.toggleCollapseState(topicId: selectedId)
+            updateTouchBar() // Update button state after toggle
+        }
+    }
+    
+    @objc func toggleRelationshipMode() {
+        isRelationshipMode.wrappedValue.toggle()
+        updateTouchBar() // Update button state after toggle
+    }
+}
+
 struct InfiniteCanvas: View {
     @StateObject private var viewModel = CanvasViewModel()
     @State private var offset: CGPoint = .zero
@@ -17,6 +126,9 @@ struct InfiniteCanvas: View {
     @State private var backgroundStyle: BackgroundStyle = .grid // Track background style
     @State private var backgroundColor: Color = Color(.windowBackgroundColor) // Track background color
     @State private var backgroundOpacity: Double = 1.0 // Track background opacity
+    @State private var sidebarMode: SidebarMode = .style
+    @State private var isRelationshipMode: Bool = false // Track relationship mode
+    @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -207,7 +319,7 @@ struct InfiniteCanvas: View {
                     }
                     
                     // Topics layer
-                    TopicsCanvasView(viewModel: viewModel)
+                    TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
                         .scaleEffect(scale)
                         .offset(x: offset.x, y: offset.y)
                 }
@@ -222,6 +334,70 @@ struct InfiniteCanvas: View {
                             Text("MindFlow")
                                 .foregroundColor(.primary)
                                 .padding(.horizontal)
+                            
+                            Spacer()
+                            
+                            // Both buttons centered in a HStack
+                            HStack(spacing: 16) {
+                                // Collapse button - always visible, enabled when a topic with children is selected
+                                Button(action: {
+                                    if let selectedId = viewModel.selectedTopicId {
+                                        viewModel.toggleCollapseState(topicId: selectedId)
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        let isCollapsed = viewModel.selectedTopicId.flatMap(viewModel.isTopicCollapsed) ?? false
+                                        let totalDescendants = viewModel.selectedTopicId.flatMap { id in 
+                                            if let topic = viewModel.getTopicById(id) {
+                                                return viewModel.countAllDescendants(for: topic)
+                                            }
+                                            return 0
+                                        } ?? 0
+                                        
+                                        Image(systemName: totalDescendants > 0 ? "\(totalDescendants).circle" : "circle")
+                                            .foregroundColor(totalDescendants > 0 ? .primary : .gray)
+                                            .font(.system(size: 14, weight: .regular))
+                                        
+                                        Text(isCollapsed ? "Expand" : "Collapse")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(totalDescendants > 0 ? .primary : .gray)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color(.controlBackgroundColor).opacity(0.7))
+                                    .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                                .focusable(false)
+                                .disabled(viewModel.selectedTopicId == nil || 
+                                         (viewModel.selectedTopicId.flatMap { id in 
+                                             viewModel.getTopicById(id)
+                                         }.flatMap { topic in 
+                                             viewModel.countAllDescendants(for: topic)
+                                         } ?? 0) == 0)
+                                
+                                // Relationship button - always visible
+                                Button(action: {
+                                    isRelationshipMode.toggle()
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.triangle.branch")
+                                            .foregroundColor(isRelationshipMode ? .blue : .primary)
+                                            .font(.system(size: 14, weight: .regular))
+                                        
+                                        Text("Relationship")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(isRelationshipMode ? .blue : .primary)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(isRelationshipMode ? Color.blue.opacity(0.2) : Color(.controlBackgroundColor).opacity(0.7))
+                                    .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                                .focusable(false)
+                            }
+                            
                             Spacer()
                             
                             // Sidebar toggle button container
@@ -301,454 +477,209 @@ struct InfiniteCanvas: View {
                                 .frame(width: sidebarWidth)
                                 .overlay(
                                     VStack(spacing: 16) {
-                                        // Sidebar header
-                                        Text("Style")
-                                            .foregroundColor(.primary)
-                                            .font(.headline)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.top, 12)
-                                            .padding(.horizontal)
-                                        
-                                        Divider()
-                                            .padding(.horizontal)
-                                        
-                                        // Canvas Background Style section
-                                        VStack(spacing: 16) {
-                                            // Section header
-                                            Text("Canvas Background")
-                                                .foregroundColor(.primary)
-                                                .font(.headline)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.top, 12)
-                                                .padding(.horizontal)
-                                            
-                                            Divider()
-                                                .padding(.horizontal)
-                                            
-                                            // Background style selector
-                                            HStack(spacing: 8) {
-                                                Text("Style")
-                                                    .foregroundColor(.primary)
-                                                    .font(.system(size: 13))
-                                                
-                                                Spacer()
-                                                
-                                                Picker("", selection: $backgroundStyle) {
-                                                    ForEach(BackgroundStyle.allCases) { style in
-                                                        HStack {
-                                                            Image(systemName: style.iconName)
-                                                                .font(.system(size: 14))
-                                                            Text(style.rawValue)
-                                                        }
-                                                        .tag(style)
-                                                    }
-                                                }
-                                                .pickerStyle(MenuPickerStyle())
-                                                .frame(width: 120)
-                                            }
-                                            .padding(.horizontal)
-                                            
-                                            // Background color control
-                                            HStack(spacing: 8) {
-                                                Text("Color")
-                                                    .foregroundColor(.primary)
-                                                    .font(.system(size: 13))
-                                                
-                                                Spacer()
-                                                
-                                                Button(action: {
-                                                    isShowingBackgroundColorPicker.toggle()
-                                                }) {
-                                                    RoundedRectangle(cornerRadius: 2)
-                                                        .fill(backgroundColor)
-                                                        .frame(width: 50, height: 28)
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 2)
-                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                        )
-                                                }
-                                                .buttonStyle(PlainButtonStyle())
-                                                .popover(isPresented: $isShowingBackgroundColorPicker, arrowEdge: .bottom) {
-                                                    ColorPickerView(
-                                                        selectedColor: $backgroundColor,
-                                                        opacity: $backgroundOpacity
-                                                    )
-                                                }
-                                            }
-                                            .padding(.horizontal)
+                                        // Sidebar header with segmented control
+                                        Picker("", selection: $sidebarMode) {
+                                            Text("Style").tag(SidebarMode.style)
+                                            Text("Map").tag(SidebarMode.map)
                                         }
+                                        .pickerStyle(.segmented)
+                                        .padding(.horizontal)
+                                        .padding(.top, 12)
                                         
                                         Divider()
                                             .padding(.horizontal)
                                         
-                                        // Topic styling - only shown when a topic is selected
-                                        if let selectedTopic = viewModel.getSelectedTopic() {
-                                            // Topic Style header
-                                            Text("Topic Style")
-                                                .foregroundColor(.primary)
-                                                .font(.headline)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.top, 12)
-                                                .padding(.horizontal)
-                                            
-                                            Divider()
-                                                .padding(.horizontal)
-                                            
-                                            // Shape selector
-                                            ShapeSelector(
-                                                selectedShape: selectedTopic.shape,
-                                                onShapeSelected: { shape in
-                                                    viewModel.updateTopicShape(selectedTopic.id, shape: shape)
-                                                }
-                                            )
-                                            
-                                            // Fill control
-                                            HStack(spacing: 8) {
-                                                Text("Fill")
+                                        if sidebarMode == .style {
+                                            // Canvas Background Style section
+                                            VStack(spacing: 16) {
+                                                // Section header
+                                                Text("Canvas Background")
                                                     .foregroundColor(.primary)
-                                                    .font(.system(size: 13))
-                                                
-                                                Spacer()
-                                                
-                                                Button(action: {
-                                                    isShowingColorPicker.toggle()
-                                                }) {
-                                                    RoundedRectangle(cornerRadius: 2)
-                                                        .fill(selectedTopic.backgroundColor)
-                                                        .frame(width: 50, height: 28)
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 2)
-                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                        )
-                                                }
-                                                .buttonStyle(PlainButtonStyle())
-                                                .popover(isPresented: $isShowingColorPicker, arrowEdge: .bottom) {
-                                                    ColorPickerView(
-                                                        selectedColor: Binding(
-                                                            get: { selectedTopic.backgroundColor },
-                                                            set: { newColor in
-                                                                viewModel.updateTopicBackgroundColor(selectedTopic.id, color: newColor)
-                                                            }
-                                                        ),
-                                                        opacity: Binding(
-                                                            get: { selectedTopic.backgroundOpacity },
-                                                            set: { newOpacity in
-                                                                viewModel.updateTopicBackgroundOpacity(selectedTopic.id, opacity: newOpacity)
-                                                            }
-                                                        )
-                                                    )
-                                                }
-                                            }
+                                                    .font(.headline)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.top, 12)
                                                     .padding(.horizontal)
-                                            
-                                            // Border control
-                                            HStack(spacing: 8) {
-                                                Text("Border")
-                                                    .foregroundColor(.primary)
-                                                    .font(.system(size: 13))
                                                 
-                                                Spacer()
+                                                Divider()
+                                                    .padding(.horizontal)
                                                 
-                                                Button(action: {
-                                                    isShowingBorderColorPicker.toggle()
-                                                }) {
-                                                    RoundedRectangle(cornerRadius: 2)
-                                                        .fill(selectedTopic.borderColor)
-                                                        .frame(width: 50, height: 28)
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 2)
-                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                        )
-                                                }
-                                                .buttonStyle(PlainButtonStyle())
-                                                .popover(isPresented: $isShowingBorderColorPicker, arrowEdge: .bottom) {
-                                                    ColorPickerView(
-                                                        selectedColor: Binding(
-                                                            get: { selectedTopic.borderColor },
-                                                            set: { newColor in
-                                                                viewModel.updateTopicBorderColor(selectedTopic.id, color: newColor)
-                                                            }
-                                                        ),
-                                                        opacity: Binding(
-                                                            get: { selectedTopic.borderOpacity },
-                                                            set: { newOpacity in
-                                                                viewModel.updateTopicBorderOpacity(selectedTopic.id, opacity: newOpacity)
-                                                            }
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                            .padding(.horizontal)
-                                            
-                                            // Border width control
-                                            HStack(spacing: 8) {
-                                                Text("Border Width")
-                                                    .foregroundColor(.primary)
-                                                    .font(.system(size: 13))
-                                                
-                                                Spacer()
-                                                
-                                                Menu {
-                                                    ForEach(Topic.BorderWidth.allCases, id: \.self) { width in
-                                                        Button(action: {
-                                                            viewModel.updateTopicBorderWidth(selectedTopic.id, width: width)
-                                                        }) {
+                                                // Background style selector
+                                                HStack(spacing: 8) {
+                                                    Text("Style")
+                                                        .foregroundColor(.primary)
+                                                        .font(.system(size: 13))
+                                                    
+                                                    Spacer()
+                                                    
+                                                    Picker("", selection: $backgroundStyle) {
+                                                        ForEach(BackgroundStyle.allCases) { style in
                                                             HStack {
-                                                                if selectedTopic.borderWidth == width {
-                                                                    Image(systemName: "checkmark")
-                                                                        .frame(width: 16, alignment: .center)
-                                                                } else {
-                                                                    Color.clear
-                                                                        .frame(width: 16)
-                                                                }
-                                                                Text(width.displayName)
-                                                                Spacer()
+                                                                Image(systemName: style.iconName)
+                                                                    .font(.system(size: 14))
+                                                                Text(style.rawValue)
                                                             }
-                                                            .contentShape(Rectangle())
+                                                            .tag(style)
                                                         }
                                                     }
-                                                } label: {
-                                                    HStack {
-                                                        Text(selectedTopic.borderWidth.displayName)
-                                                            .foregroundColor(.white)
-                                                    }
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 6)
-                                                    .frame(width: 100)
-                                                    .background(Color.black.opacity(0.6))
-                                                    .cornerRadius(6)
+                                                    .pickerStyle(MenuPickerStyle())
+                                                    .frame(width: 120)
                                                 }
-                                            }
-                                            .padding(.horizontal)
-                                        } else {
-                                            Text("Select a topic to edit its properties")
-                                                .foregroundColor(.secondary)
-                                                .padding()
-                                        }
-                                        
-                                        // Spacer(minLength: 0)
-                                        
-                                        // Text section
-                                        VStack(spacing: 16) {
-                                            // Section header
-                                            Text("Text")
-                                                .foregroundColor(.primary)
-                                                .font(.headline)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.top, 12)
                                                 .padding(.horizontal)
+                                                
+                                                // Background color control
+                                                HStack(spacing: 8) {
+                                                    Text("Color")
+                                                        .foregroundColor(.primary)
+                                                        .font(.system(size: 13))
+                                                    
+                                                    Spacer()
+                                                    
+                                                    Button(action: {
+                                                        isShowingBackgroundColorPicker.toggle()
+                                                    }) {
+                                                        RoundedRectangle(cornerRadius: 2)
+                                                            .fill(backgroundColor)
+                                                            .frame(width: 50, height: 28)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 2)
+                                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                            )
+                                                    }
+                                                    .buttonStyle(PlainButtonStyle())
+                                                    .popover(isPresented: $isShowingBackgroundColorPicker, arrowEdge: .bottom) {
+                                                        ColorPickerView(
+                                                            selectedColor: $backgroundColor,
+                                                            opacity: $backgroundOpacity
+                                                        )
+                                                    }
+                                                }
+                                                .padding(.horizontal)
+                                            }
                                             
                                             Divider()
                                                 .padding(.horizontal)
                                             
-                                            // Row 1: Font style and size
-                                            HStack(spacing: 8) {
-                                                Menu {
-                                                    ForEach(["Apple SD Gothic", "System", "Helvetica", "Arial", "Times New Roman"], id: \.self) { font in
-                                                        Button(action: {
-                                                            if let selectedTopic = viewModel.getSelectedTopic() {
-                                                                viewModel.updateTopicFont(selectedTopic.id, font: font)
-                                                            }
-                                                        }) {
-                                                            Text(font)
-                                                        }
-                                                    }
-                                                } label: {
-                                                    HStack {
-                                                        Text(viewModel.getSelectedTopic()?.font ?? "System")
-                                                            .lineLimit(1)
-                                                            .truncationMode(.tail)
-                                                        Spacer()
-                                                        Image(systemName: "chevron.down")
-                                                            .font(.system(size: 10))
-                                                    }
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 6)
-                                                    .frame(width: 120)
-                                                    .background(Color(.darkGray))
-                                                    .cornerRadius(6)
-                                                }
+                                            // Topic styling - only shown when a topic is selected
+                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                // Topic Style header
+                                                Text("Topic Style")
+                                                    .foregroundColor(.primary)
+                                                    .font(.headline)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.top, 12)
+                                                    .padding(.horizontal)
                                                 
-                                                Menu {
-                                                    ForEach([8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64], id: \.self) { size in
-                                                        Button(action: {
-                                                            if let selectedTopic = viewModel.getSelectedTopic() {
-                                                                viewModel.updateTopicFontSize(selectedTopic.id, size: CGFloat(size))
-                                                            }
-                                                        }) {
-                                                            Text("\(size)")
-                                                        }
-                                                    }
-                                                } label: {
-                                                    HStack {
-                                                        Text("\(Int(viewModel.getSelectedTopic()?.fontSize ?? 16))")
-                                                        Spacer()
-                                                        Image(systemName: "chevron.down")
-                                                            .font(.system(size: 10))
-                                                    }
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 6)
-                                                    .frame(width: 60)
-                                                    .background(Color(.darkGray))
-                                                    .cornerRadius(6)
-                                                }
-                                            }
-                                            .padding(.horizontal)
-                                            
-                                            // Row 2: Font weight and foreground color
-                                            HStack(spacing: 8) {
-                                                Menu {
-                                                    ForEach(Font.Weight.allCases, id: \.self) { weight in
-                                                        Button(action: {
-                                                            if let selectedTopic = viewModel.getSelectedTopic() {
-                                                                viewModel.updateTopicFontWeight(selectedTopic.id, weight: weight)
-                                                            }
-                                                        }) {
-                                                            Text(weight.displayName)
-                                                        }
-                                                    }
-                                                } label: {
-                                                    HStack {
-                                                        Text(viewModel.getSelectedTopic()?.fontWeight.displayName ?? "Medium")
-                                                        Spacer()
-                                                        Image(systemName: "chevron.down")
-                                                            .font(.system(size: 10))
-                                                    }
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 6)
-                                                    .frame(width: 120)
-                                                    .background(Color(.darkGray))
-                                                    .cornerRadius(6)
-                                                }
+                                                Divider()
+                                                    .padding(.horizontal)
                                                 
-                                                Button(action: {
-                                                    isShowingForegroundColorPicker.toggle()
-                                                }) {
-                                                    RoundedRectangle(cornerRadius: 2)
-                                                        .fill(viewModel.getSelectedTopic()?.foregroundColor ?? .white)
-                                                        .frame(width: 50, height: 28)
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 2)
-                                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                        )
-                                                }
-                                                .buttonStyle(PlainButtonStyle())
-                                                .popover(isPresented: $isShowingForegroundColorPicker, arrowEdge: .bottom) {
-                                                    if let selectedTopic = viewModel.getSelectedTopic() {
+                                                // Shape selector
+                                                ShapeSelector(
+                                                    selectedShape: selectedTopic.shape,
+                                                    onShapeSelected: { shape in
+                                                        viewModel.updateTopicShape(selectedTopic.id, shape: shape)
+                                                    }
+                                                )
+                                                
+                                                // Fill control
+                                                HStack(spacing: 8) {
+                                                    Text("Fill")
+                                                        .foregroundColor(.primary)
+                                                        .font(.system(size: 13))
+                                                    
+                                                    Spacer()
+                                                    
+                                                    Button(action: {
+                                                        isShowingColorPicker.toggle()
+                                                    }) {
+                                                        RoundedRectangle(cornerRadius: 2)
+                                                            .fill(selectedTopic.backgroundColor)
+                                                            .frame(width: 50, height: 28)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 2)
+                                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                            )
+                                                    }
+                                                    .buttonStyle(PlainButtonStyle())
+                                                    .popover(isPresented: $isShowingColorPicker, arrowEdge: .bottom) {
                                                         ColorPickerView(
                                                             selectedColor: Binding(
-                                                                get: { selectedTopic.foregroundColor },
+                                                                get: { selectedTopic.backgroundColor },
                                                                 set: { newColor in
-                                                                    viewModel.updateTopicForegroundColor(selectedTopic.id, color: newColor)
+                                                                    viewModel.updateTopicBackgroundColor(selectedTopic.id, color: newColor)
                                                                 }
                                                             ),
                                                             opacity: Binding(
-                                                                get: { selectedTopic.foregroundOpacity },
+                                                                get: { selectedTopic.backgroundOpacity },
                                                                 set: { newOpacity in
-                                                                    viewModel.updateTopicForegroundOpacity(selectedTopic.id, opacity: newOpacity)
+                                                                    viewModel.updateTopicBackgroundOpacity(selectedTopic.id, opacity: newOpacity)
                                                                 }
                                                             )
                                                         )
                                                     }
                                                 }
-                                            }
-                                            .padding(.horizontal)
-                                            
-                                            // Row 3: Text style controls
-                                            HStack(spacing: 0) {
-                                                ForEach(TextStyle.allCases, id: \.self) { style in
-                                                    Button(action: {
-                                                        if let selectedTopic = viewModel.getSelectedTopic() {
-                                                            let isEnabled = !(selectedTopic.textStyles.contains(style))
-                                                            viewModel.updateTopicTextStyle(selectedTopic.id, style: style, isEnabled: isEnabled)
-                                                        }
-                                                    }) {
-                                                        Image(systemName: style.iconName)
-                                                            .foregroundColor(.white)
-                                                            .frame(maxWidth: .infinity, minHeight: 28)
-                                                            .background(viewModel.getSelectedTopic()?.textStyles.contains(style) ?? false ? Color.gray.opacity(0.3) : Color.clear)
-                                                            .contentShape(Rectangle())
-                                                    }
-                                                    .buttonStyle(.plain)
-                                                    
-                                                    if style != .underline {
-                                                        Divider()
-                                                            .frame(height: 16)
-                                                            .background(Color.black.opacity(0.2))
-                                                    }
-                                                }
+                                                        .padding(.horizontal)
                                                 
-                                                Divider()
-                                                    .frame(height: 16)
-                                                    .background(Color.black.opacity(0.2))
-                                                
-                                                Button(action: {
-                                                    if let selectedTopic = viewModel.getSelectedTopic() {
-                                                        let nextCase = TextCase.allCases.first { $0 != selectedTopic.textCase } ?? .none
-                                                        viewModel.updateTopicTextCase(selectedTopic.id, textCase: nextCase)
-                                                    }
-                                                }) {
-                                                    Image(systemName: "textformat")
-                                                        .foregroundColor(.white)
-                                                        .frame(maxWidth: .infinity, minHeight: 28)
-                                                        .contentShape(Rectangle())
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                            .padding(.vertical, 2)
-                                            .padding(.horizontal, 4)
-                                            .background(Color(.darkGray))
-                                            .cornerRadius(6)
-                                            .padding(.horizontal)
-                                            
-                                            // Row 4: Text alignment
-                                            Picker("", selection: Binding(
-                                                get: { viewModel.getSelectedTopic()?.textAlignment ?? .center },
-                                                set: { alignment in
-                                                    if let selectedTopic = viewModel.getSelectedTopic() {
-                                                        viewModel.updateTopicTextAlignment(selectedTopic.id, alignment: alignment)
-                                                    }
-                                                }
-                                            )) {
-                                                ForEach(TextAlignment.allCases, id: \.self) { alignment in
-                                                    Image(systemName: alignment.iconName)
-                                                        .tag(alignment)
-                                                }
-                                            }
-                                            .pickerStyle(.segmented)
-                                            .padding(.horizontal)
-                                        }
-                                        
-                                        // Branch Style section
-                                        VStack(spacing: 16) {
-                                            // Section header
-                                            Text("Branch Style")
-                                                .foregroundColor(.primary)
-                                                .font(.headline)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.top, 12)
-                                                .padding(.horizontal)
-                                            
-                                            Divider()
-                                                .padding(.horizontal)
-                                            
-                                            // Branch style dropdown
-                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                // Border control
                                                 HStack(spacing: 8) {
+                                                    Text("Border")
+                                                        .foregroundColor(.primary)
+                                                        .font(.system(size: 13))
+                                                    
+                                                    Spacer()
+                                                    
+                                                    Button(action: {
+                                                        isShowingBorderColorPicker.toggle()
+                                                    }) {
+                                                        RoundedRectangle(cornerRadius: 2)
+                                                            .fill(selectedTopic.borderColor)
+                                                            .frame(width: 50, height: 28)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 2)
+                                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                            )
+                                                    }
+                                                    .buttonStyle(PlainButtonStyle())
+                                                    .popover(isPresented: $isShowingBorderColorPicker, arrowEdge: .bottom) {
+                                                        ColorPickerView(
+                                                            selectedColor: Binding(
+                                                                get: { selectedTopic.borderColor },
+                                                                set: { newColor in
+                                                                    viewModel.updateTopicBorderColor(selectedTopic.id, color: newColor)
+                                                                }
+                                                            ),
+                                                            opacity: Binding(
+                                                                get: { selectedTopic.borderOpacity },
+                                                                set: { newOpacity in
+                                                                    viewModel.updateTopicBorderOpacity(selectedTopic.id, opacity: newOpacity)
+                                                                }
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                                .padding(.horizontal)
+                                                
+                                                // Border width control
+                                                HStack(spacing: 8) {
+                                                    Text("Border Width")
+                                                        .foregroundColor(.primary)
+                                                        .font(.system(size: 13))
+                                                    
+                                                    Spacer()
+                                                    
                                                     Menu {
-                                                        ForEach(Topic.BranchStyle.allCases, id: \.self) { style in
+                                                        ForEach(Topic.BorderWidth.allCases, id: \.self) { width in
                                                             Button(action: {
-                                                                viewModel.updateTopicBranchStyle(selectedTopic.id, style: style)
+                                                                viewModel.updateTopicBorderWidth(selectedTopic.id, width: width)
                                                             }) {
                                                                 HStack {
-                                                                    if selectedTopic.branchStyle == style {
+                                                                    if selectedTopic.borderWidth == width {
                                                                         Image(systemName: "checkmark")
                                                                             .frame(width: 16, alignment: .center)
                                                                     } else {
                                                                         Color.clear
                                                                             .frame(width: 16)
                                                                     }
-                                                                    Text(style.displayName)
+                                                                    Text(width.displayName)
                                                                     Spacer()
                                                                 }
                                                                 .contentShape(Rectangle())
@@ -756,8 +687,55 @@ struct InfiniteCanvas: View {
                                                         }
                                                     } label: {
                                                         HStack {
-                                                            Text(selectedTopic.branchStyle.displayName)
+                                                            Text(selectedTopic.borderWidth.displayName)
                                                                 .foregroundColor(.white)
+                                                        }
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 6)
+                                                        .frame(width: 100)
+                                                        .background(Color.black.opacity(0.6))
+                                                        .cornerRadius(6)
+                                                    }
+                                                }
+                                                .padding(.horizontal)
+                                            } else {
+                                                Text("Select a topic to edit its properties")
+                                                    .foregroundColor(.secondary)
+                                                    .padding()
+                                            }
+                                            
+                                            // Spacer(minLength: 0)
+                                            
+                                            // Text section
+                                            VStack(spacing: 16) {
+                                                // Section header
+                                                Text("Text")
+                                                    .foregroundColor(.primary)
+                                                    .font(.headline)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.top, 12)
+                                                    .padding(.horizontal)
+                                                
+                                                Divider()
+                                                    .padding(.horizontal)
+                                                
+                                                // Row 1: Font style and size
+                                                HStack(spacing: 8) {
+                                                    Menu {
+                                                        ForEach(["Apple SD Gothic", "System", "Helvetica", "Arial", "Times New Roman"], id: \.self) { font in
+                                                            Button(action: {
+                                                                if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                    viewModel.updateTopicFont(selectedTopic.id, font: font)
+                                                                }
+                                                            }) {
+                                                                Text(font)
+                                                            }
+                                                        }
+                                                    } label: {
+                                                        HStack {
+                                                            Text(viewModel.getSelectedTopic()?.font ?? "System")
+                                                                .lineLimit(1)
+                                                                .truncationMode(.tail)
                                                             Spacer()
                                                             Image(systemName: "chevron.down")
                                                                 .font(.system(size: 10))
@@ -768,8 +746,229 @@ struct InfiniteCanvas: View {
                                                         .background(Color(.darkGray))
                                                         .cornerRadius(6)
                                                     }
+                                                    
+                                                    Menu {
+                                                        ForEach([8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64], id: \.self) { size in
+                                                            Button(action: {
+                                                                if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                    viewModel.updateTopicFontSize(selectedTopic.id, size: CGFloat(size))
+                                                                }
+                                                            }) {
+                                                                Text("\(size)")
+                                                            }
+                                                        }
+                                                    } label: {
+                                                        HStack {
+                                                            Text("\(Int(viewModel.getSelectedTopic()?.fontSize ?? 16))")
+                                                            Spacer()
+                                                            Image(systemName: "chevron.down")
+                                                                .font(.system(size: 10))
+                                                        }
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 6)
+                                                        .frame(width: 60)
+                                                        .background(Color(.darkGray))
+                                                        .cornerRadius(6)
+                                                    }
                                                 }
                                                 .padding(.horizontal)
+                                                
+                                                // Row 2: Font weight and foreground color
+                                                HStack(spacing: 8) {
+                                                    Menu {
+                                                        ForEach(Font.Weight.allCases, id: \.self) { weight in
+                                                            Button(action: {
+                                                                if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                    viewModel.updateTopicFontWeight(selectedTopic.id, weight: weight)
+                                                                }
+                                                            }) {
+                                                                Text(weight.displayName)
+                                                            }
+                                                        }
+                                                    } label: {
+                                                        HStack {
+                                                            Text(viewModel.getSelectedTopic()?.fontWeight.displayName ?? "Medium")
+                                                            Spacer()
+                                                            Image(systemName: "chevron.down")
+                                                                .font(.system(size: 10))
+                                                        }
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 6)
+                                                        .frame(width: 120)
+                                                        .background(Color(.darkGray))
+                                                        .cornerRadius(6)
+                                                    }
+                                                    
+                                                    Button(action: {
+                                                        isShowingForegroundColorPicker.toggle()
+                                                    }) {
+                                                        RoundedRectangle(cornerRadius: 2)
+                                                            .fill(viewModel.getSelectedTopic()?.foregroundColor ?? .white)
+                                                            .frame(width: 50, height: 28)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 2)
+                                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                            )
+                                                    }
+                                                    .buttonStyle(PlainButtonStyle())
+                                                    .popover(isPresented: $isShowingForegroundColorPicker, arrowEdge: .bottom) {
+                                                        if let selectedTopic = viewModel.getSelectedTopic() {
+                                                            ColorPickerView(
+                                                                selectedColor: Binding(
+                                                                    get: { selectedTopic.foregroundColor },
+                                                                    set: { newColor in
+                                                                        viewModel.updateTopicForegroundColor(selectedTopic.id, color: newColor)
+                                                                    }
+                                                                ),
+                                                                opacity: Binding(
+                                                                    get: { selectedTopic.foregroundOpacity },
+                                                                    set: { newOpacity in
+                                                                        viewModel.updateTopicForegroundOpacity(selectedTopic.id, opacity: newOpacity)
+                                                                    }
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                .padding(.horizontal)
+                                                
+                                                // Row 3: Text style controls
+                                                HStack(spacing: 0) {
+                                                    ForEach(TextStyle.allCases, id: \.self) { style in
+                                                        Button(action: {
+                                                            if let selectedTopic = viewModel.getSelectedTopic() {
+                                                                let isEnabled = !(selectedTopic.textStyles.contains(style))
+                                                                viewModel.updateTopicTextStyle(selectedTopic.id, style: style, isEnabled: isEnabled)
+                                                            }
+                                                        }) {
+                                                            Image(systemName: style.iconName)
+                                                                .foregroundColor(.white)
+                                                                .frame(maxWidth: .infinity, minHeight: 28)
+                                                                .background(viewModel.getSelectedTopic()?.textStyles.contains(style) ?? false ? Color.gray.opacity(0.3) : Color.clear)
+                                                                .contentShape(Rectangle())
+                                                        }
+                                                        .buttonStyle(.plain)
+                                                        
+                                                        if style != .underline {
+                                                            Divider()
+                                                                .frame(height: 16)
+                                                                .background(Color.black.opacity(0.2))
+                                                        }
+                                                    }
+                                                    
+                                                    Divider()
+                                                        .frame(height: 16)
+                                                        .background(Color.black.opacity(0.2))
+                                                    
+                                                    Button(action: {
+                                                        if let selectedTopic = viewModel.getSelectedTopic() {
+                                                            let nextCase = TextCase.allCases.first { $0 != selectedTopic.textCase } ?? .none
+                                                            viewModel.updateTopicTextCase(selectedTopic.id, textCase: nextCase)
+                                                        }
+                                                    }) {
+                                                        Image(systemName: "textformat")
+                                                            .foregroundColor(.white)
+                                                            .frame(maxWidth: .infinity, minHeight: 28)
+                                                            .contentShape(Rectangle())
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                                .padding(.vertical, 2)
+                                                .padding(.horizontal, 4)
+                                                .background(Color(.darkGray))
+                                                .cornerRadius(6)
+                                                .padding(.horizontal)
+                                                
+                                                // Row 4: Text alignment
+                                                Picker("", selection: Binding(
+                                                    get: { viewModel.getSelectedTopic()?.textAlignment ?? .center },
+                                                    set: { alignment in
+                                                        if let selectedTopic = viewModel.getSelectedTopic() {
+                                                            viewModel.updateTopicTextAlignment(selectedTopic.id, alignment: alignment)
+                                                        }
+                                                    }
+                                                )) {
+                                                    ForEach(TextAlignment.allCases, id: \.self) { alignment in
+                                                        Image(systemName: alignment.iconName)
+                                                            .tag(alignment)
+                                                    }
+                                                }
+                                                .pickerStyle(.segmented)
+                                                .padding(.horizontal)
+                                            }
+                                            
+                                            // Branch Style section
+                                            VStack(spacing: 16) {
+                                                // Section header
+                                                Text("Branch Style")
+                                                    .foregroundColor(.primary)
+                                                    .font(.headline)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.top, 12)
+                                                    .padding(.horizontal)
+                                                
+                                                Divider()
+                                                    .padding(.horizontal)
+                                                
+                                                // Branch style dropdown
+                                                if let selectedTopic = viewModel.getSelectedTopic() {
+                                                    HStack(spacing: 8) {
+                                                        Menu {
+                                                            ForEach(Topic.BranchStyle.allCases, id: \.self) { style in
+                                                                Button(action: {
+                                                                    viewModel.updateTopicBranchStyle(selectedTopic.id, style: style)
+                                                                }) {
+                                                                    HStack {
+                                                                        if selectedTopic.branchStyle == style {
+                                                                            Image(systemName: "checkmark")
+                                                                                .frame(width: 16, alignment: .center)
+                                                                        } else {
+                                                                            Color.clear
+                                                                                .frame(width: 16)
+                                                                        }
+                                                                        Text(style.displayName)
+                                                                        Spacer()
+                                                                    }
+                                                                    .contentShape(Rectangle())
+                                                                }
+                                                            }
+                                                        } label: {
+                                                            HStack {
+                                                                Text(selectedTopic.branchStyle.displayName)
+                                                                    .foregroundColor(.white)
+                                                                Spacer()
+                                                                Image(systemName: "chevron.down")
+                                                                    .font(.system(size: 10))
+                                                            }
+                                                            .padding(.horizontal, 8)
+                                                            .padding(.vertical, 6)
+                                                            .frame(width: 120)
+                                                            .background(Color(.darkGray))
+                                                            .cornerRadius(6)
+                                                        }
+                                                    }
+                                                    .padding(.horizontal)
+                                                }
+                                            }
+                                            
+                                            Spacer(minLength: 20)
+                                        } else {
+                                            // Map view content
+                                            VStack(spacing: 16) {
+                                                Text("Map View")
+                                                    .foregroundColor(.primary)
+                                                    .font(.headline)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.top, 12)
+                                                    .padding(.horizontal)
+                                                
+                                                Divider()
+                                                    .padding(.horizontal)
+                                                
+                                                // Add map view content here
+                                                Text("Map view content coming soon...")
+                                                    .foregroundColor(.secondary)
+                                                    .padding()
                                             }
                                         }
                                         
@@ -816,6 +1015,14 @@ struct InfiniteCanvas: View {
             .onChange(of: viewModel.topics) { _ in
                 topicsBounds = calculateTopicsBounds()
             }
+            .onChange(of: viewModel.selectedTopicId) { newValue in
+                // Update the touch bar when selection changes
+                touchBarDelegate?.updateTouchBar()
+            }
+            .onChange(of: isRelationshipMode) { newValue in
+                // Update the touch bar when relationship mode changes
+                touchBarDelegate?.updateTouchBar()
+            }
             .onAppear {
                 KeyboardMonitor.shared.keyHandler = { event in
                     if let window = NSApp.keyWindow {
@@ -830,6 +1037,9 @@ struct InfiniteCanvas: View {
                     }
                 }
                 KeyboardMonitor.shared.startMonitoring()
+                
+                // Initialize Touch Bar Delegate
+                touchBarDelegate = InfiniteCanvasTouchBarDelegate(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
                 
                 // Add observer for undo command (Cmd+Z)
                 NotificationCenter.default.addObserver(forName: NSNotification.Name("UndoRequested"), object: nil, queue: .main) { _ in
@@ -1897,6 +2107,12 @@ extension Font.Weight: CaseIterable {
         default: return "Regular"
         }
     }
+}
+
+// Add this enum near the top of the file with other enums
+enum SidebarMode {
+    case style
+    case map
 }
 
 #Preview {
