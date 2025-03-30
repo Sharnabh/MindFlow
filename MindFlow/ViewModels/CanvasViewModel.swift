@@ -6,6 +6,11 @@ class CanvasViewModel: ObservableObject {
     @Published var selectedTopicId: UUID?
     @Published var relationDragState: (fromId: UUID, toPosition: CGPoint)?
     
+    // History for undo/redo
+    private var history: [[Topic]] = []
+    private var currentHistoryIndex: Int = -1
+    private let maxHistorySize: Int = 50
+    
     private var mainTopicCount = 0
     private let subtopicSpacing: CGFloat = 200 // Vertical spacing between topics at the same level
     private let subtopicOffset: CGFloat = 150 // Reduced horizontal offset between levels
@@ -14,9 +19,108 @@ class CanvasViewModel: ObservableObject {
     private let horizontalSpacing: CGFloat = 200 // Minimum horizontal spacing between main topics
     private var isDragging = false
     
+    init() {
+        // Initialize history with current empty state
+        history.append([])
+        currentHistoryIndex = 0
+        
+        // Register for save notifications
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSaveRequest), name: NSNotification.Name("RequestTopicsForSave"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleSaveAsRequest), name: NSNotification.Name("RequestTopicsForSaveAs"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleClearCanvas), name: NSNotification.Name("ClearCanvas"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleLoadRequest), name: NSNotification.Name("LoadMindMap"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleDirectLoadTopics), name: NSNotification.Name("LoadTopics"), object: nil)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Save/Load Functionality
+    
+    @objc private func handleSaveRequest() {
+        MindFlowFileManager.shared.saveCurrentFile(topics: getAllTopics()) { success, errorMessage in
+            DispatchQueue.main.async {
+                if let error = errorMessage {
+                    // Handle error - in a real app, you might want to show an alert
+                    print("Failed to save: \(error)")
+                }
+            }
+        }
+    }
+    
+    @objc private func handleSaveAsRequest() {
+        MindFlowFileManager.shared.saveFileAs(topics: getAllTopics()) { success, errorMessage in
+            DispatchQueue.main.async {
+                if let error = errorMessage {
+                    // Handle error - in a real app, you might want to show an alert
+                    print("Failed to save: \(error)")
+                }
+            }
+        }
+    }
+    
+    @objc private func handleLoadRequest() {
+        // First prompt to save if there are unsaved changes
+        if !topics.isEmpty {
+            // In a real app, you would show a dialog asking to save first
+            // For now, we'll just proceed with loading
+        }
+        
+        MindFlowFileManager.shared.loadFile { loadedTopics, errorMessage in
+            DispatchQueue.main.async {
+                if let topics = loadedTopics {
+                    self.loadTopics(topics)
+                } else if let error = errorMessage {
+                    // Handle error - in a real app, you might want to show an alert
+                    print("Failed to load: \(error)")
+                }
+            }
+        }
+    }
+    
+    /// Loads a set of topics into the canvas
+    private func loadTopics(_ loadedTopics: [Topic]) {
+        saveState() // Save current state for undo
+        
+        // Replace all topics with the loaded ones
+        topics = loadedTopics.map { topic in
+            var newTopic = topic
+            // Make sure transient properties are properly set
+            newTopic.isSelected = false
+            newTopic.isEditing = false
+            return newTopic
+        }
+        
+        // Reset current selection
+        selectedTopicId = nil
+        
+        // Recalculate main topic count
+        mainTopicCount = topics.count
+        
+        // No need to rebuild relations as they should be preserved in the file
+    }
+    
+    @objc private func handleClearCanvas() {
+        saveState() // Save current state for undo
+        
+        // Clear the canvas - reset all state
+        topics = []
+        selectedTopicId = nil
+        relationDragState = nil
+        mainTopicCount = 0
+    }
+    
+    /// Gets all topics from the canvas for saving
+    private func getAllTopics() -> [Topic] {
+        // Return a copy of the topics array
+        return topics.map { $0.deepCopy() }
+    }
+    
     // MARK: - Topic Management
     
     func addMainTopic(at position: CGPoint) {
+        saveState()
         mainTopicCount += 1
         let topic = Topic.createMainTopic(at: position, count: mainTopicCount)
         topics.append(topic)
@@ -24,6 +128,7 @@ class CanvasViewModel: ObservableObject {
     }
     
     func addSubtopic(to parentTopic: Topic) {
+        saveState()
         print("Adding subtopic to parent: \(parentTopic.id), isMainTopic: \(parentTopic.parentId == nil)")
         if parentTopic.parentId == nil {
             // For main topics, add directly to the topics array
@@ -92,29 +197,83 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func calculateNewSubtopicPosition(for parentTopic: Topic, subtopicCount: Int) -> CGPoint {
-        // Calculate the width of the parent topic
-        let parentWidth = max(minTopicWidth, CGFloat(parentTopic.name.count * 10))
+        // Constants for spacing
+        let horizontalSpacing: CGFloat = 200 // Space between parent and child
+        let verticalSpacing: CGFloat = 60 // Space between siblings
         
-        // Adjust base offset based on number of subtopics to prevent overlapping
-        let minRadius = subtopicOffset + parentWidth/2
-        let numSubtopics = subtopicCount + 1 // Including the new subtopic
-        let radius = max(minRadius, minRadius * (1.0 + CGFloat(numSubtopics) * 0.1))
+        // Calculate the total height needed for all subtopics
+        let totalSubtopics = subtopicCount + 1 // Including the new subtopic
+        let totalHeight = verticalSpacing * CGFloat(totalSubtopics - 1)
         
-        // Calculate angle for this subtopic
-        // Distribute subtopics within a 330-degree arc to prevent overlap
-        let totalAngle = 330.0 // Leave 30 degrees gap
-        let angleStep = totalAngle / Double(max(1, numSubtopics - 1))
-        let angleInDegrees = Double(subtopicCount) * angleStep
-        let angleInRadians = angleInDegrees * .pi / 180.0
+        // Calculate the starting Y position (top-most subtopic)
+        let startY = parentTopic.position.y + totalHeight/2
         
-        // Calculate position using polar coordinates
-        let x = parentTopic.position.x + radius * cos(angleInRadians)
-        let y = parentTopic.position.y + radius * sin(angleInRadians)
+        // Calculate this subtopic's Y position
+        let y = startY - (CGFloat(subtopicCount) * verticalSpacing)
         
-        return CGPoint(x: x, y: y)
+        // Position the subtopic to the right of the parent
+        let x = parentTopic.position.x + horizontalSpacing
+        
+        // After calculating the initial position, check for overlaps with existing subtopics
+        var newPosition = CGPoint(x: x, y: y)
+        
+        // Recursively check and adjust position if needed
+        newPosition = adjustPositionForOverlap(newPosition, parentTopic: parentTopic)
+        
+        return newPosition
+    }
+    
+    private func adjustPositionForOverlap(_ position: CGPoint, parentTopic: Topic) -> CGPoint {
+        var adjustedPosition = position
+        
+        // Check for overlaps with all topics
+        for topic in topics {
+            // Skip the parent topic itself
+            if topic.id == parentTopic.id {
+                continue
+            }
+            
+            // Check overlap with the topic and its subtopics recursively
+            if let newPos = checkAndAdjustOverlap(adjustedPosition, with: topic) {
+                adjustedPosition = newPos
+            }
+        }
+        
+        return adjustedPosition
+    }
+    
+    private func checkAndAdjustOverlap(_ position: CGPoint, with topic: Topic) -> CGPoint? {
+        let topicBox = getTopicBox(topic: topic)
+        let newTopicBox = CGRect(
+            x: position.x - 60,  // Half of typical topic width
+            y: position.y - 20,  // Half of typical topic height
+            width: 120,          // Typical topic width
+            height: 40           // Typical topic height
+        )
+        
+        // If there's an overlap, adjust the position
+        if topicBox.intersects(newTopicBox) {
+            // Move the position down by a bit more than the topic height
+            return CGPoint(x: position.x, y: position.y + 70)
+        }
+        
+        // Recursively check subtopics
+        for subtopic in topic.subtopics {
+            if let adjustedPos = checkAndAdjustOverlap(position, with: subtopic) {
+                return adjustedPos
+            }
+        }
+        
+        return nil
     }
     
     func updateTopicName(_ id: UUID, newName: String) {
+        // Skip saving state for minor text edits to avoid filling history
+        // with every keystroke during editing
+        if let topic = getTopicById(id), topic.name != newName && !newName.isEmpty {
+            saveState()
+        }
+        
         // Update main topic name
         if let index = topics.firstIndex(where: { $0.id == id }) {
             topics[index].name = newName
@@ -286,32 +445,31 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func positionSubtree(in topic: inout Topic, parentX: CGFloat, startY: CGFloat) {
-        let parentWidth = max(minTopicWidth, CGFloat(topic.name.count * 10))
         let numSubtopics = topic.subtopics.count
+        if numSubtopics == 0 { return }
         
-        // Adjust radius based on number of subtopics
-        let minRadius = subtopicOffset + parentWidth/2
-        let radius = max(minRadius, minRadius * (1.0 + CGFloat(numSubtopics) * 0.1))
+        // Constants for spacing
+        let horizontalSpacing: CGFloat = 200 // Space between parent and child
+        let verticalSpacing: CGFloat = 60 // Space between siblings
         
-        // Position each subtopic radially, starting from right side
-        for i in 0..<topic.subtopics.count {
+        // Calculate the total height needed for all subtopics
+        let totalHeight = verticalSpacing * CGFloat(numSubtopics - 1)
+        
+        // Calculate the starting Y position (top-most subtopic)
+        let topY = topic.position.y + totalHeight/2
+        
+        // Position each subtopic
+        for i in 0..<numSubtopics {
             var subtopic = topic.subtopics[i]
             
-            // Calculate angle for this subtopic using dynamic distribution
-            let totalAngle = 330.0 // Leave 30 degrees gap
-            let angleStep = totalAngle / Double(max(1, numSubtopics - 1))
-            let angleInDegrees = Double(i) * angleStep
-            let angleInRadians = angleInDegrees * .pi / 180.0
-            
-            // Position the subtopic using polar coordinates
-            subtopic.position = CGPoint(
-                x: topic.position.x + radius * cos(angleInRadians),
-                y: topic.position.y + radius * sin(angleInRadians)
-            )
+            // Calculate position
+            let x = topic.position.x + horizontalSpacing
+            let y = topY - (CGFloat(i) * verticalSpacing)
+            subtopic.position = CGPoint(x: x, y: y)
             
             // Recursively position this subtopic's subtree
             if !subtopic.subtopics.isEmpty {
-                positionSubtree(in: &subtopic, parentX: subtopic.position.x, startY: subtopic.position.y)
+                positionSubtree(in: &subtopic, parentX: x, startY: y)
             }
             
             topic.subtopics[i] = subtopic
@@ -460,7 +618,7 @@ class CanvasViewModel: ObservableObject {
     
     func handleDragEnd(_ topicId: UUID) {
         isDragging = false
-        // Optionally add any cleanup or final positioning logic here
+        saveState() // Save state after dragging ends
     }
     
     // MARK: - Topic Finding
@@ -480,8 +638,37 @@ class CanvasViewModel: ObservableObject {
     }
     
     func getSelectedTopic() -> Topic? {
-        guard let id = selectedTopicId else { return nil }
-        return findTopic(id: id)
+        guard let selectedId = selectedTopicId else { return nil }
+        
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == selectedId }) {
+            return topic
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let found = findTopicInSubtopics(id: selectedId, in: topic) {
+                return found
+            }
+        }
+        
+        return nil
+    }
+    
+    func getTopicById(_ id: UUID) -> Topic? {
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == id }) {
+            return topic
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let found = findTopicInSubtopics(id: id, in: topic) {
+                return found
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Keyboard Events
@@ -561,6 +748,7 @@ class CanvasViewModel: ObservableObject {
                 
                 // Update all relations to ensure proper positioning
                 updateAllRelations()
+                saveState() // Save state after adding relation
             }
         }
     }
@@ -668,6 +856,7 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Topic Deletion
     
     private func deleteTopic(id: UUID) {
+        saveState() // Save state before deletion
         // First try to delete from main topics
         if let index = topics.firstIndex(where: { $0.id == id }) {
             // Remove relations to this topic from all other topics
@@ -779,4 +968,733 @@ class CanvasViewModel: ObservableObject {
         
         return false
     }
-} 
+    
+    func findTopicIndex(_ id: UUID) -> Int? {
+        // First check main topics
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            return index
+        }
+        
+        // Then check subtopics
+        for (index, topic) in topics.enumerated() {
+            if findTopicInSubtopics(id: id, in: topic) != nil {
+                return index
+            }
+        }
+        
+        return nil
+    }
+    
+    private func findTopicInSubtopics(id: UUID, in topic: Topic) -> Topic? {
+        if topic.id == id {
+            return topic
+        }
+        
+        for subtopic in topic.subtopics {
+            if let found = findTopicInSubtopics(id: id, in: subtopic) {
+                return found
+            }
+        }
+        
+        return nil
+    }
+    
+    func updateTopicBackgroundColor(_ id: UUID, color: Color) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].backgroundColor = color
+            // Update all subtopics recursively
+            updateSubtopicsBackgroundColor(&topics[index], color)
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBackgroundColor(id, color, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBackgroundColor(_ id: UUID, _ color: Color, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].backgroundColor = color
+                // Update all subtopics recursively
+                updateSubtopicsBackgroundColor(&topic.subtopics[i], color)
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBackgroundColor(id, color, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // Helper function to recursively update all subtopics' background color
+    private func updateSubtopicsBackgroundColor(_ topic: inout Topic, _ color: Color) {
+        for i in 0..<topic.subtopics.count {
+            topic.subtopics[i].backgroundColor = color
+            var subtopic = topic.subtopics[i]
+            updateSubtopicsBackgroundColor(&subtopic, color)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    func updateTopicBorderColor(_ id: UUID, color: Color) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].borderColor = color
+            // Update all subtopics recursively
+            updateSubtopicsBorderColor(&topics[index], color)
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBorderColor(id, color, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBorderColor(_ id: UUID, _ color: Color, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].borderColor = color
+                // Update all subtopics recursively
+                updateSubtopicsBorderColor(&topic.subtopics[i], color)
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBorderColor(id, color, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // Helper function to recursively update all subtopics' border color
+    private func updateSubtopicsBorderColor(_ topic: inout Topic, _ color: Color) {
+        for i in 0..<topic.subtopics.count {
+            topic.subtopics[i].borderColor = color
+            var subtopic = topic.subtopics[i]
+            updateSubtopicsBorderColor(&subtopic, color)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    func updateTopicBackgroundOpacity(_ id: UUID, opacity: Double) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].backgroundOpacity = opacity
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBackgroundOpacity(id, opacity, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBackgroundOpacity(_ id: UUID, _ opacity: Double, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].backgroundOpacity = opacity
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBackgroundOpacity(id, opacity, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicBorderOpacity(_ id: UUID, opacity: Double) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].borderOpacity = opacity
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBorderOpacity(id, opacity, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBorderOpacity(_ id: UUID, _ opacity: Double, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].borderOpacity = opacity
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBorderOpacity(id, opacity, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicBorderWidth(_ id: UUID, width: Topic.BorderWidth) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].borderWidth = width
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicBorderWidth(id, width, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicBorderWidth(_ id: UUID, _ width: Topic.BorderWidth, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].borderWidth = width
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBorderWidth(id, width, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // MARK: - Text Formatting
+    
+    func updateTopicFont(_ id: UUID, font: String) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].font = font
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicFont(id, font, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicFont(_ id: UUID, _ font: String, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].font = font
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicFont(id, font, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicFontSize(_ id: UUID, size: CGFloat) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].fontSize = size
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicFontSize(id, size, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicFontSize(_ id: UUID, _ size: CGFloat, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].fontSize = size
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicFontSize(id, size, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicFontWeight(_ id: UUID, weight: Font.Weight) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].fontWeight = weight
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicFontWeight(id, weight, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicFontWeight(_ id: UUID, _ weight: Font.Weight, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].fontWeight = weight
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicFontWeight(id, weight, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicForegroundColor(_ id: UUID, color: Color) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].foregroundColor = color
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicForegroundColor(id, color, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicForegroundColor(_ id: UUID, _ color: Color, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].foregroundColor = color
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicForegroundColor(id, color, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicForegroundOpacity(_ id: UUID, opacity: Double) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].foregroundOpacity = opacity
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicForegroundOpacity(id, opacity, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicForegroundOpacity(_ id: UUID, _ opacity: Double, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].foregroundOpacity = opacity
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicForegroundOpacity(id, opacity, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicTextStyle(_ id: UUID, style: TextStyle, isEnabled: Bool) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            if isEnabled {
+                topics[index].textStyles.insert(style)
+            } else {
+                topics[index].textStyles.remove(style)
+            }
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicTextStyle(id, style, isEnabled, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicTextStyle(_ id: UUID, _ style: TextStyle, _ isEnabled: Bool, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                if isEnabled {
+                    topic.subtopics[i].textStyles.insert(style)
+                } else {
+                    topic.subtopics[i].textStyles.remove(style)
+                }
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicTextStyle(id, style, isEnabled, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicTextCase(_ id: UUID, textCase: TextCase) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].textCase = textCase
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicTextCase(id, textCase, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    func updateTopicBranchStyle(_ id: UUID, style: Topic.BranchStyle) {
+        // Update all topics to use the new style
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            updateBranchStyleRecursively(&topic, style)
+            topics[i] = topic
+        }
+    }
+    
+    private func updateBranchStyleRecursively(_ topic: inout Topic, _ style: Topic.BranchStyle) {
+        // Update the current topic
+        topic.branchStyle = style
+        
+        // Update all subtopics recursively
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            updateBranchStyleRecursively(&subtopic, style)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    private func updateSubtopicTextCase(_ id: UUID, _ textCase: TextCase, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].textCase = textCase
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicTextCase(id, textCase, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func updateTopicTextAlignment(_ id: UUID, alignment: TextAlignment) {
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            topics[index].textAlignment = alignment
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if updateSubtopicTextAlignment(id, alignment, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func updateSubtopicTextAlignment(_ id: UUID, _ alignment: TextAlignment, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].textAlignment = alignment
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicTextAlignment(id, alignment, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // MARK: - Undo/Redo Functionality
+    
+    /// Save current state for undo history
+    private func saveState() {
+        // If we're not at the end of history, truncate it
+        if currentHistoryIndex < history.count - 1 {
+            history = Array(history[0...currentHistoryIndex])
+        }
+        
+        // Create a deep copy of the topics array
+        let topicsCopy = topics.map { $0.deepCopy() }
+        
+        // Add to history
+        history.append(topicsCopy)
+        currentHistoryIndex = history.count - 1
+        
+        // Limit history size
+        if history.count > maxHistorySize {
+            history.removeFirst()
+            currentHistoryIndex = history.count - 1
+        }
+    }
+    
+    /// Perform undo operation
+    func undo() {
+        guard currentHistoryIndex > 0 else { return }
+        
+        currentHistoryIndex -= 1
+        topics = history[currentHistoryIndex].map { $0.deepCopy() }
+    }
+    
+    /// Perform redo operation
+    func redo() {
+        guard currentHistoryIndex < history.count - 1 else { return }
+        
+        currentHistoryIndex += 1
+        topics = history[currentHistoryIndex].map { $0.deepCopy() }
+    }
+    
+    // MARK: - Relation Management
+    
+    /// Restores bidirectional relations after loading a state
+    private func restoreBidirectionalRelations() {
+        // Get all topics including subtopics
+        var allTopics = topics
+        for topic in topics {
+            allTopics.append(contentsOf: getAllSubtopics(from: topic))
+        }
+        
+        // For each topic, ensure its relations are bidirectional
+        for topic in allTopics {
+            for relatedTopic in topic.relations {
+                // If this topic is the source (id < related.id), ensure the target has a relation back
+                if topic.id < relatedTopic.id {
+                    if var targetTopic = findTopic(id: relatedTopic.id) {
+                        if !targetTopic.relations.contains(where: { $0.id == topic.id }) {
+                            targetTopic.addRelation(topic)
+                            updateTopic(targetTopic)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func removeRelation(from: UUID, to: UUID) {
+        saveState() // Save state before removing relation
+        
+        // Find and update both topics
+        if var fromTopic = findTopic(id: from) {
+            fromTopic.removeRelation(to)
+            updateTopic(fromTopic)
+        }
+        
+        if var toTopic = findTopic(id: to) {
+            toTopic.removeRelation(from)
+            updateTopic(toTopic)
+        }
+    }
+    
+    // MARK: - Topic Collapse Functionality
+    
+    func toggleCollapseState(topicId: UUID) {
+        saveState() // Save state before toggling collapse
+        
+        // Update main topic
+        if let index = topics.firstIndex(where: { $0.id == topicId }) {
+            topics[index].isCollapsed.toggle()
+            return
+        }
+        
+        // Update subtopic
+        for i in 0..<topics.count {
+            var topic = topics[i]
+            if toggleSubtopicCollapseState(topicId, in: &topic) {
+                topics[i] = topic
+                break
+            }
+        }
+    }
+    
+    private func toggleSubtopicCollapseState(_ id: UUID, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                topic.subtopics[i].isCollapsed.toggle()
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if toggleSubtopicCollapseState(id, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    func isTopicCollapsed(id: UUID) -> Bool {
+        // Check main topics
+        if let topic = topics.first(where: { $0.id == id }) {
+            return topic.isCollapsed
+        }
+        
+        // Check subtopics
+        for topic in topics {
+            if let collapsed = isSubtopicCollapsed(id, in: topic) {
+                return collapsed
+            }
+        }
+        
+        return false
+    }
+    
+    private func isSubtopicCollapsed(_ id: UUID, in topic: Topic) -> Bool? {
+        if topic.id == id {
+            return topic.isCollapsed
+        }
+        
+        for subtopic in topic.subtopics {
+            if let collapsed = isSubtopicCollapsed(id, in: subtopic) {
+                return collapsed
+            }
+        }
+        
+        return nil
+    }
+    
+    // Count all descendants (including all nested subtopics) for a topic
+    func countAllDescendants(for topic: Topic) -> Int {
+        var count = 0
+        
+        // Add direct subtopics
+        count += topic.subtopics.count
+        
+        // Add all nested subtopics recursively
+        for subtopic in topic.subtopics {
+            count += countAllDescendants(for: subtopic)
+        }
+        
+        return count
+    }
+    
+    @objc private func handleDirectLoadTopics(_ notification: Notification) {
+        if let userInfo = notification.userInfo,
+           let topics = userInfo["topics"] as? [Topic] {
+            loadTopics(topics)
+        }
+    }
+}

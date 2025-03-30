@@ -1,7 +1,8 @@
 import Foundation
+import SwiftUI
 
 struct Topic: Identifiable, Equatable {
-    enum Shape {
+    enum Shape: Codable {
         case rectangle
         case roundedRectangle
         case circle
@@ -22,6 +23,35 @@ struct Topic: Identifiable, Equatable {
         case rightArrow
     }
     
+    enum BorderWidth: Double, CaseIterable, Codable {
+        case none = 0
+        case extraThin = 0.5
+        case thin = 1
+        case medium = 2
+        case bold = 3
+        case extraBold = 4
+        
+        var displayName: String {
+            switch self {
+            case .none: return "None"
+            case .extraThin: return "Extra Thin"
+            case .thin: return "Thin"
+            case .medium: return "Medium"
+            case .bold: return "Bold"
+            case .extraBold: return "Extra Bold"
+            }
+        }
+    }
+    
+    enum BranchStyle: String, CaseIterable, Codable {
+        case `default` = "Default"
+        case curved = "Curved"
+        
+        var displayName: String {
+            return self.rawValue
+        }
+    }
+    
     let id: UUID
     var name: String
     var position: CGPoint
@@ -29,8 +59,25 @@ struct Topic: Identifiable, Equatable {
     var subtopics: [Topic]
     var isSelected: Bool
     var isEditing: Bool
+    var isCollapsed: Bool
     var relations: [Topic]
     var shape: Shape
+    var backgroundColor: Color
+    var backgroundOpacity: Double
+    var borderColor: Color
+    var borderOpacity: Double
+    var borderWidth: BorderWidth
+    var branchStyle: BranchStyle = .default
+    
+    // Text formatting properties
+    var font: String = "System"
+    var fontSize: CGFloat = 16
+    var fontWeight: Font.Weight = .medium
+    var foregroundColor: Color = .white
+    var foregroundOpacity: Double = 1.0
+    var textStyles: Set<TextStyle> = []
+    var textCase: TextCase = .none
+    var textAlignment: TextAlignment = .center
     
     init(
         id: UUID = UUID(),
@@ -40,8 +87,23 @@ struct Topic: Identifiable, Equatable {
         subtopics: [Topic] = [],
         isSelected: Bool = false,
         isEditing: Bool = false,
+        isCollapsed: Bool = false,
         relations: [Topic] = [],
-        shape: Shape = .roundedRectangle
+        shape: Shape = .roundedRectangle,
+        backgroundColor: Color = .blue,
+        backgroundOpacity: Double = 1.0,
+        borderColor: Color = .blue,
+        borderOpacity: Double = 1.0,
+        borderWidth: BorderWidth = .medium,
+        branchStyle: BranchStyle = .default,
+        font: String = "System",
+        fontSize: CGFloat = 16,
+        fontWeight: Font.Weight = .medium,
+        foregroundColor: Color = .white,
+        foregroundOpacity: Double = 1.0,
+        textStyles: Set<TextStyle> = [],
+        textCase: TextCase = .none,
+        textAlignment: TextAlignment = .center
     ) {
         self.id = id
         self.name = name
@@ -50,8 +112,23 @@ struct Topic: Identifiable, Equatable {
         self.subtopics = subtopics
         self.isSelected = isSelected
         self.isEditing = isEditing
+        self.isCollapsed = isCollapsed
         self.relations = relations
         self.shape = shape
+        self.backgroundColor = backgroundColor
+        self.backgroundOpacity = backgroundOpacity
+        self.borderColor = borderColor
+        self.borderOpacity = borderOpacity
+        self.borderWidth = borderWidth
+        self.branchStyle = branchStyle
+        self.font = font
+        self.fontSize = fontSize
+        self.fontWeight = fontWeight
+        self.foregroundColor = foregroundColor
+        self.foregroundOpacity = foregroundOpacity
+        self.textStyles = textStyles
+        self.textCase = textCase
+        self.textAlignment = textAlignment
     }
     
     // Implement Equatable
@@ -63,8 +140,23 @@ struct Topic: Identifiable, Equatable {
         lhs.subtopics == rhs.subtopics &&
         lhs.isSelected == rhs.isSelected &&
         lhs.isEditing == rhs.isEditing &&
+        lhs.isCollapsed == rhs.isCollapsed &&
         lhs.relations == rhs.relations &&
-        lhs.shape == rhs.shape
+        lhs.shape == rhs.shape &&
+        lhs.backgroundColor == rhs.backgroundColor &&
+        lhs.backgroundOpacity == rhs.backgroundOpacity &&
+        lhs.borderColor == rhs.borderColor &&
+        lhs.borderOpacity == rhs.borderOpacity &&
+        lhs.borderWidth == rhs.borderWidth &&
+        lhs.branchStyle == rhs.branchStyle &&
+        lhs.font == rhs.font &&
+        lhs.fontSize == rhs.fontSize &&
+        lhs.fontWeight == rhs.fontWeight &&
+        lhs.foregroundColor == rhs.foregroundColor &&
+        lhs.foregroundOpacity == rhs.foregroundOpacity &&
+        lhs.textStyles == rhs.textStyles &&
+        lhs.textCase == rhs.textCase &&
+        lhs.textAlignment == rhs.textAlignment
     }
 }
 
@@ -80,7 +172,11 @@ extension Topic {
         Topic(
             name: "Subtopic \(count)",
             position: position,
-            parentId: self.id
+            parentId: self.id,
+            backgroundColor: self.backgroundColor,
+            backgroundOpacity: self.backgroundOpacity,
+            borderColor: self.borderColor,
+            borderOpacity: self.borderOpacity
         )
     }
     
@@ -93,5 +189,42 @@ extension Topic {
     
     mutating func removeRelation(_ topicId: UUID) {
         relations.removeAll(where: { $0.id == topicId })
+    }
+    
+    /// Creates a deep copy of the Topic, including all of its subtopics
+    func deepCopy() -> Topic {
+        var copy = Topic(
+            id: self.id,
+            name: self.name,
+            position: self.position,
+            parentId: self.parentId,
+            subtopics: [],
+            isSelected: self.isSelected,
+            isEditing: self.isEditing,
+            isCollapsed: self.isCollapsed,
+            relations: [], // Initialize with empty relations
+            shape: self.shape,
+            backgroundColor: self.backgroundColor,
+            backgroundOpacity: self.backgroundOpacity,
+            borderColor: self.borderColor,
+            borderOpacity: self.borderOpacity,
+            borderWidth: self.borderWidth,
+            branchStyle: self.branchStyle,
+            font: self.font,
+            fontSize: self.fontSize,
+            fontWeight: self.fontWeight,
+            foregroundColor: self.foregroundColor,
+            foregroundOpacity: self.foregroundOpacity,
+            textStyles: self.textStyles,
+            textCase: self.textCase,
+            textAlignment: self.textAlignment
+        )
+        
+        // Recursively copy subtopics
+        copy.subtopics = self.subtopics.map { $0.deepCopy() }
+        
+        // Skip copying relations entirely to prevent circular references during serialization
+        
+        return copy
     }
 } 
