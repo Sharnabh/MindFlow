@@ -56,6 +56,13 @@ struct MindFlowApp: App {
                     NotificationCenter.default.post(name: NSNotification.Name("SaveMindMapAs"), object: nil)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
+                
+                Divider()
+                
+                Button("Export...") {
+                    NotificationCenter.default.post(name: NSNotification.Name("ExportMindMap"), object: nil)
+                }
+                .keyboardShortcut("e")
             }
             
             CommandGroup(replacing: .undoRedo) {
@@ -108,6 +115,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Configure the document controller if needed
         let documentController = NSDocumentController.shared
         documentController.autosavingDelay = 10.0 // Auto save every 10 seconds
+        
+        // Initialize the export manager
+        _ = ExportManager.shared
     }
     
     // Handle files opened through Finder
