@@ -130,6 +130,9 @@ struct InfiniteCanvas: View {
     @State private var isRelationshipMode: Bool = false // Track relationship mode
     @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
     
+    // Reference to the NSViewRepresentable for exporting
+    @State private var canvasViewRef: CanvasViewRepresentable?
+    
     // Constants for canvas
     private let minScale: CGFloat = 0.1
     private let maxScale: CGFloat = 5.0
@@ -324,6 +327,12 @@ struct InfiniteCanvas: View {
                         .offset(x: offset.x, y: offset.y)
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
+                .background(
+                    // Add a representable that gives us access to the underlying NSView
+                    CanvasViewRepresentable(onViewCreated: { view in
+                        self.canvasViewRef = view
+                    })
+                )
                 
                 // Top bar
                 Rectangle()
@@ -1050,6 +1059,21 @@ struct InfiniteCanvas: View {
                 NotificationCenter.default.addObserver(forName: NSNotification.Name("RedoRequested"), object: nil, queue: .main) { _ in
                     viewModel.redo()
                 }
+                
+                // Set up touch bar delegate
+                touchBarDelegate = InfiniteCanvasTouchBarDelegate(
+                    viewModel: viewModel,
+                    isRelationshipMode: $isRelationshipMode
+                )
+                
+                // Register for export notification
+                NotificationCenter.default.addObserver(forName: NSNotification.Name("ExportMindMap"), object: nil, queue: .main) { _ in
+                    self.handleExportRequest()
+                }
+                
+                NotificationCenter.default.addObserver(forName: NSNotification.Name("PrepareCanvasForExport"), object: nil, queue: .main) { _ in
+                    self.prepareCanvasForExport()
+                }
             }
             .onDisappear {
                 KeyboardMonitor.shared.stopMonitoring()
@@ -1060,6 +1084,45 @@ struct InfiniteCanvas: View {
             }
         }
         .ignoresSafeArea()
+    }
+    
+    // MARK: - Export Functionality
+    
+    private func handleExportRequest() {
+        // Notify that we want to export the mind map
+        NotificationCenter.default.post(name: NSNotification.Name("RequestTopicsForExport"), object: nil)
+    }
+    
+    private func prepareCanvasForExport() {
+        // Instead of directly using the NSView reference which doesn't capture the canvas content,
+        // we'll pass all the necessary data to render a complete representation of the mind map
+        guard let mainWindow = NSApp.mainWindow else {
+            showExportError(message: "Could not access the application window")
+            return
+        }
+        
+        // Pass all the necessary data to render a complete representation
+        ExportManager.shared.exportCanvas(
+            mainWindow: mainWindow,
+            canvasFrame: mainWindow.contentView?.frame ?? .zero,
+            topics: viewModel.topics,
+            scale: scale,
+            offset: offset,
+            backgroundColor: backgroundColor,
+            backgroundStyle: backgroundStyle,
+            selectedTopicId: viewModel.selectedTopicId
+        )
+    }
+    
+    private func showExportError(message: String) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Export Failed"
+            alert.informativeText = message
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
     }
 }
 
@@ -2113,6 +2176,32 @@ extension Font.Weight: CaseIterable {
 enum SidebarMode {
     case style
     case map
+}
+
+// NSViewRepresentable to get access to the underlying NSView for export
+struct CanvasViewRepresentable: NSViewRepresentable {
+    var onViewCreated: (CanvasViewRepresentable) -> Void
+    var nsView: NSView?
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        
+        // Create a mutable copy with the view set
+        var mutableSelf = self
+        mutableSelf.nsView = view
+        
+        // Call back with the reference to this representable
+        DispatchQueue.main.async {
+            onViewCreated(mutableSelf)
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Nothing to update
+    }
 }
 
 #Preview {
