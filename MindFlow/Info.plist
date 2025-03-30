@@ -11,9 +11,30 @@
             <string>Editor</string>
             <key>LSHandlerRank</key>
             <string>Owner</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>mindflow</string>
+            </array>
+            <key>CFBundleTypeIconFile</key>
+            <string>MindFlowDocument</string>
             <key>LSItemContentTypes</key>
             <array>
                 <string>com.mindflow.mindmap</string>
+            </array>
+        </dict>
+    </array>
+    <key>CFBundleTypeExtensions</key>
+    <array>
+        <string>mindflow</string>
+    </array>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.mindflow.mindmap</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>mindflow</string>
             </array>
         </dict>
     </array>

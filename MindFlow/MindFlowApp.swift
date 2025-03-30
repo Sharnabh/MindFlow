@@ -100,19 +100,38 @@ struct MindFlowApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Register UTType for our file format
-        if let bundleID = Bundle.main.bundleIdentifier {
-            // File type registration is handled through Info.plist
-            // Set up file type associations
-            let fileTypes = ["mindflow"]
-            NSDocumentController.shared.setValue(
-                fileTypes,
-                forKey: "documentClassNames"
-            )
-            
-            // Configure the document controller
-            let documentController = NSDocumentController.shared
-            documentController.autosavingDelay = 10.0 // Auto save every 10 seconds
+        // Register file type association without using setValue:forKey:
+        // The correct way to register file types is through Info.plist, which we've already done
+        
+        // No need to set documentClassNames, as it's not a valid property on NSDocumentController
+        
+        // Configure the document controller if needed
+        let documentController = NSDocumentController.shared
+        documentController.autosavingDelay = 10.0 // Auto save every 10 seconds
+    }
+    
+    // Handle files opened through Finder
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        
+        // Load the file
+        MindFlowFileManager.shared.loadFile(from: url) { loadedTopics, errorMessage in
+            if let topics = loadedTopics {
+                // Notify the canvas view model to load these topics
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("LoadTopics"),
+                    object: nil,
+                    userInfo: ["topics": topics]
+                )
+            } else if let error = errorMessage {
+                // Display error alert
+                let alert = NSAlert()
+                alert.messageText = "Failed to open file"
+                alert.informativeText = error
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
         }
     }
 }

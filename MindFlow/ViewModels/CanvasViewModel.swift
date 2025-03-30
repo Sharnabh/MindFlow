@@ -29,6 +29,7 @@ class CanvasViewModel: ObservableObject {
         NotificationCenter.default.addObserver(self, selector: #selector(handleSaveAsRequest), name: NSNotification.Name("RequestTopicsForSaveAs"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleClearCanvas), name: NSNotification.Name("ClearCanvas"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleLoadRequest), name: NSNotification.Name("LoadMindMap"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleDirectLoadTopics), name: NSNotification.Name("LoadTopics"), object: nil)
     }
     
     deinit {
@@ -1688,5 +1689,12 @@ class CanvasViewModel: ObservableObject {
         }
         
         return count
+    }
+    
+    @objc private func handleDirectLoadTopics(_ notification: Notification) {
+        if let userInfo = notification.userInfo,
+           let topics = userInfo["topics"] as? [Topic] {
+            loadTopics(topics)
+        }
     }
 }

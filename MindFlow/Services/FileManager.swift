@@ -24,8 +24,8 @@ class MindFlowFileManager {
         savePanel.canCreateDirectories = true
         savePanel.showsTagField = true
         savePanel.title = "Save Mind Map"
-        savePanel.nameFieldStringValue = "Untitled.mindflow"
-        savePanel.allowedContentTypes = [UTType.mindFlowType]
+        savePanel.nameFieldStringValue = "Untitled"
+        savePanel.allowedFileTypes = ["mindflow"]
         
         savePanel.begin { result in
             if result == .OK, let url = savePanel.url {
@@ -40,6 +40,20 @@ class MindFlowFileManager {
     private func saveFile(topics: [Topic], to url: URL, completion: @escaping (Bool, String?) -> Void) {
         do {
             // Create the file content with our custom format
+            print("Attempting to encode \(topics.count) topics")
+            
+            // Try each topic individually to find the problematic one
+            for (index, topic) in topics.enumerated() {
+                do {
+                    let encoder = JSONEncoder()
+                    _ = try encoder.encode(topic)
+                } catch {
+                    print("Error encoding topic at index \(index): \(error.localizedDescription)")
+                    completion(false, "Error encoding topic at index \(index): \(error.localizedDescription)")
+                    return
+                }
+            }
+            
             let fileData = try encodeTopics(topics)
             
             // Write the data to the file
@@ -51,6 +65,7 @@ class MindFlowFileManager {
             // Call the completion handler
             completion(true, nil)
         } catch {
+            print("Failed to save file: \(error)")
             completion(false, "Failed to save file: \(error.localizedDescription)")
         }
     }
@@ -61,7 +76,7 @@ class MindFlowFileManager {
         openPanel.canChooseDirectories = false
         openPanel.allowsMultipleSelection = false
         openPanel.title = "Open Mind Map"
-        openPanel.allowedContentTypes = [UTType.mindFlowType]
+        openPanel.allowedFileTypes = ["mindflow"]
         
         openPanel.begin { result in
             if result == .OK, let url = openPanel.url {
@@ -72,7 +87,7 @@ class MindFlowFileManager {
         }
     }
     
-    private func loadFile(from url: URL, completion: @escaping ([Topic]?, String?) -> Void) {
+    func loadFile(from url: URL, completion: @escaping ([Topic]?, String?) -> Void) {
         do {
             // Read the file data
             let fileData = try Data(contentsOf: url)
@@ -98,8 +113,16 @@ class MindFlowFileManager {
     // MARK: - Data Encoding/Decoding
     
     private func encodeTopics(_ topics: [Topic]) throws -> Data {
+        // Create a deep copy without relations to prevent circular references
+        let topicsForEncoding = topics.map { topic -> Topic in
+            var topicCopy = topic.deepCopy()
+            topicCopy.relations = [] // Clear relations to prevent circular references
+            return topicCopy
+        }
+        
         let encoder = JSONEncoder()
-        let topicData = try encoder.encode(topics)
+        encoder.outputFormatting = .prettyPrinted
+        let topicData = try encoder.encode(topicsForEncoding)
         return topicData
     }
     
@@ -113,7 +136,8 @@ class MindFlowFileManager {
 // Extension to define the UTType for MindFlow files
 extension UTType {
     static var mindFlowType: UTType {
-        UTType(exportedAs: "com.mindflow.mindmap")
+        // Use a direct file extension approach for better compatibility
+        UTType(filenameExtension: "mindflow", conformingTo: .data)!
     }
 }
 
@@ -131,11 +155,18 @@ struct ColorComponents: Codable {
 extension Color {
     func toComponents() -> ColorComponents {
         let nsColor = NSColor(self)
+        
+        // Convert to RGB colorspace first to handle catalog colors
+        guard let rgbColor = nsColor.usingColorSpace(.sRGB) else {
+            // Fallback to default values if conversion fails
+            return ColorComponents(red: 0, green: 0, blue: 0, opacity: 1)
+        }
+        
         return ColorComponents(
-            red: Double(nsColor.redComponent),
-            green: Double(nsColor.greenComponent),
-            blue: Double(nsColor.blueComponent),
-            opacity: Double(nsColor.alphaComponent)
+            red: Double(rgbColor.redComponent),
+            green: Double(rgbColor.greenComponent),
+            blue: Double(rgbColor.blueComponent),
+            opacity: Double(rgbColor.alphaComponent)
         )
     }
 }
@@ -143,7 +174,7 @@ extension Color {
 // MARK: - Codable Extensions for Topic
 extension Topic: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, position, parentId, subtopics, shape, backgroundColor, backgroundOpacity, 
+        case id, name, positionX, positionY, parentId, subtopics, shape, backgroundColor, backgroundOpacity, 
              borderColor, borderOpacity, borderWidth, branchStyle, font, fontSize, fontWeight, 
              foregroundColor, foregroundOpacity, textStyles, textCase, textAlignment, isCollapsed
     }
@@ -154,8 +185,8 @@ extension Topic: Codable {
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         
-        let x = try container.decode(CGFloat.self, forKey: .position)
-        let y = try container.decode(CGFloat.self, forKey: .position)
+        let x = try container.decode(CGFloat.self, forKey: .positionX)
+        let y = try container.decode(CGFloat.self, forKey: .positionY)
         position = CGPoint(x: x, y: y)
         
         parentId = try container.decodeIfPresent(UUID.self, forKey: .parentId)
@@ -225,14 +256,14 @@ extension Topic: Codable {
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         
-        // Encode CGPoint as separate components
-        try container.encode(position.x, forKey: .position)
-        try container.encode(position.y, forKey: .position)
+        // Encode CGPoint as separate components with unique keys
+        try container.encode(position.x, forKey: .positionX)
+        try container.encode(position.y, forKey: .positionY)
         
         try container.encodeIfPresent(parentId, forKey: .parentId)
         try container.encode(subtopics, forKey: .subtopics)
         
-        // We don't encode isSelected, isEditing or relations since they're transient
+        // We don't encode relations since they're a potential source of circular references
         
         try container.encode(shape, forKey: .shape)
         
