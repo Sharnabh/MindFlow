@@ -1332,14 +1332,14 @@ struct InfiniteCanvas: View {
                         }
                 )
             )
-            .onChange(of: viewModel.topics) { _ in
+            .onChange(of: viewModel.topics) { oldValue, newValue in
                 topicsBounds = calculateTopicsBounds()
             }
-            .onChange(of: viewModel.selectedTopicId) { newValue in
+            .onChange(of: viewModel.selectedTopicId) { oldValue, newValue in
                 // Update the touch bar when selection changes
                 touchBarDelegate?.updateTouchBar()
             }
-            .onChange(of: isRelationshipMode) { newValue in
+            .onChange(of: isRelationshipMode) { oldValue, newValue in
                 // Update the touch bar when relationship mode changes
                 touchBarDelegate?.updateTouchBar()
             }
@@ -1488,7 +1488,7 @@ struct MinimapView: View {
                         if shouldUseCurvedStyle {
                             // Draw curved path
                             let dx = endPoint.x - startPoint.x
-                            let dy = endPoint.y - startPoint.y
+                            _ = endPoint.y - startPoint.y
                             let midX = startPoint.x + dx * 0.5
                             
                             let control1 = CGPoint(x: midX, y: startPoint.y)
@@ -2056,7 +2056,7 @@ private struct TopicContent: View {
                     .frame(width: width + 32, height: height)
             )
             .focused($isFocused)
-            .onChange(of: editingName) { newValue in
+            .onChange(of: editingName) { oldValue, newValue in
                 onNameChange(newValue)
             }
             .onExitCommand {
@@ -2359,7 +2359,7 @@ struct ColorPickerView: View {
                 TextField("", text: $hexValue)
                     .textFieldStyle(PlainTextFieldStyle())
                     .frame(width: 60)
-                    .onChange(of: hexValue) { newValue in
+                    .onChange(of: hexValue) { oldValue, newValue in
                         if let color = Color(hex: newValue) {
                             selectedColor = color
                         }
@@ -2473,7 +2473,7 @@ enum TextAlignment: CaseIterable {
     }
 }
 
-extension Font.Weight: CaseIterable {
+extension Font.Weight: @retroactive CaseIterable {
     public static var allCases: [Font.Weight] = [
         .thin,
         .ultraLight,

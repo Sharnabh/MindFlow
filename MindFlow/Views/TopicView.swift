@@ -1,7 +1,8 @@
 import SwiftUI
 
 // Add CGPoint animation extensions
-extension CGPoint: VectorArithmetic {
+extension CGPoint: @retroactive AdditiveArithmetic {}
+extension CGPoint: @retroactive VectorArithmetic {
     public static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
         return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
     }
@@ -166,13 +167,13 @@ struct TopicView: View {
         )
         .gesture(createDragGesture())
         .position(animatedPosition)
-        .onChange(of: topic.isEditing) { isEditing in
-            if isEditing {
+        .onChange(of: topic.isEditing) { oldValue, newValue in
+            if newValue {
                 editingName = topic.name
                 isFocused = true
             }
         }
-        .onChange(of: topic.position) { newPosition in
+        .onChange(of: topic.position) { oldValue, newPosition in
             // When position is updated externally, update the animated position immediately during drag
             // This ensures subtopics move with their parent without delay
             if isDragging {
@@ -221,8 +222,11 @@ struct TopicView: View {
                             y: topic.position.y + value.translation.height
                         )
                         
-                        // Update animated position directly during drag for responsiveness
-                        animatedPosition = newPosition
+                        // Update animated position using DispatchQueue to avoid state modification during view update
+                        DispatchQueue.main.async {
+                            // Update animated position directly during drag for responsiveness
+                            animatedPosition = newPosition
+                        }
                         
                         // Inform parent about the position change
                         onDragChanged(newPosition)
@@ -232,10 +236,13 @@ struct TopicView: View {
             .onChanged { _ in
                 // Set dragging flag to true when gesture starts
                 if !isDragging && !topic.isEditing && !isControlPressed && !isRelationshipMode {
-                    isDragging = true
-                    
-                    // Cancel any existing deceleration
-                    decelerationTimer?.invalidate()
+                    // Use DispatchQueue.main.async to modify state outside the view update cycle
+                    DispatchQueue.main.async {
+                        isDragging = true
+                        
+                        // Cancel any existing deceleration
+                        decelerationTimer?.invalidate()
+                    }
                 }
             }
             .onEnded { value in
@@ -349,7 +356,7 @@ private struct TopicContent: View {
                     .frame(width: size.width + 32, height: size.height)
             )
             .focused($isFocused)
-            .onChange(of: editingName) { newValue in
+            .onChange(of: editingName) { oldValue, newValue in
                 onNameChange(newValue)
             }
             .onExitCommand {
@@ -939,9 +946,9 @@ func calculateTopicIntersection(from: Topic, to: Topic) -> (start: CGPoint, end:
     let fromCenter = from.position
     let toCenter = to.position
     
-    // Constants for automatic arrangement
-    let horizontalSpacing: CGFloat = 200 // Horizontal space between parent and child
-    let minVerticalSpacing: CGFloat = 60 // Minimum vertical space between siblings
+    // Constants for automatic arrangement - we'll leave these in as comments for reference
+    // Horizontal space between parent and child
+    // Minimum vertical space between siblings
     
     // Function to find the best side intersection point
     func findBestSideIntersection(box: CGRect, from: CGPoint, towards: CGPoint, isParentChild: Bool = false) -> CGPoint {
@@ -1174,12 +1181,12 @@ private struct ConnectionLine: View {
                 )
             }
         }
-        .onChange(of: points.start) { newStart in
+        .onChange(of: points.start) { oldValue, newStart in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 animatedStartPoint = newStart
             }
         }
-        .onChange(of: points.end) { newEnd in
+        .onChange(of: points.end) { oldValue, newEnd in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 animatedEndPoint = newEnd
             }
@@ -1263,7 +1270,7 @@ struct AnimatedCurvePath: Shape {
         
         // Calculate control points for the curve
         let dx = end.x - start.x
-        let dy = end.y - start.y
+        let _ = end.y - start.y
         let midX = start.x + dx * 0.5
         
         // Create control points that curve outward
@@ -1310,7 +1317,7 @@ struct TopicsCanvasView: View {
             if let (fromId, toPosition) = viewModel.relationDragState,
                let fromTopic = viewModel.findTopic(id: fromId) {
                 // Check if target topic exists at the current position
-                let targetTopic = findTopicAt(position: toPosition, in: viewModel.topics)
+                let _ = findTopicAt(position: toPosition, in: viewModel.topics)
                 let points = calculateIntersection(from: fromTopic, toPosition: toPosition, topics: viewModel.topics)
                 
                 // Use curved style if the source topic has curved branch style
@@ -1327,12 +1334,12 @@ struct TopicsCanvasView: View {
                             .stroke(Color.purple.opacity(0.5), lineWidth: 2)
                     }
                 }
-                .onChange(of: points.start) { newStart in
+                .onChange(of: points.start) { oldValue, newStart in
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                         animatedTemporaryLineStart = newStart
                     }
                 }
-                .onChange(of: points.end) { newEnd in
+                .onChange(of: points.end) { oldValue, newEnd in
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                         animatedTemporaryLineEnd = newEnd
                     }

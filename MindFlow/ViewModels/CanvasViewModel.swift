@@ -206,7 +206,7 @@ class CanvasViewModel: ObservableObject {
     private func addNestedSubtopic(to parentTopic: Topic) {
         print("Adding nested subtopic to parent: \(parentTopic.id)")
         for topicIndex in 0..<topics.count {
-            if var mainTopic = findAndUpdateTopicHierarchy(parentId: parentTopic.id, in: topics[topicIndex]) {
+            if let mainTopic = findAndUpdateTopicHierarchy(parentId: parentTopic.id, in: topics[topicIndex]) {
                 topics[topicIndex] = mainTopic
                 print("Updated main topic hierarchy at index: \(topicIndex)")
                 return
@@ -300,9 +300,8 @@ class CanvasViewModel: ObservableObject {
             height: 40           // Typical topic height
         )
         
-        // If there's an overlap, adjust the position
+        // If there's an overlap, adjust the position down by a bit more than the topic height
         if topicBox.intersects(newTopicBox) {
-            // Move the position down by a bit more than the topic height
             return CGPoint(x: position.x, y: position.y + 70)
         }
         
@@ -365,26 +364,31 @@ class CanvasViewModel: ObservableObject {
     }
     
     func setTopicEditing(_ id: UUID?, isEditing: Bool) {
-        // Clear previous editing state
-        for i in 0..<topics.count {
-            clearEditingStateRecursively(in: &topics[i])
+        // Create a copy of the topics array
+        var updatedTopics = topics
+        
+        // Clear previous editing state on the copy
+        for i in 0..<updatedTopics.count {
+            clearEditingStateRecursively(in: &updatedTopics[i])
         }
         
-        // Set new editing state
+        // Set new editing state if we have an ID
         if let id = id {
-            // Update main topic
-            if let index = topics.firstIndex(where: { $0.id == id }) {
-                topics[index].isEditing = isEditing
-                return
-            }
-            
-            // Update subtopic
-            for i in 0..<topics.count {
-                if setSubtopicEditing(id, isEditing, in: &topics[i]) {
-                    break
+            // Check if it's a main topic
+            if let index = updatedTopics.firstIndex(where: { $0.id == id }) {
+                updatedTopics[index].isEditing = isEditing
+            } else {
+                // Check subtopics
+                for i in 0..<updatedTopics.count {
+                    if setSubtopicEditing(id, isEditing, in: &updatedTopics[i]) {
+                        break
+                    }
                 }
             }
         }
+        
+        // Update the published property once with all changes
+        self.topics = updatedTopics
     }
     
     private func clearEditingStateRecursively(in topic: inout Topic) {
@@ -552,20 +556,23 @@ class CanvasViewModel: ObservableObject {
         let verticalSpacing: CGFloat = 100 // Space between siblings
         let baseMainTopicSpacing: CGFloat = 350 // Base space between main topics
         
+        // Create a copy of topics to work with
+        var updatedTopics = topics
+        
         // First position main topics horizontally with equal spacing
-        let numMainTopics = topics.count
+        let numMainTopics = updatedTopics.count
         if numMainTopics > 0 {
             // Get the selected topic as a reference point
             var centerTopic: Topic?
             var centerTopicIndex: Int = 0
             
-            if let selectedId = selectedTopicId, let index = topics.firstIndex(where: { $0.id == selectedId }) {
+            if let selectedId = selectedTopicId, let index = updatedTopics.firstIndex(where: { $0.id == selectedId }) {
                 // If a main topic is selected, use it as center
-                centerTopic = topics[index]
+                centerTopic = updatedTopics[index]
                 centerTopicIndex = index
             } else {
                 // Otherwise use the first topic
-                centerTopic = topics.first
+                centerTopic = updatedTopics.first
                 centerTopicIndex = 0
             }
             
@@ -578,7 +585,7 @@ class CanvasViewModel: ObservableObject {
             // Position topics to the left of center topic
             var currentX = centerPosition.x
             for i in stride(from: centerTopicIndex - 1, through: 0, by: -1) {
-                var topic = topics[i]
+                var topic = updatedTopics[i]
                 
                 // Calculate width needed for this topic and get its box
                 let topicWidth = calculateTreeWidth(topic)
@@ -596,7 +603,6 @@ class CanvasViewModel: ObservableObject {
                     y: centerPosition.y
                 )
                 
-                // Adjust currentX for the next topic
                 currentX -= topicWidth/2
                 
                 // Position all subtopics in a tree layout
@@ -604,7 +610,7 @@ class CanvasViewModel: ObservableObject {
                     layoutSubtopicTreeImproved(in: &topic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
                 }
                 
-                topics[i] = topic
+                updatedTopics[i] = topic
             }
             
             // Reset and position topics to the right of center topic
@@ -613,15 +619,15 @@ class CanvasViewModel: ObservableObject {
             let centerTopicBox = getTopicBox(topic: centerTopic)
             
             // Position center topic's subtopics without moving the center topic
-            var updatedCenterTopic = topics[centerTopicIndex]
+            var updatedCenterTopic = updatedTopics[centerTopicIndex]
             if !updatedCenterTopic.subtopics.isEmpty {
                 layoutSubtopicTreeImproved(in: &updatedCenterTopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
             }
-            topics[centerTopicIndex] = updatedCenterTopic
+            updatedTopics[centerTopicIndex] = updatedCenterTopic
             
             // Position topics to the right of center topic
             for i in (centerTopicIndex + 1)..<numMainTopics {
-                var topic = topics[i]
+                var topic = updatedTopics[i]
                 let topicBox = getTopicBox(topic: topic)
                 
                 // Calculate adaptive spacing based on the actual widths of the topics
@@ -642,28 +648,32 @@ class CanvasViewModel: ObservableObject {
                 // Update currentX for next topic
                 currentX += calculateTreeWidth(topic)
                 
-                topics[i] = topic
+                updatedTopics[i] = topic
             }
             
             // Ensure branch styles are preserved after layout
-            if let firstTopic = topics.first {
+            if let firstTopic = updatedTopics.first {
                 // Get the current global branch style from the first topic
                 let globalStyle = firstTopic.branchStyle
                 
                 // Re-apply to all topics to ensure consistency
-                for i in 0..<topics.count {
-                    var mainTopic = topics[i]
+                for i in 0..<updatedTopics.count {
+                    var mainTopic = updatedTopics[i]
                     updateBranchStyleRecursively(&mainTopic, globalStyle)
-                    topics[i] = mainTopic
+                    updatedTopics[i] = mainTopic
                 }
             }
         }
+        
+        // Update the published property with all changes
+        self.topics = updatedTopics
         
         // Organize relation lines after repositioning
         updateAllRelations()
     }
 
     // Improved layout function that ensures subtopics maintain order
+    @discardableResult
     private func layoutSubtopicTreeImproved(in topic: inout Topic, horizontalSpacing: CGFloat, verticalSpacing: CGFloat) -> CGFloat {
         let numSubtopics = topic.subtopics.count
         if numSubtopics == 0 { return 0 }
@@ -788,30 +798,34 @@ class CanvasViewModel: ObservableObject {
         return actualWidth + CGFloat(maxDepth) * 250
     }
     
-    private func updateAllRelations() {
-        // First get all topics with their current positions
+    func updateAllRelations() {
+        // Collect all topics including subtopics
         var allTopics: [Topic] = []
-        
-        // Add main topics
-        allTopics.append(contentsOf: topics)
-        
-        // Add all subtopics
         for topic in topics {
+            allTopics.append(topic)
             allTopics.append(contentsOf: getAllSubtopics(from: topic))
         }
         
-        // Update relations in main topics
-        for i in 0..<topics.count {
-            var topic = topics[i]
+        // Create a copy of the topics array for editing
+        var updatedTopics = topics
+        
+        // Update relations in all main topics
+        for i in 0..<updatedTopics.count {
+            var topic = updatedTopics[i]
             updateRelationsInTopic(topic: &topic, allTopics: allTopics)
-            topics[i] = topic
+            updatedTopics[i] = topic
         }
         
         // Update relations in all subtopics
-        for i in 0..<topics.count {
-            var topic = topics[i]
+        for i in 0..<updatedTopics.count {
+            var topic = updatedTopics[i]
             updateRelationsInSubtopics(topic: &topic, allTopics: allTopics)
-            topics[i] = topic
+            updatedTopics[i] = topic
+        }
+        
+        // Update the published property outside of view update cycle
+        DispatchQueue.main.async {
+            self.topics = updatedTopics
         }
     }
     
@@ -949,15 +963,23 @@ class CanvasViewModel: ObservableObject {
     // Handle relationship drag
     func handleRelationDragChanged(_ fromId: UUID, toPosition: CGPoint) {
         // If the source topic is being dragged, use its current position
-        if let fromTopic = findTopic(id: fromId) {
-            relationDragState = (fromId: fromId, toPosition: toPosition)
+        if findTopic(id: fromId) != nil {
+            // Update relation drag state
+            DispatchQueue.main.async {
+                self.relationDragState = (fromId: fromId, toPosition: toPosition)
+            }
         }
     }
     
     func handleRelationDragEnded(_ fromId: UUID) {
-        defer { relationDragState = nil }
+        // Store current state to work with
+        let currentRelationDragState = relationDragState
         
-        guard let toPosition = relationDragState?.toPosition,
+        // Clear the relation drag state first
+        relationDragState = nil
+        
+        // Process the relation if needed
+        guard let toPosition = currentRelationDragState?.toPosition,
               let targetTopic = findTopicAt(position: toPosition) else { return }
         
         // Don't create relation to self or if already exists
@@ -982,18 +1004,32 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func updateTopic(_ updatedTopic: Topic) {
-        // Update in main topics
-        if let index = topics.firstIndex(where: { $0.id == updatedTopic.id }) {
-            topics[index] = updatedTopic
+        // Create a copy of the topics array
+        var updatedTopics = topics
+        
+        // Check if it's a main topic
+        if let index = updatedTopics.firstIndex(where: { $0.id == updatedTopic.id }) {
+            updatedTopics[index] = updatedTopic
+            
+            // Update the published property at once
+            self.topics = updatedTopics
             return
         }
         
-        // Update in subtopics
-        for i in 0..<topics.count {
-            var topic = topics[i]
+        // If it's a subtopic, find and update it
+        var topicUpdated = false
+        for i in 0..<updatedTopics.count {
+            var topic = updatedTopics[i]
             if updateTopicInHierarchy(updatedTopic, in: &topic) {
-                topics[i] = topic
+                updatedTopics[i] = topic
+                topicUpdated = true
+                break
             }
+        }
+        
+        // Only update the published property if something changed
+        if topicUpdated {
+            self.topics = updatedTopics
         }
     }
     
@@ -1700,7 +1736,7 @@ class CanvasViewModel: ObservableObject {
         
         // Store this style as the current global style
         // This ensures that any new topics or subtopics created will use this style
-        if let firstTopic = topics.first {
+        if topics.first != nil {
             // Store the current global style on the first topic (if any exists)
             // New topics will check this to inherit the correct style
         }
@@ -1970,51 +2006,90 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Drag Handling
     
     func updateDraggedTopicPosition(_ topicId: UUID, _ newPosition: CGPoint) {
+        // Mark that dragging is happening (for physics simulation)
         isDragging = true
         
-        // First find and update the topic's position
-        if let index = topics.firstIndex(where: { $0.id == topicId }) {
-            // Update main topic
-            var topic = topics[index]
-            // Calculate the offset between old and new position
-            let offset = CGPoint(
-                x: newPosition.x - topic.position.x,
-                y: newPosition.y - topic.position.y
-            )
-            
-            // Update the main topic and all its subtopics with the same offset
-            updatePositionsInTopic(topic: &topic, offset: offset)
-            topics[index] = topic
-            
-            // Update all relations immediately during drag
-            updateAllRelations()
-            
-            // Update preview line if this topic is part of the current relation drag
-            if let dragState = relationDragState {
-                if dragState.fromId == topicId {
-                    relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
+        // Store a copy of the relationDragState to avoid direct modification
+        var updatedRelationDragState: (fromId: UUID, toPosition: CGPoint)? = nil
+        
+        // Create a copy of the topics array
+        var updatedTopics = topics
+        
+        // First check if it's a main topic
+        for i in 0..<updatedTopics.count {
+            if updatedTopics[i].id == topicId {
+                // Calculate offset for all children
+                let offset = CGPoint(
+                    x: newPosition.x - updatedTopics[i].position.x,
+                    y: newPosition.y - updatedTopics[i].position.y
+                )
+                
+                // Update the main topic and all its subtopics with the same offset
+                updatePositionsInTopic(topic: &updatedTopics[i], offset: offset)
+                
+                // Check if this topic is part of the current relation drag
+                if let dragState = relationDragState, dragState.fromId == topicId {
+                    updatedRelationDragState = (fromId: dragState.fromId, toPosition: newPosition)
                 }
-            }
-        } else {
-            // If not a main topic, check subtopics
-            for i in 0..<topics.count {
-                var mainTopic = topics[i]
+                break
+            } else {
+                // Check if it's a subtopic
+                var mainTopic = updatedTopics[i]
                 if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &mainTopic) {
-                    topics[i] = mainTopic
+                    updatedTopics[i] = mainTopic
                     
-                    // Update all relations immediately during drag
-                    updateAllRelations()
-                    
-                    // Update preview line if this topic is part of the current relation drag
-                    if let dragState = relationDragState {
-                        if dragState.fromId == topicId {
-                            relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
-                        }
+                    // Check if this topic is part of the current relation drag
+                    if let dragState = relationDragState, dragState.fromId == topicId {
+                        updatedRelationDragState = (fromId: dragState.fromId, toPosition: newPosition)
                     }
                     break
                 }
             }
         }
+        
+        // Update published properties using async dispatch to avoid view update cycle issues
+        DispatchQueue.main.async {
+            // Update the topics
+            self.topics = updatedTopics
+            
+            // Update the relation drag state if needed
+            if let newDragState = updatedRelationDragState {
+                self.relationDragState = newDragState
+            }
+            
+            // Update all relations after position changes
+            self.updateAllRelationsWithoutDispatch()
+        }
+    }
+    
+    // A version of updateAllRelations without the dispatch async, for internal use
+    private func updateAllRelationsWithoutDispatch() {
+        // Collect all topics including subtopics
+        var allTopics: [Topic] = []
+        for topic in topics {
+            allTopics.append(topic)
+            allTopics.append(contentsOf: getAllSubtopics(from: topic))
+        }
+        
+        // Create a copy of the topics array for editing
+        var updatedTopics = topics
+        
+        // Update relations in all main topics
+        for i in 0..<updatedTopics.count {
+            var topic = updatedTopics[i]
+            updateRelationsInTopic(topic: &topic, allTopics: allTopics)
+            updatedTopics[i] = topic
+        }
+        
+        // Update relations in all subtopics
+        for i in 0..<updatedTopics.count {
+            var topic = updatedTopics[i]
+            updateRelationsInSubtopics(topic: &topic, allTopics: allTopics)
+            updatedTopics[i] = topic
+        }
+        
+        // Update the published property directly (used only inside an async block)
+        self.topics = updatedTopics
     }
     
     private func updatePositionsInTopic(topic: inout Topic, offset: CGPoint) {
