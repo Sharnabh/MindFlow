@@ -4,6 +4,7 @@ import AppKit
 class InfiniteCanvasTouchBarDelegate: NSObject, NSTouchBarDelegate {
     static let collapseButtonIdentifier = NSTouchBarItem.Identifier("com.mindflow.touchbar.collapse")
     static let relationshipButtonIdentifier = NSTouchBarItem.Identifier("com.mindflow.touchbar.relationship")
+    static let autoLayoutButtonIdentifier = NSTouchBarItem.Identifier("com.mindflow.touchbar.autolayout")
     static let touchBarIdentifier = NSTouchBar.CustomizationIdentifier("com.mindflow.touchbar.main")
     
     var viewModel: CanvasViewModel
@@ -24,7 +25,9 @@ class InfiniteCanvasTouchBarDelegate: NSObject, NSTouchBarDelegate {
         touchBar.defaultItemIdentifiers = [
             .fixedSpaceSmall,
             InfiniteCanvasTouchBarDelegate.collapseButtonIdentifier,
-            .fixedSpaceLarge,
+            .fixedSpaceSmall,
+            InfiniteCanvasTouchBarDelegate.autoLayoutButtonIdentifier,
+            .fixedSpaceSmall,
             InfiniteCanvasTouchBarDelegate.relationshipButtonIdentifier,
             .fixedSpaceSmall
         ]
@@ -76,6 +79,17 @@ class InfiniteCanvasTouchBarDelegate: NSObject, NSTouchBarDelegate {
             item.view = button
             return item
             
+        case InfiniteCanvasTouchBarDelegate.autoLayoutButtonIdentifier:
+            let item = NSCustomTouchBarItem(identifier: identifier)
+            let button = NSButton(title: " Auto Layout", image: NSImage(systemSymbolName: "rectangle.grid.1x2", accessibilityDescription: "Auto Layout") ?? NSImage(), target: self, action: #selector(performAutoLayout))
+            
+            // Set button style to separate text from image
+            button.bezelStyle = .rounded
+            button.imagePosition = .imageLeading
+            
+            item.view = button
+            return item
+            
         case InfiniteCanvasTouchBarDelegate.relationshipButtonIdentifier:
             let item = NSCustomTouchBarItem(identifier: identifier)
             let button = NSButton(title: " Relationship", image: NSImage(systemSymbolName: "arrow.triangle.branch", accessibilityDescription: "Create Relationships") ?? NSImage(), target: self, action: #selector(toggleRelationshipMode))
@@ -102,6 +116,10 @@ class InfiniteCanvasTouchBarDelegate: NSObject, NSTouchBarDelegate {
             viewModel.toggleCollapseState(topicId: selectedId)
             updateTouchBar() // Update button state after toggle
         }
+    }
+    
+    @objc func performAutoLayout() {
+        viewModel.performAutoLayout()
     }
     
     @objc func toggleRelationshipMode() {
@@ -229,6 +247,20 @@ struct InfiniteCanvas: View {
         )
     }
     
+    // Add these variables to the state variables at the top of InfiniteCanvas struct
+
+    @State private var currentTheme: ThemeSettings? = nil
+
+    // Define a ThemeSettings struct to hold theme information
+    struct ThemeSettings {
+        let name: String
+        let backgroundColor: Color
+        let backgroundStyle: BackgroundStyle
+        let topicFillColor: Color
+        let topicBorderColor: Color
+        let topicTextColor: Color
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
@@ -346,9 +378,29 @@ struct InfiniteCanvas: View {
                             
                             Spacer()
                             
-                            // Both buttons centered in a HStack
-                            HStack(spacing: 16) {
-                                // Collapse button - always visible, enabled when a topic with children is selected
+                            // Group all central buttons together in the middle
+                            HStack(spacing: 12) {
+                                // Auto layout button
+                                Button(action: {
+                                    viewModel.performAutoLayout()
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "rectangle.grid.1x2")
+                                            .font(.system(size: 14))
+                                        Text("Auto Layout")
+                                            .font(.system(size: 13))
+                                    }
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.15))
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .help("Automatically arrange topics with perfect spacing")
+                                
+                                // Collapse button - enabled when a topic with children is selected
                                 Button(action: {
                                     if let selectedId = viewModel.selectedTopicId {
                                         viewModel.toggleCollapseState(topicId: selectedId)
@@ -363,53 +415,57 @@ struct InfiniteCanvas: View {
                                             return 0
                                         } ?? 0
                                         
-                                        Image(systemName: totalDescendants > 0 ? "\(totalDescendants).circle" : "circle")
+                                        Image(systemName: isCollapsed ? "chevron.down.circle" : "chevron.right.circle")
                                             .foregroundColor(totalDescendants > 0 ? .primary : .gray)
-                                            .font(.system(size: 14, weight: .regular))
+                                            .font(.system(size: 14))
                                         
                                         Text(isCollapsed ? "Expand" : "Collapse")
-                                            .font(.system(size: 12))
+                                            .font(.system(size: 13))
                                             .foregroundColor(totalDescendants > 0 ? .primary : .gray)
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color(.controlBackgroundColor).opacity(0.7))
-                                    .cornerRadius(4)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.15))
+                                    )
                                 }
-                                .buttonStyle(.plain)
-                                .focusable(false)
+                                .buttonStyle(PlainButtonStyle())
                                 .disabled(viewModel.selectedTopicId == nil || 
                                          (viewModel.selectedTopicId.flatMap { id in 
                                              viewModel.getTopicById(id)
                                          }.flatMap { topic in 
                                              viewModel.countAllDescendants(for: topic)
                                          } ?? 0) == 0)
+                                .help("Collapse or expand the selected topic")
                                 
-                                // Relationship button - always visible
+                                // Relationship button
                                 Button(action: {
                                     isRelationshipMode.toggle()
                                 }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: "arrow.triangle.branch")
                                             .foregroundColor(isRelationshipMode ? .blue : .primary)
-                                            .font(.system(size: 14, weight: .regular))
+                                            .font(.system(size: 14))
                                         
                                         Text("Relationship")
-                                            .font(.system(size: 12))
+                                            .font(.system(size: 13))
                                             .foregroundColor(isRelationshipMode ? .blue : .primary)
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(isRelationshipMode ? Color.blue.opacity(0.2) : Color(.controlBackgroundColor).opacity(0.7))
-                                    .cornerRadius(4)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(isRelationshipMode ? Color.blue.opacity(0.2) : Color.gray.opacity(0.15))
+                                    )
                                 }
-                                .buttonStyle(.plain)
-                                .focusable(false)
+                                .buttonStyle(PlainButtonStyle())
+                                .help("Create relationships between topics")
                             }
                             
                             Spacer()
                             
-                            // Sidebar toggle button container
+                            // Sidebar toggle button
                             Button(action: {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     isSidebarOpen.toggle()
@@ -499,74 +555,7 @@ struct InfiniteCanvas: View {
                                             .padding(.horizontal)
                                         
                                         if sidebarMode == .style {
-                                            // Canvas Background Style section
-                                            VStack(spacing: 16) {
-                                                // Section header
-                                                Text("Canvas Background")
-                                                    .foregroundColor(.primary)
-                                                    .font(.headline)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .padding(.top, 12)
-                                                    .padding(.horizontal)
-                                                
-                                                Divider()
-                                                    .padding(.horizontal)
-                                                
-                                                // Background style selector
-                                                HStack(spacing: 8) {
-                                                    Text("Style")
-                                                        .foregroundColor(.primary)
-                                                        .font(.system(size: 13))
-                                                    
-                                                    Spacer()
-                                                    
-                                                    Picker("", selection: $backgroundStyle) {
-                                                        ForEach(BackgroundStyle.allCases) { style in
-                                                            HStack {
-                                                                Image(systemName: style.iconName)
-                                                                    .font(.system(size: 14))
-                                                                Text(style.rawValue)
-                                                            }
-                                                            .tag(style)
-                                                        }
-                                                    }
-                                                    .pickerStyle(MenuPickerStyle())
-                                                    .frame(width: 120)
-                                                }
-                                                .padding(.horizontal)
-                                                
-                                                // Background color control
-                                                HStack(spacing: 8) {
-                                                    Text("Color")
-                                                        .foregroundColor(.primary)
-                                                        .font(.system(size: 13))
-                                                    
-                                                    Spacer()
-                                                    
-                                                    Button(action: {
-                                                        isShowingBackgroundColorPicker.toggle()
-                                                    }) {
-                                                        RoundedRectangle(cornerRadius: 2)
-                                                            .fill(backgroundColor)
-                                                            .frame(width: 50, height: 28)
-                                                            .overlay(
-                                                                RoundedRectangle(cornerRadius: 2)
-                                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                            )
-                                                    }
-                                                    .buttonStyle(PlainButtonStyle())
-                                                    .popover(isPresented: $isShowingBackgroundColorPicker, arrowEdge: .bottom) {
-                                                        ColorPickerView(
-                                                            selectedColor: $backgroundColor,
-                                                            opacity: $backgroundOpacity
-                                                        )
-                                                    }
-                                                }
-                                                .padding(.horizontal)
-                                            }
-                                            
-                                            Divider()
-                                                .padding(.horizontal)
+                                            // Remove Canvas Background Style section from here
                                             
                                             // Topic styling - only shown when a topic is selected
                                             if let selectedTopic = viewModel.getSelectedTopic() {
@@ -916,6 +905,13 @@ struct InfiniteCanvas: View {
                                                     .padding(.top, 12)
                                                     .padding(.horizontal)
                                                 
+                                                // Add description to clarify this is a global setting
+                                                Text("Branch style applies to all connections on the canvas")
+                                                    .foregroundColor(.secondary)
+                                                    .font(.system(size: 12))
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(.horizontal)
+                                                
                                                 Divider()
                                                     .padding(.horizontal)
                                                 
@@ -925,9 +921,11 @@ struct InfiniteCanvas: View {
                                                         Menu {
                                                             ForEach(Topic.BranchStyle.allCases, id: \.self) { style in
                                                                 Button(action: {
-                                                                    viewModel.updateTopicBranchStyle(selectedTopic.id, style: style)
+                                                                    // Use null UUID to indicate we want to update all topics
+                                                                    viewModel.updateTopicBranchStyle(nil, style: style)
                                                                 }) {
                                                                     HStack {
+                                                                        // Check the current global style by looking at the selected topic
                                                                         if selectedTopic.branchStyle == style {
                                                                             Image(systemName: "checkmark")
                                                                                 .frame(width: 16, alignment: .center)
@@ -955,6 +953,12 @@ struct InfiniteCanvas: View {
                                                             .background(Color(.darkGray))
                                                             .cornerRadius(6)
                                                         }
+                                                        
+                                                        // Add a visual indicator showing the style affects all connections
+                                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                                            .foregroundColor(.secondary)
+                                                            .font(.system(size: 16))
+                                                            .help("Changes all connections on the canvas")
                                                     }
                                                     .padding(.horizontal)
                                                 }
@@ -962,22 +966,329 @@ struct InfiniteCanvas: View {
                                             
                                             Spacer(minLength: 20)
                                         } else {
+                                            ScrollView {
                                             // Map view content
-                                            VStack(spacing: 16) {
-                                                Text("Map View")
-                                                    .foregroundColor(.primary)
-                                                    .font(.headline)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .padding(.top, 12)
+                                                VStack(spacing: 16) {
+                                                    Text("Map View")
+                                                        .foregroundColor(.primary)
+                                                        .font(.headline)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                        .padding(.top, 12)
+                                                        .padding(.horizontal)
+                                                    
+                                                    Divider()
+                                                        .padding(.horizontal)
+                                                    
+                                                    // Canvas Background Style section moved here
+                                                    // Section header
+                                                    Text("Canvas Background")
+                                                        .foregroundColor(.primary)
+                                                        .font(.headline)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                        .padding(.top, 12)
+                                                        .padding(.horizontal)
+                                                    
+                                                    Divider()
+                                                        .padding(.horizontal)
+                                                    
+                                                    // Background style selector
+                                                    HStack(spacing: 8) {
+                                                        Text("Style")
+                                                            .foregroundColor(.primary)
+                                                            .font(.system(size: 13))
+                                                        
+                                                        Spacer()
+                                                        
+                                                        Picker("", selection: $backgroundStyle) {
+                                                            ForEach(BackgroundStyle.allCases) { style in
+                                                                HStack {
+                                                                    Image(systemName: style.iconName)
+                                                                        .font(.system(size: 14))
+                                                                    Text(style.rawValue)
+                                                                }
+                                                                .tag(style)
+                                                            }
+                                                        }
+                                                        .pickerStyle(MenuPickerStyle())
+                                                        .frame(width: 120)
+                                                    }
                                                     .padding(.horizontal)
-                                                
-                                                Divider()
+                                                    
+                                                    // Background color control
+                                                    HStack(spacing: 8) {
+                                                        Text("Color")
+                                                            .foregroundColor(.primary)
+                                                            .font(.system(size: 13))
+                                                        
+                                                        Spacer()
+                                                        
+                                                        Button(action: {
+                                                            isShowingBackgroundColorPicker.toggle()
+                                                        }) {
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .fill(backgroundColor)
+                                                                .frame(width: 50, height: 28)
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 2)
+                                                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                                )
+                                                        }
+                                                        .buttonStyle(PlainButtonStyle())
+                                                        .popover(isPresented: $isShowingBackgroundColorPicker, arrowEdge: .bottom) {
+                                                            ColorPickerView(
+                                                                selectedColor: $backgroundColor,
+                                                                opacity: $backgroundOpacity
+                                                            )
+                                                        }
+                                                    }
                                                     .padding(.horizontal)
-                                                
-                                                // Add map view content here
-                                                Text("Map view content coming soon...")
-                                                    .foregroundColor(.secondary)
-                                                    .padding()
+                                                    
+                                                    Divider()
+                                                        .padding(.horizontal)
+                                                    
+                                                    // Original Map View content - changed from placeholder
+                                                    Text("Auto Layout Settings")
+                                                        .foregroundColor(.primary)
+                                                        .font(.headline)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                        .padding(.top, 12)
+                                                        .padding(.horizontal)
+                                                    
+                                                    Divider()
+                                                        .padding(.horizontal)
+                                                    
+                                                    // Add Theme section here
+                                                    Text("Theme")
+                                                        .foregroundColor(.primary)
+                                                        .font(.headline)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                        .padding(.top, 12)
+                                                        .padding(.horizontal)
+                                                    
+                                                    Divider()
+                                                        .padding(.horizontal)
+                                                    
+                                                    // Theme selector grid
+                                                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                                        // Nature theme - greens and earth tones
+                                                        ThemeButton(
+                                                            name: "Nature",
+                                                            primaryColor: Color(red: 0.4, green: 0.65, blue: 0.4),
+                                                            secondaryColor: Color(red: 0.85, green: 0.9, blue: 0.85),
+                                                            accentColor: Color(red: 0.35, green: 0.55, blue: 0.35),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.9, green: 0.95, blue: 0.9),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color(red: 0.75, green: 0.85, blue: 0.75),
+                                                                    topicBorderColor: Color(red: 0.4, green: 0.65, blue: 0.4),
+                                                                    topicTextColor: Color(red: 0.15, green: 0.3, blue: 0.15),
+                                                                    themeName: "Nature"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Ocean theme - blues and cool tones
+                                                        ThemeButton(
+                                                            name: "Ocean",
+                                                            primaryColor: Color(red: 0.15, green: 0.5, blue: 0.7),
+                                                            secondaryColor: Color(red: 0.85, green: 0.9, blue: 0.95),
+                                                            accentColor: Color(red: 0.1, green: 0.4, blue: 0.6),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.9, green: 0.95, blue: 1.0),
+                                                                    backgroundStyle: .dots,
+                                                                    topicFillColor: Color(red: 0.8, green: 0.9, blue: 0.95),
+                                                                    topicBorderColor: Color(red: 0.15, green: 0.5, blue: 0.7),
+                                                                    topicTextColor: Color(red: 0.1, green: 0.3, blue: 0.5),
+                                                                    themeName: "Ocean"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Sunset theme - warm oranges and reds
+                                                        ThemeButton(
+                                                            name: "Sunset",
+                                                            primaryColor: Color(red: 0.9, green: 0.5, blue: 0.3),
+                                                            secondaryColor: Color(red: 1.0, green: 0.95, blue: 0.9),
+                                                            accentColor: Color(red: 0.8, green: 0.4, blue: 0.2),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.98, green: 0.95, blue: 0.9),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color(red: 1.0, green: 0.9, blue: 0.85),
+                                                                    topicBorderColor: Color(red: 0.9, green: 0.5, blue: 0.3),
+                                                                    topicTextColor: Color(red: 0.6, green: 0.3, blue: 0.1),
+                                                                    themeName: "Sunset"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Lavender theme - purples and lilacs
+                                                        ThemeButton(
+                                                            name: "Lavender",
+                                                            primaryColor: Color(red: 0.55, green: 0.45, blue: 0.7),
+                                                            secondaryColor: Color(red: 0.95, green: 0.9, blue: 1.0),
+                                                            accentColor: Color(red: 0.45, green: 0.35, blue: 0.6),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.96, green: 0.94, blue: 0.98),
+                                                                    backgroundStyle: .dots,
+                                                                    topicFillColor: Color(red: 0.9, green: 0.85, blue: 0.95),
+                                                                    topicBorderColor: Color(red: 0.55, green: 0.45, blue: 0.7),
+                                                                    topicTextColor: Color(red: 0.4, green: 0.3, blue: 0.5),
+                                                                    themeName: "Lavender"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Minimal theme - grayscale with subtle colors
+                                                        ThemeButton(
+                                                            name: "Minimal",
+                                                            primaryColor: Color(red: 0.3, green: 0.3, blue: 0.3),
+                                                            secondaryColor: Color(red: 0.95, green: 0.95, blue: 0.95),
+                                                            accentColor: Color(red: 0.2, green: 0.2, blue: 0.2),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.97, green: 0.97, blue: 0.97),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color.white,
+                                                                    topicBorderColor: Color(red: 0.3, green: 0.3, blue: 0.3),
+                                                                    topicTextColor: Color(red: 0.2, green: 0.2, blue: 0.2),
+                                                                    themeName: "Minimal"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Dark theme - dark background with vibrant accents
+                                                        ThemeButton(
+                                                            name: "Dark",
+                                                            primaryColor: Color(red: 0.2, green: 0.7, blue: 0.9),
+                                                            secondaryColor: Color(red: 0.15, green: 0.15, blue: 0.15),
+                                                            accentColor: Color(red: 0.1, green: 0.6, blue: 0.8),
+                                                            isDark: true,
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.12, green: 0.12, blue: 0.14),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color(red: 0.18, green: 0.18, blue: 0.2),
+                                                                    topicBorderColor: Color(red: 0.2, green: 0.7, blue: 0.9),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Dark"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Corporate theme - professional blues for business
+                                                        ThemeButton(
+                                                            name: "Corporate",
+                                                            primaryColor: Color(red: 0.11, green: 0.23, blue: 0.39),
+                                                            secondaryColor: Color(red: 0.95, green: 0.95, blue: 0.97),
+                                                            accentColor: Color(red: 0.15, green: 0.31, blue: 0.55),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.95, green: 0.96, blue: 0.98),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color(red: 0.11, green: 0.23, blue: 0.39),
+                                                                    topicBorderColor: Color(red: 0.15, green: 0.31, blue: 0.55),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Corporate"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Tech theme - inspired by modern tech interfaces
+                                                        ThemeButton(
+                                                            name: "Tech",
+                                                            primaryColor: Color(red: 0.0, green: 0.45, blue: 0.78),
+                                                            secondaryColor: Color(red: 0.96, green: 0.96, blue: 0.96),
+                                                            accentColor: Color(red: 0.0, green: 0.33, blue: 0.57),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.96, green: 0.96, blue: 0.96),
+                                                                    backgroundStyle: .dots,
+                                                                    topicFillColor: Color(red: 0.0, green: 0.45, blue: 0.78),
+                                                                    topicBorderColor: Color(red: 0.0, green: 0.33, blue: 0.57),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Tech"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Energy theme - vibrant and dynamic
+                                                        ThemeButton(
+                                                            name: "Energy",
+                                                            primaryColor: Color(red: 0.83, green: 0.28, blue: 0.15),
+                                                            secondaryColor: Color(red: 0.98, green: 0.94, blue: 0.88),
+                                                            accentColor: Color(red: 0.95, green: 0.77, blue: 0.06),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.98, green: 0.94, blue: 0.88),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color(red: 0.83, green: 0.28, blue: 0.15),
+                                                                    topicBorderColor: Color(red: 0.95, green: 0.77, blue: 0.06),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Energy"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Finance theme - elegant and trustworthy
+                                                        ThemeButton(
+                                                            name: "Finance",
+                                                            primaryColor: Color(red: 0.13, green: 0.28, blue: 0.33),
+                                                            secondaryColor: Color(red: 0.93, green: 0.94, blue: 0.94),
+                                                            accentColor: Color(red: 0.19, green: 0.59, blue: 0.53),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.93, green: 0.94, blue: 0.94),
+                                                                    backgroundStyle: .grid,
+                                                                    topicFillColor: Color(red: 0.13, green: 0.28, blue: 0.33),
+                                                                    topicBorderColor: Color(red: 0.19, green: 0.59, blue: 0.53),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Finance"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Innovation theme - modern and forward-thinking
+                                                        ThemeButton(
+                                                            name: "Innovation",
+                                                            primaryColor: Color(red: 0.10, green: 0.74, blue: 0.61),
+                                                            secondaryColor: Color(red: 0.95, green: 0.97, blue: 0.97),
+                                                            accentColor: Color(red: 0.13, green: 0.55, blue: 0.45),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.95, green: 0.97, blue: 0.97),
+                                                                    backgroundStyle: .dots,
+                                                                    topicFillColor: Color(red: 0.10, green: 0.74, blue: 0.61),
+                                                                    topicBorderColor: Color(red: 0.13, green: 0.55, blue: 0.45),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Innovation"
+                                                                )
+                                                            }
+                                                        )
+                                                        
+                                                        // Creative theme - balanced and sophisticated
+                                                        ThemeButton(
+                                                            name: "Creative",
+                                                            primaryColor: Color(red: 0.52, green: 0.27, blue: 0.48),
+                                                            secondaryColor: Color(red: 0.96, green: 0.94, blue: 0.98),
+                                                            accentColor: Color(red: 0.9, green: 0.56, blue: 0.36),
+                                                            onSelect: {
+                                                                applyTheme(
+                                                                    backgroundColor: Color(red: 0.96, green: 0.94, blue: 0.98),
+                                                                    backgroundStyle: .dots,
+                                                                    topicFillColor: Color(red: 0.52, green: 0.27, blue: 0.48),
+                                                                    topicBorderColor: Color(red: 0.9, green: 0.56, blue: 0.36),
+                                                                    topicTextColor: Color.white,
+                                                                    themeName: "Creative"
+                                                                )
+                                                            }
+                                                        )
+                                                    }
+                                                    .padding(.horizontal)
+                                                }
                                             }
                                         }
                                         
@@ -1771,10 +2082,27 @@ private struct TopicContent: View {
                event.keyCode == 36, // Return key
                self.isFocused {
                 
-                if event.modifierFlags.contains(.shift) {
-                    // Shift+Return: add a new line
+                if event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command) {
+                    // Shift+Return or Command+Return: add a new line
+                    // Use dispatch async to ensure we don't conflict with the TextEditor's built-in behavior
                     DispatchQueue.main.async {
-                        self.editingName += "\n"
+                        // Get the current selection to determine where to insert the newline
+                        if let currentEditor = NSApp.keyWindow?.firstResponder as? NSTextView {
+                            // Create an NSTextView operation instead of directly modifying the string
+                            // This ensures proper undo registration and avoids duplicating newlines
+                            let range = currentEditor.selectedRange()
+                            currentEditor.insertText("\n", replacementRange: range)
+                            
+                            // Update the topic name with the editor text
+                            if let updatedText = currentEditor.string as String? {
+                                self.editingName = updatedText
+                                self.onNameChange(updatedText)
+                            }
+                        } else {
+                            // Fallback if we can't get the text view
+                            self.editingName += "\n"
+                            self.onNameChange(self.editingName)
+                        }
                     }
                 } else {
                     // Regular Return: commit changes
@@ -2201,6 +2529,97 @@ struct CanvasViewRepresentable: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSView, context: Context) {
         // Nothing to update
+    }
+}
+
+// Add this after ColorPickerView struct near line 2220
+// Theme button for the theme selector
+struct ThemeButton: View {
+    let name: String
+    let primaryColor: Color
+    let secondaryColor: Color
+    let accentColor: Color
+    var isDark: Bool = false
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            VStack {
+                ZStack {
+                    // Background
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(secondaryColor)
+                        .frame(height: 60)
+                    
+                    // Sample topic
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isDark ? Color(red: 0.18, green: 0.18, blue: 0.2) : .white)
+                        .frame(width: 50, height: 24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(primaryColor, lineWidth: 2)
+                        )
+                        .shadow(color: accentColor.opacity(0.3), radius: 2, x: 0, y: 1)
+                }
+                
+                Text(name)
+                    .font(.system(size: 12))
+                    .foregroundColor(isDark ? .white : .primary)
+                    .padding(.top, 4)
+            }
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// Add this extension in the InfiniteCanvas struct - just before the body property
+// MARK: - Theme Management
+extension InfiniteCanvas {
+    func applyTheme(
+        backgroundColor: Color, 
+        backgroundStyle: BackgroundStyle, 
+        topicFillColor: Color, 
+        topicBorderColor: Color,
+        topicTextColor: Color,
+        themeName: String = ""
+    ) {
+        // Update canvas background
+        self.backgroundColor = backgroundColor
+        self.backgroundStyle = backgroundStyle
+        
+        // Store theme settings for new topics
+        self.currentTheme = ThemeSettings(
+            name: themeName,
+            backgroundColor: backgroundColor,
+            backgroundStyle: backgroundStyle,
+            topicFillColor: topicFillColor,
+            topicBorderColor: topicBorderColor,
+            topicTextColor: topicTextColor
+        )
+        
+        // Update all topics with the theme colors
+        for topicId in viewModel.getAllTopicIds() {
+            // Update fill color
+            viewModel.updateTopicBackgroundColor(topicId, color: topicFillColor)
+            
+            // Update border color
+            viewModel.updateTopicBorderColor(topicId, color: topicBorderColor)
+            
+            // Update text color
+            viewModel.updateTopicForegroundColor(topicId, color: topicTextColor)
+        }
+        
+        // Update the theme in the ViewModel
+        viewModel.setCurrentTheme(
+            topicFillColor: topicFillColor,
+            topicBorderColor: topicBorderColor,
+            topicTextColor: topicTextColor
+        )
     }
 }
 

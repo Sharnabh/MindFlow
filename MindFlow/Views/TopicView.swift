@@ -1,5 +1,107 @@
 import SwiftUI
 
+// Add CGPoint animation extensions
+extension CGPoint: VectorArithmetic {
+    public static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
+        return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
+    }
+    
+    public static func + (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
+        return CGPoint(x: lhs.x + rhs.x, y: lhs.y + rhs.y)
+    }
+    
+    public static func * (lhs: CGPoint, rhs: CGFloat) -> CGPoint {
+        return CGPoint(x: lhs.x * rhs, y: lhs.y * rhs)
+    }
+    
+    public mutating func scale(by rhs: Double) {
+        x *= CGFloat(rhs)
+        y *= CGFloat(rhs)
+    }
+    
+    public var magnitudeSquared: Double {
+        return Double(x*x + y*y)
+    }
+    
+    public static var zero: CGPoint {
+        return CGPoint(x: 0, y: 0)
+    }
+}
+
+// Add AnimatableData protocol conformance to CGPoint
+extension CGPoint {
+    public var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(x, y) }
+        set { (x, y) = (newValue.first, newValue.second) }
+    }
+}
+
+// Add View extension for conditional modifiers
+extension View {
+    @ViewBuilder func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+    
+    @ViewBuilder func selectionGlow(isSelected: Bool, color: Color) -> some View {
+        self
+            .shadow(color: isSelected ? color.opacity(0.9) : .clear, radius: 4, x: 0, y: 0)
+            .overlay(
+                ZStack {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(color.opacity(0.6), lineWidth: 2)
+                            .scaleEffect(1.05)
+                            .blur(radius: 1.5)
+                            .opacity(1)
+                            .animation(
+                                Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                                value: isSelected
+                            )
+                    }
+                }
+            )
+            .shadow(color: isSelected ? color.opacity(0.6) : .clear, radius: 6, x: 0, y: 0)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+// Physics properties for topic dragging
+class DragPhysics: ObservableObject {
+    var velocity: CGSize = .zero
+    var lastPosition: CGPoint = .zero
+    var lastUpdateTime: Date = Date()
+    var isDecelerating: Bool = false
+    var targetPosition: CGPoint = .zero
+    
+    func updateVelocity(currentPosition: CGPoint) {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(lastUpdateTime)
+        
+        if timeInterval > 0 {
+            // Calculate velocity based on position change over time
+            let dx = currentPosition.x - lastPosition.x
+            let dy = currentPosition.y - lastPosition.y
+            
+            // Apply some smoothing to the velocity
+            let smoothingFactor: CGFloat = 0.3
+            velocity.width = velocity.width * (1 - smoothingFactor) + (dx / CGFloat(timeInterval)) * smoothingFactor
+            velocity.height = velocity.height * (1 - smoothingFactor) + (dy / CGFloat(timeInterval)) * smoothingFactor
+        }
+        
+        lastPosition = currentPosition
+        lastUpdateTime = now
+    }
+    
+    func reset() {
+        velocity = .zero
+        isDecelerating = false
+    }
+}
+
 struct TopicView: View {
     let topic: Topic
     let isSelected: Bool
@@ -17,6 +119,30 @@ struct TopicView: View {
     @FocusState private var isFocused: Bool
     @State private var isControlPressed: Bool = false
     
+    // Physics state
+    @StateObject private var physics = DragPhysics()
+    @State private var animatedPosition: CGPoint
+    @State private var isDragging: Bool = false
+    
+    // Timer for deceleration
+    @State private var decelerationTimer: Timer?
+    
+    init(topic: Topic, isSelected: Bool, onSelect: @escaping () -> Void, onDragChanged: @escaping (CGPoint) -> Void, onDragEnded: @escaping () -> Void, onNameChange: @escaping (String) -> Void, onEditingChange: @escaping (Bool) -> Void, onRelationDragChanged: ((CGPoint) -> Void)?, onRelationDragEnded: (() -> Void)?, isRelationshipMode: Bool) {
+        self.topic = topic
+        self.isSelected = isSelected
+        self.onSelect = onSelect
+        self.onDragChanged = onDragChanged
+        self.onDragEnded = onDragEnded
+        self.onNameChange = onNameChange
+        self.onEditingChange = onEditingChange
+        self.onRelationDragChanged = onRelationDragChanged
+        self.onRelationDragEnded = onRelationDragEnded
+        self.isRelationshipMode = isRelationshipMode
+        
+        // Initialize position state
+        self._animatedPosition = State(initialValue: topic.position)
+    }
+    
     var body: some View {
         TopicContent(
             topic: topic,
@@ -27,6 +153,8 @@ struct TopicView: View {
             onEditingChange: onEditingChange
         )
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .scaleEffect(isSelected ? 1.03 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         .offset(isControlPressed || isRelationshipMode ? .zero : dragOffset) // Only apply drag offset when not in relation mode
         .simultaneousGesture(
             TapGesture()
@@ -37,18 +165,37 @@ struct TopicView: View {
                 }
         )
         .gesture(createDragGesture())
-        .position(topic.position)
+        .position(animatedPosition)
         .onChange(of: topic.isEditing) { isEditing in
             if isEditing {
                 editingName = topic.name
                 isFocused = true
             }
         }
+        .onChange(of: topic.position) { newPosition in
+            // When position is updated externally, update the animated position immediately during drag
+            // This ensures subtopics move with their parent without delay
+            if isDragging {
+                // During active dragging, update position immediately without animation
+                animatedPosition = newPosition
+            } else {
+                // When position updates from other sources (like auto-layout), use spring animation
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    animatedPosition = newPosition
+                }
+            }
+        }
         .onAppear {
+            animatedPosition = topic.position
+            physics.lastPosition = topic.position
+            
             NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
                 isControlPressed = event.modifierFlags.contains(.control)
                 return event
             }
+        }
+        .onDisappear {
+            decelerationTimer?.invalidate()
         }
     }
     
@@ -67,11 +214,28 @@ struct TopicView: View {
                     } else {
                         // For normal dragging, update both the visual offset and topic position
                         state = value.translation
-                        onDragChanged(CGPoint(
+                        
+                        // Update position for real-time movement
+                        let newPosition = CGPoint(
                             x: topic.position.x + value.translation.width,
                             y: topic.position.y + value.translation.height
-                        ))
+                        )
+                        
+                        // Update animated position directly during drag for responsiveness
+                        animatedPosition = newPosition
+                        
+                        // Inform parent about the position change
+                        onDragChanged(newPosition)
                     }
+                }
+            }
+            .onChanged { _ in
+                // Set dragging flag to true when gesture starts
+                if !isDragging && !topic.isEditing && !isControlPressed && !isRelationshipMode {
+                    isDragging = true
+                    
+                    // Cancel any existing deceleration
+                    decelerationTimer?.invalidate()
                 }
             }
             .onEnded { value in
@@ -79,10 +243,30 @@ struct TopicView: View {
                     if isControlPressed || isRelationshipMode {
                         onRelationDragEnded?()
                     } else {
+                        // Simply update the final position without inertia
+                        let finalPosition = CGPoint(
+                            x: topic.position.x + value.translation.width,
+                            y: topic.position.y + value.translation.height
+                        )
+                        
+                        // Update position with spring animation to final resting point
+                        withAnimation(.spring(response: 0.2, dampingFraction: 1.0)) {
+                            animatedPosition = finalPosition
+                        }
+                        
+                        // Immediately notify about drag end
                         onDragEnded()
+                        isDragging = false
                     }
                 }
             }
+    }
+    
+    // We'll keep this method but it won't be called anymore
+    private func startDeceleration() {
+        // Just immediately call onDragEnded without any deceleration
+        onDragEnded()
+        physics.reset()
     }
 }
 
@@ -96,8 +280,11 @@ private struct TopicContent: View {
     
     private func calculateSize() -> (width: CGFloat, height: CGFloat) {
         let text = topic.isEditing ? editingName : topic.name
-        let width = max(120, CGFloat(text.count * 10))
-        let height: CGFloat = 40
+        let lines = text.components(separatedBy: "\n")
+        let maxLineLength = lines.map { $0.count }.max() ?? 0
+        let width = max(120, CGFloat(maxLineLength * 10))
+        let lineCount = lines.count
+        let height = max(40, CGFloat(lineCount * 24))
         return (width, height)
     }
     
@@ -136,8 +323,10 @@ private struct TopicContent: View {
     
     private func createTextField() -> some View {
         let size = calculateSize()
-        return TextField("", text: $editingName)
-            .textFieldStyle(.plain)
+        
+        return TextEditor(text: $editingName)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
             .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
             .font(.custom(topic.font, size: topic.fontSize, relativeTo: .body).weight(topic.fontWeight))
             .fontWeight(topic.textStyles.contains(.bold) ? .bold : nil)
@@ -150,7 +339,7 @@ private struct TopicContent: View {
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .frame(minWidth: size.width, maxWidth: size.width)
+            .frame(width: size.width, height: size.height)
             .background(
                 createBackground()
                     .frame(width: size.width + 32, height: size.height)
@@ -163,20 +352,66 @@ private struct TopicContent: View {
             .onChange(of: editingName) { newValue in
                 onNameChange(newValue)
             }
-            .onSubmit {
-                onNameChange(editingName)
-                isFocused = false
-                onEditingChange(false)
-            }
             .onExitCommand {
                 isFocused = false
                 onEditingChange(false)
             }
-            .onKeyPress(.tab) {
-                isFocused = true
-                return .handled
+            .onAppear {
+                // Setup a local key monitor that specifically handles Return keys
+                setupReturnKeyMonitor()
             }
-            .submitLabel(.return)
+            .onDisappear {
+                // Remove the local monitor when not editing
+                removeReturnKeyMonitor()
+            }
+    }
+    
+    // Local key monitor using NSEvent directly for reliable Shift+Return detection
+    private func setupReturnKeyMonitor() {
+        // Handle Return key
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("ReturnKeyPressed"), object: nil, queue: .main) { notification in
+            if let userInfo = notification.userInfo,
+               let event = userInfo["event"] as? NSEvent,
+               event.keyCode == 36, // Return key
+               self.isFocused {
+                
+                // Clear any pending timer to prevent multiple insertions
+                if event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command) {
+                    // Shift+Return or Command+Return: add a new line
+                    // Use dispatch async to ensure we don't conflict with the TextEditor's built-in behavior
+                    DispatchQueue.main.async {
+                        // Get the current selection to determine where to insert the newline
+                        if let currentEditor = NSApp.keyWindow?.firstResponder as? NSTextView {
+                            // Create an NSTextView operation instead of directly modifying the string
+                            // This ensures proper undo registration and avoids duplicating newlines
+                            let range = currentEditor.selectedRange()
+                            currentEditor.insertText("\n", replacementRange: range)
+                            
+                            // Update the topic name with the editor text
+                            if let updatedText = currentEditor.string as String? {
+                                self.editingName = updatedText
+                                self.onNameChange(updatedText)
+                            }
+                        } else {
+                            // Fallback if we can't get the text view
+                            self.editingName += "\n"
+                            self.onNameChange(self.editingName)
+                        }
+                    }
+                } else {
+                    // Regular Return: commit changes
+                    DispatchQueue.main.async {
+                        self.onNameChange(self.editingName)
+                        self.isFocused = false
+                        self.onEditingChange(false)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func removeReturnKeyMonitor() {
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ReturnKeyPressed"), object: nil)
     }
     
     private func createTextDisplay() -> some View {
@@ -273,58 +508,76 @@ private struct TopicContent: View {
             case .rectangle:
                 Rectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .roundedRectangle:
-        RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .circle:
                 Capsule()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .line:
                 Rectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
                     .frame(height: 2)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .diamond:
                 Diamond()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .hexagon:
                 RegularPolygon(sides: 6)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .octagon:
                 RegularPolygon(sides: 8)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .parallelogram:
                 Parallelogram()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .cloud:
                 Cloud()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .heart:
                 Heart()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .shield:
                 Shield()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .star:
                 Star()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .document:
                 Document()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .doubleRectangle:
                 DoubleRectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .flag:
                 Flag()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .leftArrow:
                 Arrow(pointing: .left)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             case .rightArrow:
                 Arrow(pointing: .right)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
             }
         }
     }
@@ -613,8 +866,16 @@ private struct Arrow: Shape {
 
 // Helper function to get a topic's bounding box
 func getTopicBox(topic: Topic) -> CGRect {
-    let width = max(120, CGFloat(topic.name.count * 10)) + 32 // Add padding for shape
-    let height: CGFloat = 40 // Total height including vertical padding
+    // Calculate width based on the longest line
+    let lines = topic.name.components(separatedBy: "\n")
+    let maxLineLength = lines.map { $0.count }.max() ?? 0
+    let width = max(120, CGFloat(maxLineLength * 10)) + 32 // Add padding for shape
+    
+    // Calculate height based on number of lines
+    let lineCount = lines.count
+    // Use a base height for single-line topics, and increase height for multi-line
+    let height = max(40, CGFloat(lineCount * 24)) + 16 // Add vertical padding
+    
     return CGRect(
         x: topic.position.x - width/2,
         y: topic.position.y - height/2,
@@ -771,54 +1032,8 @@ private struct ConnectionLinesView: View {
     let onDeleteRelation: (UUID, UUID) -> Void
     let selectedId: UUID?
     
-    // Helper function to check if any topic in the entire canvas has curved style
-    private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
-        // First check all root topics
-        for topic in topics {
-            if topic.branchStyle == .curved {
-                return true
-            }
-        }
-        
-        // Then check all subtopics recursively
-        for topic in topics {
-            if checkSubtopicsForCurvedStyle(topic) {
-                return true
-            }
-        }
-        
-        return false
-    }
-    
-    // Helper function to check subtopics recursively
-    private func checkSubtopicsForCurvedStyle(_ topic: Topic) -> Bool {
-        // Check immediate subtopics
-        for subtopic in topic.subtopics {
-            if subtopic.branchStyle == .curved {
-                return true
-            }
-            
-            // Recursively check deeper subtopics
-            if checkSubtopicsForCurvedStyle(subtopic) {
-                return true
-            }
-        }
-        
-        // Check relations
-        for relation in topic.relations {
-            if relation.branchStyle == .curved {
-                return true
-            }
-        }
-        
-        return false
-    }
-    
     var body: some View {
-        // Check if any topic in the entire canvas has curved style
-        let shouldUseCurvedStyle = hasCurvedStyle(topics)
-        
-        // Draw all lines in a single layer
+        // Draw all lines in a single layer with smooth animations
         ForEach(topics) { topic in
             Group {
                 // Draw lines to immediate subtopics only if not collapsed
@@ -828,11 +1043,13 @@ private struct ConnectionLinesView: View {
                             from: topic,
                             to: subtopic,
                             color: subtopic.borderColor,
-                            forceCurved: shouldUseCurvedStyle,
+                            forceCurved: false, // Not forcing curved, will use individual topic settings
                             onDelete: {}, // No delete for parent-child relationships
                             isRelationship: false, // This is a parent-child relationship
                             selectedId: selectedId
                         )
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.position)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: subtopic.position)
                     }
                 }
                 
@@ -842,11 +1059,13 @@ private struct ConnectionLinesView: View {
                         from: topic,
                         to: relatedTopic,
                         color: .purple,
-                        forceCurved: shouldUseCurvedStyle,
+                        forceCurved: false, // Not forcing curved, will use individual topic settings
                         onDelete: { onDeleteRelation(topic.id, relatedTopic.id) },
                         isRelationship: true, // This is a relationship line
                         selectedId: selectedId
                     )
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.position)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: relatedTopic.position)
                 }
             }
             
@@ -857,6 +1076,8 @@ private struct ConnectionLinesView: View {
                     onDeleteRelation: onDeleteRelation,
                     selectedId: selectedId
                 )
+                .transition(.opacity)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: !topic.isCollapsed)
             }
         }
     }
@@ -874,6 +1095,20 @@ private struct ConnectionLine: View {
     
     @State private var isHovered = false
     @State private var hoverPoint: CGPoint = .zero
+    @State private var animatedStartPoint: CGPoint = .zero
+    @State private var animatedEndPoint: CGPoint = .zero
+    
+    private var shouldUseCurvedStyle: Bool {
+        // Use curved style if:
+        // 1. Either the source or target topic has curved branch style
+        // 2. Or if forceCurved is true (global setting)
+        // For parent-child relationships, use the parent's style
+        if !isRelationship {
+            return from.branchStyle == .curved
+        }
+        // For relationships, use curved if either topic has curved style
+        return forceCurved || from.branchStyle == .curved || to.branchStyle == .curved
+    }
     
     var body: some View {
         let points = calculateTopicIntersection(from: from, to: to)
@@ -881,39 +1116,21 @@ private struct ConnectionLine: View {
         ZStack {
             // Draw the line
             Group {
-                if forceCurved {
-                    // Draw curved path
-                    Path { path in
-                        path.move(to: points.start)
-                        
-                        // Calculate control points for the curve
-                        let dx = points.end.x - points.start.x
-                        let dy = points.end.y - points.start.y
-                        let midX = points.start.x + dx * 0.5
-                        
-                        // Create control points that curve outward
-                        let control1 = CGPoint(x: midX, y: points.start.y)
-                        let control2 = CGPoint(x: midX, y: points.end.y)
-                        
-                        path.addCurve(to: points.end,
-                                     control1: control1,
-                                     control2: control2)
-                    }
-                    .stroke(color.opacity(1.0), lineWidth: 1)
+                if shouldUseCurvedStyle {
+                    // Draw curved path with animation
+                    AnimatedCurvePath(start: animatedStartPoint, end: animatedEndPoint)
+                        .stroke(color.opacity(1.0), lineWidth: 1)
                 } else {
-                    // Draw straight line
-                    Path { path in
-                        path.move(to: points.start)
-                        path.addLine(to: points.end)
-                    }
-                    .stroke(color.opacity(1.0), lineWidth: 1)
+                    // Draw straight line with animation
+                    AnimatedLinePath(start: animatedStartPoint, end: animatedEndPoint)
+                        .stroke(color.opacity(1.0), lineWidth: 1)
                 }
             }
             
             // Add hover area with smaller width
             Path { path in
-                path.move(to: points.start)
-                path.addLine(to: points.end)
+                path.move(to: animatedStartPoint)
+                path.addLine(to: animatedEndPoint)
             }
             .stroke(Color.clear, lineWidth: 10) // 10px hover area
             .onHover { hovering in
@@ -927,7 +1144,7 @@ private struct ConnectionLine: View {
                         hoverPoint = viewPoint
                         
                         // Calculate distance from point to line
-                        let distance = distanceFromPointToLine(point: hoverPoint, lineStart: points.start, lineEnd: points.end)
+                        let distance = distanceFromPointToLine(point: hoverPoint, lineStart: animatedStartPoint, lineEnd: animatedEndPoint)
                         isHovered = distance < 10 // Show button if within 10px of the line
                     }
                 } else {
@@ -952,10 +1169,25 @@ private struct ConnectionLine: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .position(
-                    x: (points.start.x + points.end.x) / 2,
-                    y: (points.start.y + points.end.y) / 2
+                    x: (animatedStartPoint.x + animatedEndPoint.x) / 2,
+                    y: (animatedStartPoint.y + animatedEndPoint.y) / 2
                 )
             }
+        }
+        .onChange(of: points.start) { newStart in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                animatedStartPoint = newStart
+            }
+        }
+        .onChange(of: points.end) { newEnd in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                animatedEndPoint = newEnd
+            }
+        }
+        .onAppear {
+            // Initialize animated points
+            animatedStartPoint = points.start
+            animatedEndPoint = points.end
         }
     }
     
@@ -992,52 +1224,64 @@ private struct ConnectionLine: View {
     }
 }
 
+// Animated path shapes
+struct AnimatedLinePath: Shape {
+    var start: CGPoint
+    var end: CGPoint
+    
+    var animatableData: AnimatablePair<CGPoint.AnimatableData, CGPoint.AnimatableData> {
+        get { AnimatablePair(start.animatableData, end.animatableData) }
+        set { 
+            start.animatableData = newValue.first
+            end.animatableData = newValue.second
+        }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: start)
+        path.addLine(to: end)
+        return path
+    }
+}
+
+struct AnimatedCurvePath: Shape {
+    var start: CGPoint
+    var end: CGPoint
+    
+    var animatableData: AnimatablePair<CGPoint.AnimatableData, CGPoint.AnimatableData> {
+        get { AnimatablePair(start.animatableData, end.animatableData) }
+        set { 
+            start.animatableData = newValue.first
+            end.animatableData = newValue.second
+        }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: start)
+        
+        // Calculate control points for the curve
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let midX = start.x + dx * 0.5
+        
+        // Create control points that curve outward
+        let control1 = CGPoint(x: midX, y: start.y)
+        let control2 = CGPoint(x: midX, y: end.y)
+        
+        path.addCurve(to: end, control1: control1, control2: control2)
+        return path
+    }
+}
+
 struct TopicsCanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @Binding var isRelationshipMode: Bool
     
-    // Helper function to check if any topic in the entire canvas has curved style
-    private func hasCurvedStyle(_ topics: [Topic]) -> Bool {
-        // First check all root topics
-        for topic in topics {
-            if topic.branchStyle == .curved {
-                return true
-            }
-        }
-        
-        // Then check all subtopics recursively
-        for topic in topics {
-            if checkSubtopicsForCurvedStyle(topic) {
-                return true
-            }
-        }
-        
-        return false
-    }
-    
-    // Helper function to check subtopics recursively
-    private func checkSubtopicsForCurvedStyle(_ topic: Topic) -> Bool {
-        // Check immediate subtopics
-        for subtopic in topic.subtopics {
-            if subtopic.branchStyle == .curved {
-                return true
-            }
-            
-            // Recursively check deeper subtopics
-            if checkSubtopicsForCurvedStyle(subtopic) {
-                return true
-            }
-        }
-        
-        // Check relations
-        for relation in topic.relations {
-            if relation.branchStyle == .curved {
-                return true
-            }
-        }
-        
-        return false
-    }
+    // State for temporary relationship line animation
+    @State private var animatedTemporaryLineStart: CGPoint = .zero
+    @State private var animatedTemporaryLineEnd: CGPoint = .zero
     
     var body: some View {
         ZStack {
@@ -1069,33 +1313,33 @@ struct TopicsCanvasView: View {
                 let targetTopic = findTopicAt(position: toPosition, in: viewModel.topics)
                 let points = calculateIntersection(from: fromTopic, toPosition: toPosition, topics: viewModel.topics)
                 
-                // Use curved style if any topic in the canvas has curved style
-                if hasCurvedStyle(viewModel.topics) {
-                    // Draw curved path
-                    Path { path in
-                        path.move(to: points.start)
-                        
-                        // Calculate control points for the curve
-                        let dx = points.end.x - points.start.x
-                        let dy = points.end.y - points.start.y
-                        let midX = points.start.x + dx * 0.5
-                        
-                        // Create control points that curve outward
-                        let control1 = CGPoint(x: midX, y: points.start.y)
-                        let control2 = CGPoint(x: midX, y: points.end.y)
-                        
-                        path.addCurve(to: points.end,
-                                     control1: control1,
-                                     control2: control2)
+                // Use curved style if the source topic has curved branch style
+                let shouldUseCurvedStyle = fromTopic.branchStyle == .curved
+                
+                Group {
+                    if shouldUseCurvedStyle {
+                        // Animated curved path
+                        AnimatedCurvePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
+                            .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                    } else {
+                        // Animated straight line
+                        AnimatedLinePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
+                            .stroke(Color.purple.opacity(0.5), lineWidth: 2)
                     }
-                    .stroke(Color.purple.opacity(0.5), lineWidth: 2)
-                } else {
-                    // Draw straight line
-                    Path { path in
-                        path.move(to: points.start)
-                        path.addLine(to: points.end)
+                }
+                .onChange(of: points.start) { newStart in
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        animatedTemporaryLineStart = newStart
                     }
-                    .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                }
+                .onChange(of: points.end) { newEnd in
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        animatedTemporaryLineEnd = newEnd
+                    }
+                }
+                .onAppear {
+                    animatedTemporaryLineStart = points.start
+                    animatedTemporaryLineEnd = points.end
                 }
             }
         }
@@ -1119,7 +1363,7 @@ private struct TopicsView: View {
         ZStack {
             // Draw all topics in order, ensuring proper z-index
             ForEach(topics) { topic in
-                // Draw the topic
+                // Draw the topic with spring animations
                 TopicView(
                     topic: topic,
                     isSelected: topic.id == selectedId,
@@ -1144,7 +1388,9 @@ private struct TopicsView: View {
                     },
                     isRelationshipMode: isRelationshipMode
                 )
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
                 .zIndex(topic.id == selectedId ? 1 : 0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.id == selectedId)
                 
                 // Draw subtopics for this topic only if not collapsed
                 if !topic.subtopics.isEmpty && !topic.isCollapsed {
@@ -1160,6 +1406,8 @@ private struct TopicsView: View {
                         onRelationDragEnded: onRelationDragEnded,
                         isRelationshipMode: isRelationshipMode
                     )
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: !topic.isCollapsed)
                 }
             }
         }

@@ -19,6 +19,11 @@ class CanvasViewModel: ObservableObject {
     private let horizontalSpacing: CGFloat = 200 // Minimum horizontal spacing between main topics
     private var isDragging = false
     
+    // Add these properties to store the current theme
+    private var currentThemeFillColor: Color?
+    private var currentThemeBorderColor: Color?
+    private var currentThemeTextColor: Color?
+    
     init() {
         // Initialize history with current empty state
         history.append([])
@@ -98,6 +103,19 @@ class CanvasViewModel: ObservableObject {
         // Recalculate main topic count
         mainTopicCount = topics.count
         
+        // Ensure branch styles are consistent throughout the loaded mind map
+        if let firstTopic = topics.first {
+            // Get the branch style from the first topic
+            let globalStyle = firstTopic.branchStyle
+            
+            // Apply it to all topics to ensure consistency
+            for i in 0..<topics.count {
+                var mainTopic = topics[i]
+                updateBranchStyleRecursively(&mainTopic, globalStyle)
+                topics[i] = mainTopic
+            }
+        }
+        
         // No need to rebuild relations as they should be preserved in the file
     }
     
@@ -122,9 +140,32 @@ class CanvasViewModel: ObservableObject {
     func addMainTopic(at position: CGPoint) {
         saveState()
         mainTopicCount += 1
-        let topic = Topic.createMainTopic(at: position, count: mainTopicCount)
+        
+        // Create new topic at the exact cursor position
+        var topic = Topic.createMainTopic(at: position, count: mainTopicCount)
+        
+        // Apply theme colors if a theme has been selected
+        if let fillColor = currentThemeFillColor, 
+           let borderColor = currentThemeBorderColor,
+           let textColor = currentThemeTextColor {
+            topic.backgroundColor = fillColor
+            topic.borderColor = borderColor
+            topic.foregroundColor = textColor
+        }
+        
+        // Apply the current branch style from existing topics (if any exist)
+        if !topics.isEmpty {
+            // Use the first topic's branch style as the current global style
+            topic.branchStyle = topics[0].branchStyle
+        }
+        
         topics.append(topic)
+        
+        // Select the new topic so it becomes the center reference for auto-layout
         selectedTopicId = topic.id
+        
+        // Apply auto-layout while maintaining the new topic's position
+        performAutoLayout()
     }
     
     func addSubtopic(to parentTopic: Topic) {
@@ -138,6 +179,9 @@ class CanvasViewModel: ObservableObject {
             // For nested subtopics, recursively find the parent and add the subtopic
             addNestedSubtopic(to: parentTopic)
         }
+        
+        // Automatically adjust spacing after adding a subtopic
+        performAutoLayout()
     }
     
     private func addSubtopicToParent(_ parentTopic: Topic, at parentIndex: Int) {
@@ -147,13 +191,14 @@ class CanvasViewModel: ObservableObject {
         // Position the new subtopic relative to its parent
         let subtopicPosition = calculateNewSubtopicPosition(for: parentTopic, subtopicCount: subtopicCount)
         
-        let subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+        var subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+        
+        // Inherit the parent's branch style
+        subtopic.branchStyle = parentTopic.branchStyle
+        
         topics[parentIndex].subtopics.append(subtopic)
         
-        // Reposition all subtopics to ensure proper spacing
-        var updatedTopic = topics[parentIndex]
-        positionSubtree(in: &updatedTopic, parentX: updatedTopic.position.x, startY: updatedTopic.position.y)
-        topics[parentIndex] = updatedTopic
+        // No need to position subtree here since we'll call performAutoLayout after
         
         selectedTopicId = subtopic.id
     }
@@ -180,7 +225,11 @@ class CanvasViewModel: ObservableObject {
             // Position the new subtopic relative to its parent
             let subtopicPosition = calculateNewSubtopicPosition(for: topic, subtopicCount: subtopicCount)
             
-            let subtopic = topic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+            var subtopic = topic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+            
+            // Inherit the parent's branch style
+            subtopic.branchStyle = topic.branchStyle
+            
             updatedTopic.subtopics.append(subtopic)
             selectedTopicId = subtopic.id
             return updatedTopic
@@ -423,10 +472,12 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func calculateSubtreeHeight(_ topic: Topic) -> CGFloat {
-        let topicHeight = self.topicHeight
+        // Get the actual height of this topic from its content
+        let topicBox = getTopicBox(topic: topic)
+        let actualTopicHeight = topicBox.height
         
         if topic.subtopics.isEmpty {
-            return topicHeight
+            return actualTopicHeight
         }
         
         // Calculate total height needed for subtopics including spacing
@@ -441,7 +492,7 @@ class CanvasViewModel: ObservableObject {
             }
         }
         
-        return max(topicHeight, totalHeight)
+        return max(actualTopicHeight, totalHeight)
     }
     
     private func positionSubtree(in topic: inout Topic, parentX: CGFloat, startY: CGFloat) {
@@ -452,112 +503,289 @@ class CanvasViewModel: ObservableObject {
         let horizontalSpacing: CGFloat = 200 // Space between parent and child
         let verticalSpacing: CGFloat = 60 // Space between siblings
         
-        // Calculate the total height needed for all subtopics
-        let totalHeight = verticalSpacing * CGFloat(numSubtopics - 1)
+        // Calculate the heights of each subtopic to determine proper spacing
+        var subtopicHeights: [CGFloat] = []
+        var totalHeightNeeded: CGFloat = 0
+        
+        for subtopic in topic.subtopics {
+            let subtopicBox = getTopicBox(topic: subtopic)
+            let height = subtopicBox.height
+            subtopicHeights.append(height)
+            totalHeightNeeded += height
+        }
+        
+        // Add spacing between topics
+        totalHeightNeeded += verticalSpacing * CGFloat(numSubtopics - 1)
         
         // Calculate the starting Y position (top-most subtopic)
-        let topY = topic.position.y + totalHeight/2
+        let topY = topic.position.y + totalHeightNeeded/2 - subtopicHeights[0]/2
         
         // Position each subtopic
+        var currentY = topY
         for i in 0..<numSubtopics {
             var subtopic = topic.subtopics[i]
             
             // Calculate position
             let x = topic.position.x + horizontalSpacing
-            let y = topY - (CGFloat(i) * verticalSpacing)
-            subtopic.position = CGPoint(x: x, y: y)
+            subtopic.position = CGPoint(x: x, y: currentY)
             
             // Recursively position this subtopic's subtree
             if !subtopic.subtopics.isEmpty {
-                positionSubtree(in: &subtopic, parentX: x, startY: y)
+                positionSubtree(in: &subtopic, parentX: x, startY: currentY)
             }
             
             topic.subtopics[i] = subtopic
-        }
-    }
-    
-    // MARK: - Drag Handling
-    
-    func updateDraggedTopicPosition(_ topicId: UUID, _ newPosition: CGPoint) {
-        isDragging = true
-        
-        // First find and update the topic's position
-        if let index = topics.firstIndex(where: { $0.id == topicId }) {
-            // Update main topic
-            var topic = topics[index]
-            let offset = CGPoint(
-                x: newPosition.x - topic.position.x,
-                y: newPosition.y - topic.position.y
-            )
-            updatePositionsInTopic(topic: &topic, offset: offset)
-            topics[index] = topic
             
-            // Update all relations immediately during drag
-            updateAllRelations()
-            
-            // Update preview line if this topic is part of the current relation drag
-            if let dragState = relationDragState {
-                if dragState.fromId == topicId {
-                    relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
-                }
-            }
-        } else {
-            // Update subtopic
-            for i in 0..<topics.count {
-                var mainTopic = topics[i]
-                if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &mainTopic) {
-                    topics[i] = mainTopic
-                    
-                    // Update all relations immediately during drag
-                    updateAllRelations()
-                    
-                    // Update preview line if this topic is part of the current relation drag
-                    if let dragState = relationDragState {
-                        if dragState.fromId == topicId {
-                            relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
-                        }
-                    }
-                    break
-                }
+            // Move down for next subtopic, considering its height
+            if i < numSubtopics - 1 {
+                currentY -= (subtopicHeights[i]/2 + verticalSpacing + subtopicHeights[i+1]/2)
             }
         }
     }
     
-    private func updatePositionsInTopic(topic: inout Topic, offset: CGPoint) {
-        // Update the topic's position
-        topic.position = CGPoint(
-            x: topic.position.x + offset.x,
-            y: topic.position.y + offset.y
-        )
+    // Add auto layout method for perfect spacing
+    func performAutoLayout() {
+        saveState() // Save state before rearranging
+
+        // Constants for ideal spacing
+        let horizontalSpacing: CGFloat = 250 // Space between parent and child
+        let verticalSpacing: CGFloat = 100 // Space between siblings
+        let baseMainTopicSpacing: CGFloat = 350 // Base space between main topics
         
-        // Update all subtopics recursively
-        for i in 0..<topic.subtopics.count {
-            var subtopic = topic.subtopics[i]
-            updatePositionsInTopic(topic: &subtopic, offset: offset)
-            topic.subtopics[i] = subtopic
-        }
-    }
-    
-    private func updateSubtopicPositionRecursively(topicId: UUID, newPosition: CGPoint, in topic: inout Topic) -> Bool {
-        // Check direct subtopics
-        for i in 0..<topic.subtopics.count {
-            if topic.subtopics[i].id == topicId {
-                let offset = CGPoint(
-                    x: newPosition.x - topic.subtopics[i].position.x,
-                    y: newPosition.y - topic.subtopics[i].position.y
+        // First position main topics horizontally with equal spacing
+        let numMainTopics = topics.count
+        if numMainTopics > 0 {
+            // Get the selected topic as a reference point
+            var centerTopic: Topic?
+            var centerTopicIndex: Int = 0
+            
+            if let selectedId = selectedTopicId, let index = topics.firstIndex(where: { $0.id == selectedId }) {
+                // If a main topic is selected, use it as center
+                centerTopic = topics[index]
+                centerTopicIndex = index
+            } else {
+                // Otherwise use the first topic
+                centerTopic = topics.first
+                centerTopicIndex = 0
+            }
+            
+            // Ensure we have a center topic
+            guard let centerTopic = centerTopic else { return }
+            
+            // Keep the center topic fixed at its current position
+            let centerPosition = centerTopic.position
+            
+            // Position topics to the left of center topic
+            var currentX = centerPosition.x
+            for i in stride(from: centerTopicIndex - 1, through: 0, by: -1) {
+                var topic = topics[i]
+                
+                // Calculate width needed for this topic and get its box
+                let topicWidth = calculateTreeWidth(topic)
+                let centerTopicBox = getTopicBox(topic: centerTopic)
+                let topicBox = getTopicBox(topic: topic)
+                
+                // Calculate adaptive spacing based on the actual widths of the topics
+                let adaptiveSpacing = baseMainTopicSpacing + (centerTopicBox.width + topicBox.width) * 0.3
+                
+                // Position to the left of the previous topic
+                currentX -= (topicWidth/2 + adaptiveSpacing)
+                
+                topic.position = CGPoint(
+                    x: currentX,
+                    y: centerPosition.y
                 )
-                updatePositionsInTopic(topic: &topic.subtopics[i], offset: offset)
-                return true
+                
+                // Adjust currentX for the next topic
+                currentX -= topicWidth/2
+                
+                // Position all subtopics in a tree layout
+                if !topic.subtopics.isEmpty {
+                    layoutSubtopicTreeImproved(in: &topic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                }
+                
+                topics[i] = topic
             }
             
-            // Check nested subtopics
-            var subtopic = topic.subtopics[i]
-            if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &subtopic) {
-                topic.subtopics[i] = subtopic
-                return true
+            // Reset and position topics to the right of center topic
+            currentX = centerPosition.x
+            let centerTopicWidth = calculateTreeWidth(centerTopic)
+            let centerTopicBox = getTopicBox(topic: centerTopic)
+            
+            // Position center topic's subtopics without moving the center topic
+            var updatedCenterTopic = topics[centerTopicIndex]
+            if !updatedCenterTopic.subtopics.isEmpty {
+                layoutSubtopicTreeImproved(in: &updatedCenterTopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+            }
+            topics[centerTopicIndex] = updatedCenterTopic
+            
+            // Position topics to the right of center topic
+            for i in (centerTopicIndex + 1)..<numMainTopics {
+                var topic = topics[i]
+                let topicBox = getTopicBox(topic: topic)
+                
+                // Calculate adaptive spacing based on the actual widths of the topics
+                let adaptiveSpacing = baseMainTopicSpacing + (centerTopicBox.width + topicBox.width) * 0.3
+                
+                currentX += centerTopicWidth/2 + adaptiveSpacing
+                
+                topic.position = CGPoint(
+                    x: currentX + topicBox.width/2,
+                    y: centerPosition.y
+                )
+                
+                // Position all subtopics in a tree layout
+                if !topic.subtopics.isEmpty {
+                    layoutSubtopicTreeImproved(in: &topic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                }
+                
+                // Update currentX for next topic
+                currentX += calculateTreeWidth(topic)
+                
+                topics[i] = topic
+            }
+            
+            // Ensure branch styles are preserved after layout
+            if let firstTopic = topics.first {
+                // Get the current global branch style from the first topic
+                let globalStyle = firstTopic.branchStyle
+                
+                // Re-apply to all topics to ensure consistency
+                for i in 0..<topics.count {
+                    var mainTopic = topics[i]
+                    updateBranchStyleRecursively(&mainTopic, globalStyle)
+                    topics[i] = mainTopic
+                }
             }
         }
-        return false
+        
+        // Organize relation lines after repositioning
+        updateAllRelations()
+    }
+
+    // Improved layout function that ensures subtopics maintain order
+    private func layoutSubtopicTreeImproved(in topic: inout Topic, horizontalSpacing: CGFloat, verticalSpacing: CGFloat) -> CGFloat {
+        let numSubtopics = topic.subtopics.count
+        if numSubtopics == 0 { return 0 }
+        
+        // First level subtopics always go to the right of parent
+        let parentX = topic.position.x
+        let parentY = topic.position.y
+        
+        // Get parent topic box
+        let parentBox = getTopicBox(topic: topic)
+        
+        // Calculate how much vertical space we need for each subtopic's tree
+        var subtreeHeights: [CGFloat] = []
+        var totalHeight: CGFloat = 0
+        
+        // First calculate all subtree heights
+        for i in 0..<numSubtopics {
+            let subtopic = topic.subtopics[i]
+            let subtopicSubtreeCount = countAllSubtopics(subtopic)
+            
+            // Get the actual height of the subtopic
+            let subtopicBox = getTopicBox(topic: subtopic)
+            let actualHeight = subtopicBox.height
+            
+            // Adapt vertical spacing based on the size of the subtree
+            // More topics need more space to avoid crowding
+            let adaptiveSpacing = verticalSpacing * (1.0 + log(Double(max(1, subtopicSubtreeCount))) * 0.2)
+            
+            // Consider the actual height of the topic when calculating spacing
+            let height = max(adaptiveSpacing, CGFloat(adaptiveSpacing) * CGFloat(subtopicSubtreeCount))
+            let heightWithTopicSize = max(height, actualHeight * 2) // Ensure enough space for the topic
+            
+            subtreeHeights.append(heightWithTopicSize)
+            totalHeight += heightWithTopicSize
+        }
+        
+        // Calculate the starting Y position (top-most subtopic)
+        let topY = parentY - totalHeight/2
+        
+        // Position each subtopic vertically, accounting for their subtree size
+        var currentY = topY
+        
+        for i in 0..<numSubtopics {
+            var subtopic = topic.subtopics[i]
+            
+            // Get the subtopic box for width calculation
+            let subtopicBox = getTopicBox(topic: subtopic)
+            
+            // Calculate adaptive horizontal spacing based on the widths of parent and subtopic
+            let adaptiveHorizontalSpacing = horizontalSpacing + (parentBox.width + subtopicBox.width) * 0.25
+            
+            // Position this subtopic - always to the right of parent at consistent horizontal distance
+            subtopic.position = CGPoint(
+                x: parentX + parentBox.width/2 + adaptiveHorizontalSpacing,
+                y: currentY + subtreeHeights[i]/2
+            )
+            
+            // Recursively position this subtopic's subtree
+            if !subtopic.subtopics.isEmpty {
+                let usedHeight = layoutSubtopicTreeImproved(in: &subtopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                // We'll use the actual height used if it's greater than our initial estimate
+                currentY += max(subtreeHeights[i], usedHeight)
+            } else {
+                currentY += subtreeHeights[i]
+            }
+            
+            topic.subtopics[i] = subtopic
+        }
+        
+        return totalHeight
+    }
+
+    // Helper function to count all subtopics in a tree, including nested ones
+    private func countAllSubtopics(_ topic: Topic) -> Int {
+        if topic.subtopics.isEmpty {
+            return 1 // Count this topic
+        }
+        
+        // Use a more efficient approach for larger subtree counts
+        let directSubtopicCount = topic.subtopics.count
+        
+        // For small subtrees, use a simple recursive approach
+        if directSubtopicCount < 10 {
+            var count = 1 // Count this topic
+            for subtopic in topic.subtopics {
+                count += countAllSubtopics(subtopic)
+            }
+            return count
+        } else {
+            // For larger trees, use a more efficient calculation
+            // This approximation works well for most balanced trees
+            let nestedCount = topic.subtopics.reduce(0) { count, subtopic in
+                return count + (1 + subtopic.subtopics.count * 2)
+            }
+            return 1 + directSubtopicCount + nestedCount
+        }
+    }
+
+    // Calculate the width of a topic's subtree for spacing purposes
+    private func calculateTreeWidth(_ topic: Topic) -> CGFloat {
+        // Get the actual width of this topic based on its content instead of using a fixed value
+        let topicBox = getTopicBox(topic: topic)
+        let actualWidth = topicBox.width
+        
+        if topic.subtopics.isEmpty {
+            return actualWidth
+        }
+        
+        // Find the deepest nested level
+        var maxDepth: Int = 0
+        
+        func calculateDepth(_ topic: Topic, currentDepth: Int) {
+            maxDepth = max(maxDepth, currentDepth)
+            for subtopic in topic.subtopics {
+                calculateDepth(subtopic, currentDepth: currentDepth + 1)
+            }
+        }
+        
+        calculateDepth(topic, currentDepth: 1)
+        
+        // Each level adds horizontal spacing
+        return actualWidth + CGFloat(maxDepth) * 250
     }
     
     private func updateAllRelations() {
@@ -843,8 +1071,16 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func getTopicBox(topic: Topic) -> CGRect {
-        let width = max(120, CGFloat(topic.name.count * 10)) + 32 // Add padding for shape
-        let height: CGFloat = 40 // Total height including vertical padding
+        // Calculate width based on the longest line
+        let lines = topic.name.components(separatedBy: "\n")
+        let maxLineLength = lines.map { $0.count }.max() ?? 0
+        let width = max(120, CGFloat(maxLineLength * 10)) + 32 // Add padding for shape
+        
+        // Calculate height based on number of lines
+        let lineCount = lines.count
+        // Use a base height for single-line topics, and increase height for multi-line
+        let height = max(40, CGFloat(lineCount * 24)) + 16 // Add vertical padding
+        
         return CGRect(
             x: topic.position.x - width/2,
             y: topic.position.y - height/2,
@@ -1450,12 +1686,23 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
-    func updateTopicBranchStyle(_ id: UUID, style: Topic.BranchStyle) {
-        // Update all topics to use the new style
+    func updateTopicBranchStyle(_ id: UUID?, style: Topic.BranchStyle) {
+        // Save state before making changes
+        saveState()
+        
+        // When updating branch style, apply it to all topics on the canvas
+        // Apply the style to all topics in the canvas
         for i in 0..<topics.count {
-            var topic = topics[i]
-            updateBranchStyleRecursively(&topic, style)
-            topics[i] = topic
+            var mainTopic = topics[i]
+            updateBranchStyleRecursively(&mainTopic, style)
+            topics[i] = mainTopic
+        }
+        
+        // Store this style as the current global style
+        // This ensures that any new topics or subtopics created will use this style
+        if let firstTopic = topics.first {
+            // Store the current global style on the first topic (if any exists)
+            // New topics will check this to inherit the correct style
         }
     }
     
@@ -1469,6 +1716,28 @@ class CanvasViewModel: ObservableObject {
             updateBranchStyleRecursively(&subtopic, style)
             topic.subtopics[i] = subtopic
         }
+    }
+    
+    private func updateSubtopicBranchStyle(_ id: UUID, _ style: Topic.BranchStyle, in topic: inout Topic) -> Bool {
+        // Check if this topic's subtopics contain the target
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == id {
+                // Update this subtopic and all its descendants
+                var subtopic = topic.subtopics[i]
+                updateBranchStyleRecursively(&subtopic, style)
+                topic.subtopics[i] = subtopic
+                return true
+            }
+            
+            // Recursively check this subtopic's subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicBranchStyle(id, style, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
     }
     
     private func updateSubtopicTextCase(_ id: UUID, _ textCase: TextCase, in topic: inout Topic) -> Bool {
@@ -1696,5 +1965,125 @@ class CanvasViewModel: ObservableObject {
            let topics = userInfo["topics"] as? [Topic] {
             loadTopics(topics)
         }
+    }
+    
+    // MARK: - Drag Handling
+    
+    func updateDraggedTopicPosition(_ topicId: UUID, _ newPosition: CGPoint) {
+        isDragging = true
+        
+        // First find and update the topic's position
+        if let index = topics.firstIndex(where: { $0.id == topicId }) {
+            // Update main topic
+            var topic = topics[index]
+            // Calculate the offset between old and new position
+            let offset = CGPoint(
+                x: newPosition.x - topic.position.x,
+                y: newPosition.y - topic.position.y
+            )
+            
+            // Update the main topic and all its subtopics with the same offset
+            updatePositionsInTopic(topic: &topic, offset: offset)
+            topics[index] = topic
+            
+            // Update all relations immediately during drag
+            updateAllRelations()
+            
+            // Update preview line if this topic is part of the current relation drag
+            if let dragState = relationDragState {
+                if dragState.fromId == topicId {
+                    relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
+                }
+            }
+        } else {
+            // If not a main topic, check subtopics
+            for i in 0..<topics.count {
+                var mainTopic = topics[i]
+                if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &mainTopic) {
+                    topics[i] = mainTopic
+                    
+                    // Update all relations immediately during drag
+                    updateAllRelations()
+                    
+                    // Update preview line if this topic is part of the current relation drag
+                    if let dragState = relationDragState {
+                        if dragState.fromId == topicId {
+                            relationDragState = (fromId: dragState.fromId, toPosition: newPosition)
+                        }
+                    }
+                    break
+                }
+            }
+        }
+    }
+    
+    private func updatePositionsInTopic(topic: inout Topic, offset: CGPoint) {
+        // Update the topic's position
+        topic.position = CGPoint(
+            x: topic.position.x + offset.x,
+            y: topic.position.y + offset.y
+        )
+        
+        // Update all subtopics recursively with the same offset
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            updatePositionsInTopic(topic: &subtopic, offset: offset)
+            topic.subtopics[i] = subtopic
+        }
+    }
+    
+    private func updateSubtopicPositionRecursively(topicId: UUID, newPosition: CGPoint, in topic: inout Topic) -> Bool {
+        // Check direct subtopics
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == topicId {
+                // Calculate the offset between old and new position
+                let offset = CGPoint(
+                    x: newPosition.x - topic.subtopics[i].position.x,
+                    y: newPosition.y - topic.subtopics[i].position.y
+                )
+                
+                // Update this subtopic and all its children with the same offset
+                updatePositionsInTopic(topic: &topic.subtopics[i], offset: offset)
+                return true
+            }
+            
+            // Check nested subtopics
+            var subtopic = topic.subtopics[i]
+            if updateSubtopicPositionRecursively(topicId: topicId, newPosition: newPosition, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        return false
+    }
+    
+    // Get all topic IDs from the mind map
+    func getAllTopicIds() -> [UUID] {
+        var topicIds = [UUID]()
+        
+        func collectIds(from topics: [Topic]) {
+            for topic in topics {
+                topicIds.append(topic.id)
+                collectIds(from: topic.subtopics)
+            }
+        }
+        
+        collectIds(from: topics)
+        return topicIds
+    }
+    
+    // Add this method to set the current theme
+    func setCurrentTheme(topicFillColor: Color, topicBorderColor: Color, topicTextColor: Color) {
+        // Update local theme colors
+        currentThemeFillColor = topicFillColor
+        currentThemeBorderColor = topicBorderColor
+        currentThemeTextColor = topicTextColor
+        
+        // Update Topic static theme colors property for subtopics
+        Topic.themeColors = (
+            backgroundColor: topicFillColor, 
+            borderColor: topicBorderColor, 
+            foregroundColor: topicTextColor
+        )
     }
 }

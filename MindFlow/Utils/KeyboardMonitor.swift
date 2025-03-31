@@ -12,19 +12,28 @@ class KeyboardMonitor {
         guard monitor == nil else { return }
         
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            print("KeyboardMonitor received key: \(event.keyCode)")
+            print("KeyboardMonitor received key: \(event.keyCode), modifiers: \(event.modifierFlags.rawValue)")
             
             var shouldPassEvent = true
             
             // Post notification for Return key (code 36)
             if event.keyCode == 36 {
+                // Log the modifiers for debugging
+                let isCommandPressed = event.modifierFlags.contains(.command)
+                let isShiftPressed = event.modifierFlags.contains(.shift)
+                print("Return pressed - Command: \(isCommandPressed), Shift: \(isShiftPressed)")
+                
+                // Post notification with the event for our custom handlers
                 NotificationCenter.default.post(
                     name: NSNotification.Name("ReturnKeyPressed"),
                     object: nil,
                     userInfo: ["event": event]
                 )
-                // Always suppress sound for Return key (with or without shift)
-                shouldPassEvent = false
+                
+                // Always suppress the system sound for Return key
+                // But also prevent default behavior for Command+Return and Shift+Return
+                // to avoid double newlines
+                shouldPassEvent = !(isCommandPressed || isShiftPressed)
             }
             
             // Detect Cmd+Z for Undo (key code 6 is 'z')
@@ -51,7 +60,7 @@ class KeyboardMonitor {
             
             self?.keyHandler?(event)
             
-            // Return nil for handled events to prevent system sound
+            // Return nil for handled events to prevent system sound and default behavior
             return shouldPassEvent ? event : nil
         }
     }

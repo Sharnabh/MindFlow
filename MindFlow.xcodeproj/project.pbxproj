@@ -12,9 +12,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		CED8ED052D83F83C00F37456 /* MindFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MindFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CED8ED172D83F85D00F37456 /* MindFlow.pages */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.pages; sourceTree = "<group>"; };
 		CED8ED192D83FA5600F37456 /* MindFlow.docx */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.docx; sourceTree = "<group>"; };
+		CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MindFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -40,18 +40,10 @@
 			isa = PBXGroup;
 			children = (
 				CED8ED072D83F83C00F37456 /* MindFlow */,
-				CED8ED062D83F83C00F37456 /* Products */,
 				CED8ED172D83F85D00F37456 /* MindFlow.pages */,
 				CED8ED192D83FA5600F37456 /* MindFlow.docx */,
+				CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */,
 			);
-			sourceTree = "<group>";
-		};
-		CED8ED062D83F83C00F37456 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				CED8ED052D83F83C00F37456 /* MindFlow.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -76,7 +68,7 @@
 			packageProductDependencies = (
 			);
 			productName = MindFlow;
-			productReference = CED8ED052D83F83C00F37456 /* MindFlow.app */;
+			productReference = CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -104,7 +96,7 @@
 			mainGroup = CED8ECFC2D83F83C00F37456;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = CED8ED062D83F83C00F37456 /* Products */;
+			productRefGroup = CED8ECFC2D83F83C00F37456;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -259,6 +251,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = MindFlow/MindFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -268,6 +261,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MindFlow;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -286,6 +281,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = MindFlow/MindFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -295,6 +291,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = MindFlow;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
