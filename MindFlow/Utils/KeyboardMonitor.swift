@@ -30,10 +30,30 @@ class KeyboardMonitor {
                     userInfo: ["event": event]
                 )
                 
-                // Always suppress the system sound for Return key
-                // But also prevent default behavior for Command+Return and Shift+Return
-                // to avoid double newlines
-                shouldPassEvent = !(isCommandPressed || isShiftPressed)
+                // For Command+Return and Shift+Return, always prevent the default behavior
+                // to avoid duplicate newlines in TextEditor - our handler will insert the newline
+                if isCommandPressed || isShiftPressed {
+                    // Check if the first responder is a TextEditor/NSTextView
+                    if let window = NSApp.keyWindow,
+                       let firstResponder = window.firstResponder,
+                       firstResponder.isKind(of: NSTextView.self) {
+                        // For TextEditor with modifiers, always stop the event here
+                        // Our notification handler will insert exactly one newline
+                        shouldPassEvent = false
+                    }
+                } else {
+                    // For plain Return, check what type of control has focus
+                    if let window = NSApp.keyWindow,
+                       let firstResponder = window.firstResponder {
+                        // For NSTextView (TextEditor), let system handle regular Return
+                        if firstResponder.isKind(of: NSTextView.self) {
+                            shouldPassEvent = true
+                        } else {
+                            // For other controls, let our custom handlers decide
+                            shouldPassEvent = true
+                        }
+                    }
+                }
             }
             
             // Detect Cmd+Z for Undo (key code 6 is 'z')

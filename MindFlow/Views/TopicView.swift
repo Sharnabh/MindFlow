@@ -289,9 +289,16 @@ private struct TopicContent: View {
         let text = topic.isEditing ? editingName : topic.name
         let lines = text.components(separatedBy: "\n")
         let maxLineLength = lines.map { $0.count }.max() ?? 0
-        let width = max(120, CGFloat(maxLineLength * 10))
+        
+        // Scale width based on font size - larger fonts need more width per character
+        let fontSizeScaleFactor = max(1.0, topic.fontSize / 14.0)
+        let width = max(120, CGFloat(maxLineLength * 10) * fontSizeScaleFactor)
+        
         let lineCount = lines.count
-        let height = max(40, CGFloat(lineCount * 24))
+        // Scale line height based on font size
+        let lineHeight = max(24, topic.fontSize * 1.5)
+        let height = max(40, CGFloat(lineCount) * lineHeight)
+        
         return (width, height)
     }
     
@@ -382,19 +389,22 @@ private struct TopicContent: View {
                event.keyCode == 36, // Return key
                self.isFocused {
                 
-                // Clear any pending timer to prevent multiple insertions
                 if event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command) {
                     // Shift+Return or Command+Return: add a new line
-                    // Use dispatch async to ensure we don't conflict with the TextEditor's built-in behavior
+                    // The KeyboardMonitor has already blocked the system event,
+                    // so we need to manually insert exactly one newline
+                    
+                    // Use dispatch async to ensure we're outside the view update cycle
                     DispatchQueue.main.async {
-                        // Get the current selection to determine where to insert the newline
+                        // Check if we can get the current text view
                         if let currentEditor = NSApp.keyWindow?.firstResponder as? NSTextView {
-                            // Create an NSTextView operation instead of directly modifying the string
-                            // This ensures proper undo registration and avoids duplicating newlines
+                            // Get the current selection
                             let range = currentEditor.selectedRange()
+                            
+                            // Insert a single newline at the selection
                             currentEditor.insertText("\n", replacementRange: range)
                             
-                            // Update the topic name with the editor text
+                            // Update the bound text value
                             if let updatedText = currentEditor.string as String? {
                                 self.editingName = updatedText
                                 self.onNameChange(updatedText)
@@ -876,12 +886,16 @@ func getTopicBox(topic: Topic) -> CGRect {
     // Calculate width based on the longest line
     let lines = topic.name.components(separatedBy: "\n")
     let maxLineLength = lines.map { $0.count }.max() ?? 0
-    let width = max(120, CGFloat(maxLineLength * 10)) + 32 // Add padding for shape
+    
+    // Scale width based on font size - larger fonts need more width per character
+    let fontSizeScaleFactor = max(1.0, topic.fontSize / 14.0)
+    let width = max(120, CGFloat(maxLineLength * 10) * fontSizeScaleFactor) + 32 // Add padding for shape
     
     // Calculate height based on number of lines
     let lineCount = lines.count
-    // Use a base height for single-line topics, and increase height for multi-line
-    let height = max(40, CGFloat(lineCount * 24)) + 16 // Add vertical padding
+    // Scale line height based on font size
+    let lineHeight = max(24, topic.fontSize * 1.5)
+    let height = max(40, CGFloat(lineCount) * lineHeight) + 16 // Add vertical padding
     
     return CGRect(
         x: topic.position.x - width/2,

@@ -666,10 +666,12 @@ class CanvasViewModel: ObservableObject {
         }
         
         // Update the published property with all changes
-        self.topics = updatedTopics
-        
-        // Organize relation lines after repositioning
-        updateAllRelations()
+        DispatchQueue.main.async {
+            self.topics = updatedTopics
+            
+            // Organize relation lines after repositioning
+            self.updateAllRelations()
+        }
     }
 
     // Improved layout function that ensures subtopics maintain order
