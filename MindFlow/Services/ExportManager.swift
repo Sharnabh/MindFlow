@@ -382,7 +382,7 @@ class ExportManager {
             if useCurvedStyle || topic.branchStyle == .curved {
                 // Draw curved connection
                 let dx = subtopicPosition.x - position.x
-                let dy = subtopicPosition.y - position.y
+                let _ = subtopicPosition.y - position.y
                 let midX = position.x + dx * 0.5
                 
                 context.move(to: position)

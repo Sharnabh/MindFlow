@@ -79,6 +79,9 @@ struct Topic: Identifiable, Equatable {
     var textCase: TextCase = .none
     var textAlignment: TextAlignment = .center
     
+    // Add a static property to Topic to store theme colors
+    static var themeColors: (backgroundColor: Color?, borderColor: Color?, foregroundColor: Color?) = (nil, nil, nil)
+    
     init(
         id: UUID = UUID(),
         name: String,
@@ -169,14 +172,23 @@ extension Topic {
     }
     
     func createSubtopic(at position: CGPoint, count: Int) -> Topic {
-        Topic(
+        // First check if theme colors are set, if not use parent's colors
+        let backgroundColor = Topic.themeColors.backgroundColor ?? self.backgroundColor
+        let borderColor = Topic.themeColors.borderColor ?? self.borderColor
+        let foregroundColor = Topic.themeColors.foregroundColor ?? self.foregroundColor
+        
+        return Topic(
             name: "Subtopic \(count)",
             position: position,
             parentId: self.id,
-            backgroundColor: self.backgroundColor,
+            backgroundColor: backgroundColor,
             backgroundOpacity: self.backgroundOpacity,
-            borderColor: self.borderColor,
-            borderOpacity: self.borderOpacity
+            borderColor: borderColor,
+            borderOpacity: self.borderOpacity,
+            borderWidth: self.borderWidth,
+            branchStyle: self.branchStyle,
+            foregroundColor: foregroundColor,
+            foregroundOpacity: self.foregroundOpacity
         )
     }
     

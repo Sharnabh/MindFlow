@@ -25,7 +25,7 @@ class MindFlowFileManager {
         savePanel.showsTagField = true
         savePanel.title = "Save Mind Map"
         savePanel.nameFieldStringValue = "Untitled"
-        savePanel.allowedFileTypes = ["mindflow"]
+        savePanel.allowedContentTypes = [UTType.mindFlowType]
         
         savePanel.begin { result in
             if result == .OK, let url = savePanel.url {
@@ -76,7 +76,7 @@ class MindFlowFileManager {
         openPanel.canChooseDirectories = false
         openPanel.allowsMultipleSelection = false
         openPanel.title = "Open Mind Map"
-        openPanel.allowedFileTypes = ["mindflow"]
+        openPanel.allowedContentTypes = [UTType.mindFlowType]
         
         openPanel.begin { result in
             if result == .OK, let url = openPanel.url {
