@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct Topic: Identifiable, Equatable {
+struct Topic: Identifiable, Equatable, Codable, Hashable {
     enum Shape: Codable {
         case rectangle
         case roundedRectangle
@@ -55,6 +55,7 @@ struct Topic: Identifiable, Equatable {
     let id: UUID
     var name: String
     var position: CGPoint
+    var size: CGSize
     var parentId: UUID?
     var subtopics: [Topic]
     var isSelected: Bool
@@ -68,6 +69,7 @@ struct Topic: Identifiable, Equatable {
     var borderOpacity: Double
     var borderWidth: BorderWidth
     var branchStyle: BranchStyle = .default
+    var rotation: CGFloat = 0
     
     // Text formatting properties
     var font: String = "System"
@@ -86,6 +88,7 @@ struct Topic: Identifiable, Equatable {
         id: UUID = UUID(),
         name: String,
         position: CGPoint,
+        size: CGSize = CGSize(width: 200, height: 100),
         parentId: UUID? = nil,
         subtopics: [Topic] = [],
         isSelected: Bool = false,
@@ -93,16 +96,16 @@ struct Topic: Identifiable, Equatable {
         isCollapsed: Bool = false,
         relations: [Topic] = [],
         shape: Shape = .roundedRectangle,
-        backgroundColor: Color = .blue,
+        backgroundColor: Color = .white,
         backgroundOpacity: Double = 1.0,
-        borderColor: Color = .blue,
+        borderColor: Color = .black,
         borderOpacity: Double = 1.0,
         borderWidth: BorderWidth = .medium,
         branchStyle: BranchStyle = .default,
         font: String = "System",
         fontSize: CGFloat = 16,
         fontWeight: Font.Weight = .medium,
-        foregroundColor: Color = .white,
+        foregroundColor: Color = .black,
         foregroundOpacity: Double = 1.0,
         textStyles: Set<TextStyle> = [],
         textCase: TextCase = .none,
@@ -111,6 +114,7 @@ struct Topic: Identifiable, Equatable {
         self.id = id
         self.name = name
         self.position = position
+        self.size = size
         self.parentId = parentId
         self.subtopics = subtopics
         self.isSelected = isSelected
@@ -161,6 +165,11 @@ struct Topic: Identifiable, Equatable {
         lhs.textCase == rhs.textCase &&
         lhs.textAlignment == rhs.textAlignment
     }
+    
+    // Add Hashable conformance
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 
 extension Topic {
@@ -209,6 +218,7 @@ extension Topic {
             id: self.id,
             name: self.name,
             position: self.position,
+            size: self.size,
             parentId: self.parentId,
             subtopics: [],
             isSelected: self.isSelected,
@@ -238,5 +248,102 @@ extension Topic {
         // Skip copying relations entirely to prevent circular references during serialization
         
         return copy
+    }
+}
+
+// MARK: - Codable Implementation
+extension Topic {
+    enum CodingKeys: String, CodingKey {
+        case id, name, position, size, parentId, subtopics, isSelected, isEditing, isCollapsed
+        case relations, shape, backgroundComponents, backgroundOpacity, borderComponents, borderOpacity
+        case borderWidth, branchStyle, rotation, font, fontSize, fontWeightRaw, foregroundComponents
+        case foregroundOpacity, textStyles, textCase, textAlignment
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(position, forKey: .position)
+        try container.encode(size, forKey: .size)
+        try container.encode(parentId, forKey: .parentId)
+        try container.encode(subtopics, forKey: .subtopics)
+        try container.encode(isSelected, forKey: .isSelected)
+        try container.encode(isEditing, forKey: .isEditing)
+        try container.encode(isCollapsed, forKey: .isCollapsed)
+        try container.encode(relations, forKey: .relations)
+        try container.encode(shape, forKey: .shape)
+        
+        // Encode Color properties as ColorComponents
+        try container.encode(backgroundColor.toComponents(), forKey: .backgroundComponents)
+        try container.encode(backgroundOpacity, forKey: .backgroundOpacity)
+        try container.encode(borderColor.toComponents(), forKey: .borderComponents)
+        try container.encode(borderOpacity, forKey: .borderOpacity)
+        
+        try container.encode(borderWidth, forKey: .borderWidth)
+        try container.encode(branchStyle, forKey: .branchStyle)
+        try container.encode(rotation, forKey: .rotation)
+        try container.encode(font, forKey: .font)
+        try container.encode(fontSize, forKey: .fontSize)
+        try container.encode(fontWeight.rawValue, forKey: .fontWeightRaw)
+        
+        try container.encode(foregroundColor.toComponents(), forKey: .foregroundComponents)
+        try container.encode(foregroundOpacity, forKey: .foregroundOpacity)
+        try container.encode(textStyles, forKey: .textStyles)
+        try container.encode(textCase, forKey: .textCase)
+        try container.encode(textAlignment, forKey: .textAlignment)
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        position = try container.decode(CGPoint.self, forKey: .position)
+        size = try container.decode(CGSize.self, forKey: .size)
+        parentId = try container.decodeIfPresent(UUID.self, forKey: .parentId)
+        subtopics = try container.decode([Topic].self, forKey: .subtopics)
+        isSelected = try container.decode(Bool.self, forKey: .isSelected)
+        isEditing = try container.decode(Bool.self, forKey: .isEditing)
+        isCollapsed = try container.decode(Bool.self, forKey: .isCollapsed)
+        relations = try container.decode([Topic].self, forKey: .relations)
+        shape = try container.decode(Shape.self, forKey: .shape)
+        
+        // Decode Color properties from ColorComponents
+        let bgComponents = try container.decode(ColorComponents.self, forKey: .backgroundComponents)
+        backgroundColor = Color(.sRGB, red: bgComponents.red, green: bgComponents.green, blue: bgComponents.blue, opacity: bgComponents.opacity)
+        backgroundOpacity = try container.decode(Double.self, forKey: .backgroundOpacity)
+        
+        let borderComponents = try container.decode(ColorComponents.self, forKey: .borderComponents)
+        borderColor = Color(.sRGB, red: borderComponents.red, green: borderComponents.green, blue: borderComponents.blue, opacity: borderComponents.opacity)
+        borderOpacity = try container.decode(Double.self, forKey: .borderOpacity)
+        
+        borderWidth = try container.decode(BorderWidth.self, forKey: .borderWidth)
+        branchStyle = try container.decode(BranchStyle.self, forKey: .branchStyle)
+        rotation = try container.decode(CGFloat.self, forKey: .rotation)
+        font = try container.decode(String.self, forKey: .font)
+        fontSize = try container.decode(CGFloat.self, forKey: .fontSize)
+        
+        let fontWeightRawValue = try container.decode(Int.self, forKey: .fontWeightRaw)
+        switch fontWeightRawValue {
+        case 0: fontWeight = .thin
+        case 1: fontWeight = .ultraLight
+        case 2: fontWeight = .light
+        case 3: fontWeight = .regular
+        case 4: fontWeight = .medium
+        case 5: fontWeight = .semibold
+        case 6: fontWeight = .bold
+        case 7: fontWeight = .heavy
+        default: fontWeight = .regular
+        }
+        
+        let foregroundComponents = try container.decode(ColorComponents.self, forKey: .foregroundComponents)
+        foregroundColor = Color(.sRGB, red: foregroundComponents.red, green: foregroundComponents.green, blue: foregroundComponents.blue, opacity: foregroundComponents.opacity)
+        foregroundOpacity = try container.decode(Double.self, forKey: .foregroundOpacity)
+        
+        textStyles = try container.decode(Set<TextStyle>.self, forKey: .textStyles)
+        textCase = try container.decode(TextCase.self, forKey: .textCase)
+        textAlignment = try container.decode(TextAlignment.self, forKey: .textAlignment)
     }
 } 
