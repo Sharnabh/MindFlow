@@ -1035,7 +1035,7 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
-    private func updateTopicInHierarchy(_ updatedTopic: Topic, in topic: inout Topic) -> Bool {
+    func updateTopicInHierarchy(_ updatedTopic: Topic, in topic: inout Topic) -> Bool {
         // Check direct subtopics
         for i in 0..<topic.subtopics.count {
             if topic.subtopics[i].id == updatedTopic.id {
@@ -2161,6 +2161,262 @@ class CanvasViewModel: ObservableObject {
             backgroundColor: topicFillColor, 
             borderColor: topicBorderColor, 
             foregroundColor: topicTextColor
+        )
+    }
+    
+    // MARK: - AI Integration Functions
+    
+    /// Get all topic texts for AI generation
+    func getAllTopicTexts() -> [String] {
+        var allTexts = [String]()
+        
+        // Add main topics
+        for topic in topics {
+            allTexts.append(topic.name)
+            // Recursively collect subtopics
+            collectSubtopicTexts(from: topic.subtopics, into: &allTexts)
+        }
+        
+        return allTexts
+    }
+    
+    /// Recursively collect subtopic texts
+    private func collectSubtopicTexts(from subtopics: [Topic], into texts: inout [String]) {
+        for subtopic in subtopics {
+            texts.append(subtopic.name)
+            collectSubtopicTexts(from: subtopic.subtopics, into: &texts)
+        }
+    }
+    
+    /// Get descriptions of connections between topics
+    func getConnectionDescriptions() -> [String] {
+        var connections = [String]()
+        
+        // For each main topic, describe its relationship with subtopics
+        for topic in topics {
+            describeConnections(parentTopic: topic, parentName: topic.name, connections: &connections)
+        }
+        
+        return connections
+    }
+    
+    /// Recursively describe connections between a parent topic and its subtopics
+    private func describeConnections(parentTopic: Topic, parentName: String, connections: inout [String]) {
+        for subtopic in parentTopic.subtopics {
+            connections.append("\(parentName) → \(subtopic.name)")
+            describeConnections(parentTopic: subtopic, parentName: subtopic.name, connections: &connections)
+        }
+    }
+    
+    /// Get a description of the mind map structure for AI analysis
+    func getMindMapStructureDescription() -> String {
+        var description = "Mind Map Structure:\n"
+        
+        if topics.isEmpty {
+            return description + "Empty mind map"
+        }
+        
+        for (index, topic) in topics.enumerated() {
+            description += "Main Topic \(index + 1): \(topic.name)\n"
+            if !topic.subtopics.isEmpty {
+                description += describeSubtopicStructure(topic.subtopics, level: 1)
+            }
+        }
+        
+        return description
+    }
+    
+    /// Recursively describe the structure of subtopics
+    private func describeSubtopicStructure(_ subtopics: [Topic], level: Int) -> String {
+        var description = ""
+        let indent = String(repeating: "  ", count: level)
+        
+        for (index, subtopic) in subtopics.enumerated() {
+            description += "\(indent)- Subtopic \(index + 1): \(subtopic.name)\n"
+            if !subtopic.subtopics.isEmpty {
+                description += describeSubtopicStructure(subtopic.subtopics, level: level + 1)
+            }
+        }
+        
+        return description
+    }
+    
+    /// Add a new topic from AI suggestions
+    func addTopicFromAI(title: String) {
+        // Create a position for the new topic
+        let centerX = 400.0 // Default center X
+        let centerY = 300.0 // Default center Y
+        
+        // If there's a selected topic, position the new one near it
+        var position = CGPoint(x: centerX, y: centerY)
+        if let selectedId = selectedTopicId, let selectedTopic = findTopicById(selectedId) {
+            // Position to the right of the selected topic
+            position = CGPoint(x: selectedTopic.position.x + 250, y: selectedTopic.position.y)
+        } else if !topics.isEmpty {
+            // If no selection but topics exist, position below the last one
+            let lastTopic = topics.last!
+            position = CGPoint(x: lastTopic.position.x, y: lastTopic.position.y + 150)
+        }
+        
+        saveState()
+        mainTopicCount += 1
+        
+        // Create new topic with the AI-generated title
+        var topic = Topic.createMainTopic(at: position, count: mainTopicCount)
+        topic.name = title
+        
+        // Apply theme colors if a theme has been selected
+        if let fillColor = currentThemeFillColor, 
+           let borderColor = currentThemeBorderColor,
+           let textColor = currentThemeTextColor {
+            topic.backgroundColor = fillColor
+            topic.borderColor = borderColor
+            topic.foregroundColor = textColor
+        }
+        
+        // Apply the current branch style from existing topics (if any exist)
+        if !topics.isEmpty {
+            // Use the first topic's branch style as the current global style
+            topic.branchStyle = topics[0].branchStyle
+        }
+        
+        topics.append(topic)
+        
+        // Select the new topic
+        selectedTopicId = topic.id
+        
+        // Apply auto-layout while maintaining the new topic's position
+        performAutoLayout()
+    }
+    
+    /// Find a topic by its ID (searches the entire topic tree)
+    func findTopicById(_ id: UUID) -> Topic? {
+        // First check main topics
+        if let mainTopic = topics.first(where: { $0.id == id }) {
+            return mainTopic
+        }
+        
+        // Then search through subtopics
+        for mainTopic in topics {
+            if let foundTopic = findSubtopicById(id, in: mainTopic.subtopics) {
+                return foundTopic
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Recursively search for a subtopic by ID
+    private func findSubtopicById(_ id: UUID, in subtopics: [Topic]) -> Topic? {
+        for subtopic in subtopics {
+            if subtopic.id == id {
+                return subtopic
+            }
+            
+            if let foundInChildren = findSubtopicById(id, in: subtopic.subtopics) {
+                return foundInChildren
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Adds a hierarchy of topics to the canvas based on the selected topics
+    func addTopicHierarchy(parentTopics: [TopicWithReason]) {
+        // Save current state for undo
+        saveState()
+        
+        // Keep track of the last added parent topic
+        var lastAddedParentPosition = CGPoint(x: 400, y: 300)
+        var lastParentId: UUID? = nil
+        
+        // Process each parent topic
+        for parentTopic in parentTopics {
+            // Only add selected parent topics
+            if !parentTopic.isSelected { continue }
+            
+            // Create position for the parent topic - horizontal layout
+            let parentPosition: CGPoint
+            if let lastId = lastParentId, let lastTopic = findTopicById(lastId) {
+                // Position this parent to the right of the last one
+                parentPosition = CGPoint(x: lastTopic.position.x + 300, y: lastTopic.position.y)
+            } else if !topics.isEmpty {
+                // If there are existing topics, position below the last one
+                let lastTopic = topics.last!
+                parentPosition = CGPoint(x: lastTopic.position.x, y: lastTopic.position.y + 200)
+            } else {
+                // Default position for first topic
+                parentPosition = lastAddedParentPosition
+            }
+            
+            // Create and add the parent topic
+            mainTopicCount += 1
+            var parentTopicObj = Topic.createMainTopic(at: parentPosition, count: mainTopicCount)
+            parentTopicObj.name = parentTopic.name
+            
+            // Apply theme colors if available
+            if let fillColor = currentThemeFillColor, 
+               let borderColor = currentThemeBorderColor,
+               let textColor = currentThemeTextColor {
+                parentTopicObj.backgroundColor = fillColor
+                parentTopicObj.borderColor = borderColor
+                parentTopicObj.foregroundColor = textColor
+            }
+            
+            // Apply branch style from existing topics if any
+            if !topics.isEmpty {
+                parentTopicObj.branchStyle = topics[0].branchStyle
+            }
+            
+            // Add the parent topic
+            topics.append(parentTopicObj)
+            lastParentId = parentTopicObj.id
+            lastAddedParentPosition = parentPosition
+            
+            // Process children for this parent
+            var verticalOffset: CGFloat = 0
+            for childTopic in parentTopic.children {
+                // Only add selected children
+                if !childTopic.isSelected { continue }
+                
+                // Calculate position for child
+                let childPosition = calculateSubtopicPosition(
+                    for: parentTopicObj, 
+                    verticalOffset: verticalOffset
+                )
+                
+                // Create the child topic
+                var childTopicObj = parentTopicObj.createSubtopic(
+                    at: childPosition, 
+                    count: parentTopicObj.subtopics.count + 1
+                )
+                childTopicObj.name = childTopic.name
+                
+                // Add the child to the parent
+                if let parentIndex = topics.firstIndex(where: { $0.id == parentTopicObj.id }) {
+                    topics[parentIndex].subtopics.append(childTopicObj)
+                }
+                
+                // Increase vertical offset for next child
+                verticalOffset += 80
+            }
+        }
+        
+        // Apply auto-layout for better organization
+        performAutoLayout()
+        
+        // Select the first added parent topic if any were added
+        if let firstParentId = lastParentId {
+            selectedTopicId = firstParentId
+        }
+    }
+    
+    /// Calculate position for a subtopic with custom vertical offset
+    private func calculateSubtopicPosition(for parentTopic: Topic, verticalOffset: CGFloat) -> CGPoint {
+        // Position to the right of the parent with the given vertical offset
+        return CGPoint(
+            x: parentTopic.position.x + 200,
+            y: parentTopic.position.y + verticalOffset - 100 // Center children vertically
         )
     }
 }

@@ -180,6 +180,7 @@ enum TextAlignment: String, CaseIterable, Identifiable {
 enum SidebarMode: String, CaseIterable, Identifiable {
     case style = "Style"
     case map = "Map"
+    case ai = "AI"
     
     var id: String { self.rawValue }
 }
