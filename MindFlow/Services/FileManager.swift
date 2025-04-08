@@ -239,13 +239,13 @@ extension Topic: Codable {
         foregroundOpacity = try container.decode(Double.self, forKey: .foregroundOpacity)
         
         let textStyleIndices = try container.decode([Int].self, forKey: .textStyles)
-        textStyles = Set(textStyleIndices.compactMap { TextStyle.fromRawValue($0) })
+        textStyles = Set(textStyleIndices.compactMap { TextStyle.fromIntValue($0) })
         
         let textCaseValue = try container.decode(Int.self, forKey: .textCase)
-        textCase = TextCase.fromRawValue(textCaseValue)
+        textCase = TextCase.fromIntValue(textCaseValue)
         
         let textAlignmentValue = try container.decode(Int.self, forKey: .textAlignment)
-        textAlignment = TextAlignment.fromRawValue(textAlignmentValue)
+        textAlignment = TextAlignment.fromIntValue(textAlignmentValue)
         
         isCollapsed = try container.decode(Bool.self, forKey: .isCollapsed)
     }
@@ -296,11 +296,11 @@ extension Topic: Codable {
         try container.encode(foregroundOpacity, forKey: .foregroundOpacity)
         
         // Encode text styles as array of integers
-        let textStyleIndices = textStyles.map { $0.rawValue }
+        let textStyleIndices = textStyles.map { $0.intValue }
         try container.encode(textStyleIndices, forKey: .textStyles)
         
-        try container.encode(textCase.rawValue, forKey: .textCase)
-        try container.encode(textAlignment.rawValue, forKey: .textAlignment)
+        try container.encode(textCase.intValue, forKey: .textCase)
+        try container.encode(textAlignment.intValue, forKey: .textAlignment)
         
         try container.encode(isCollapsed, forKey: .isCollapsed)
     }
@@ -315,13 +315,13 @@ extension Topic: Codable {
 
 extension TextStyle: Codable {
     enum CodingKeys: CodingKey {
-        case rawValue
+        case intValue
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(Int.self)
-        guard let style = TextStyle.fromRawValue(rawValue) else {
+        guard let style = TextStyle.fromIntValue(rawValue) else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid text style raw value")
         }
         self = style
@@ -329,7 +329,7 @@ extension TextStyle: Codable {
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
+        try container.encode(intValue)
     }
 }
 
@@ -337,12 +337,12 @@ extension TextCase: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(Int.self)
-        self = TextCase.fromRawValue(rawValue)
+        self = TextCase.fromIntValue(rawValue)
     }
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
+        try container.encode(intValue)
     }
 }
 
@@ -350,12 +350,12 @@ extension TextAlignment: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(Int.self)
-        self = TextAlignment.fromRawValue(rawValue)
+        self = TextAlignment.fromIntValue(rawValue)
     }
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
+        try container.encode(intValue)
     }
 }
 

@@ -71,7 +71,7 @@ class ExportManager {
     }
     
     // Executes when the InfiniteCanvas calls back with its prepared view
-    func exportCanvas(mainWindow: NSWindow, canvasFrame: NSRect, topics: [Topic], scale: CGFloat, offset: CGPoint, backgroundColor: Color, backgroundStyle: InfiniteCanvas.BackgroundStyle, selectedTopicId: UUID?) {
+    func exportCanvas(mainWindow: NSWindow, canvasFrame: NSRect, topics: [Topic], scale: CGFloat, offset: CGPoint, backgroundColor: Color, backgroundStyle: BackgroundStyle, selectedTopicId: UUID?) {
         // First show the export dialog window
         let exportDialog = ExportDialogWindowController { [weak self] result in
             guard let self = self, let (format, quality) = result else { return }
@@ -108,7 +108,7 @@ class ExportManager {
         NSApp.activate(ignoringOtherApps: true)
     }
     
-    private func exportMindMap(topics: [Topic], scale: CGFloat, offset: CGPoint, backgroundColor: Color, backgroundStyle: InfiniteCanvas.BackgroundStyle, to url: URL, format: ExportFormat, quality: ExportQuality, selectedTopicId: UUID?) {
+    private func exportMindMap(topics: [Topic], scale: CGFloat, offset: CGPoint, backgroundColor: Color, backgroundStyle: BackgroundStyle, to url: URL, format: ExportFormat, quality: ExportQuality, selectedTopicId: UUID?) {
         // Calculate bounds containing all topics with padding
         let topicsBounds = calculateTopicsBounds(for: topics)
         
@@ -209,7 +209,7 @@ class ExportManager {
         )
     }
     
-    private func renderToImage(size: NSSize, topics: [Topic], topicsBounds: CGRect, backgroundColor: Color, backgroundStyle: InfiniteCanvas.BackgroundStyle, exportScale: CGFloat, selectedTopicId: UUID?) -> NSImage? {
+    private func renderToImage(size: NSSize, topics: [Topic], topicsBounds: CGRect, backgroundColor: Color, backgroundStyle: BackgroundStyle, exportScale: CGFloat, selectedTopicId: UUID?) -> NSImage? {
         // Create a new image with the calculated size
         let image = NSImage(size: size)
         image.lockFocus()
@@ -246,7 +246,7 @@ class ExportManager {
         return image
     }
     
-    private func drawBackground(in context: CGContext, size: NSSize, style: InfiniteCanvas.BackgroundStyle, topicsBounds: CGRect, exportScale: CGFloat) {
+    private func drawBackground(in context: CGContext, size: NSSize, style: BackgroundStyle, topicsBounds: CGRect, exportScale: CGFloat) {
         // Apply export scale to context
         context.saveGState()
         context.scaleBy(x: exportScale, y: exportScale)
@@ -745,7 +745,7 @@ class ExportManager {
         context.restoreGState()
     }
     
-    private func renderToPDF(size: CGSize, topics: [Topic], topicsBounds: CGRect, backgroundColor: Color, backgroundStyle: InfiniteCanvas.BackgroundStyle, selectedTopicId: UUID?) -> Data? {
+    private func renderToPDF(size: CGSize, topics: [Topic], topicsBounds: CGRect, backgroundColor: Color, backgroundStyle: BackgroundStyle, selectedTopicId: UUID?) -> Data? {
         // Create a PDF context to draw into
         let pdfData = NSMutableData()
         var mediaBox = CGRect(origin: .zero, size: size)
