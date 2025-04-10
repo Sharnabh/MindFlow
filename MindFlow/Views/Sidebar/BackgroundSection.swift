@@ -5,6 +5,7 @@ struct BackgroundSection: View {
     @Binding var backgroundColor: Color
     @Binding var backgroundOpacity: Double
     @Binding var isShowingBackgroundColorPicker: Bool
+    @ObservedObject var viewModel: CanvasViewModel
     
     var body: some View {
         SidebarSection(title: "Canvas Background", content: AnyView(
@@ -46,7 +47,8 @@ struct BackgroundSection: View {
                     .popover(isPresented: $isShowingBackgroundColorPicker, arrowEdge: .bottom) {
                         ColorPickerView(
                             selectedColor: $backgroundColor,
-                            opacity: $backgroundOpacity
+                            opacity: $backgroundOpacity,
+                            viewModel: viewModel
                         )
                     }
                 }

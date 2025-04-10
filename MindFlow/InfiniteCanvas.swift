@@ -496,6 +496,16 @@ struct InfiniteCanvas: View {
                 NotificationCenter.default.addObserver(forName: NSNotification.Name("PrepareCanvasForExport"), object: nil, queue: .main) { _ in
                     self.prepareCanvasForExport()
                 }
+                
+                // Add observer for returning focus to canvas after AI operations
+                NotificationCenter.default.addObserver(forName: NSNotification.Name("ReturnFocusToCanvas"), object: nil, queue: .main) { _ in
+                    // Make the canvas the first responder to capture keyboard events
+                    if let window = NSApp.keyWindow {
+                        DispatchQueue.main.async {
+                            window.makeFirstResponder(window.contentView)
+                        }
+                    }
+                }
             }
             .onDisappear {
                 KeyboardMonitor.shared.stopMonitoring()
@@ -503,6 +513,7 @@ struct InfiniteCanvas: View {
                 // Remove observers
                 NotificationCenter.default.removeObserver(self, name: NSNotification.Name("UndoRequested"), object: nil)
                 NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RedoRequested"), object: nil)
+                NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
             }
         }
         .ignoresSafeArea()
