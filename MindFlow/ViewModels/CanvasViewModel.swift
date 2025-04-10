@@ -936,7 +936,8 @@ class CanvasViewModel: ObservableObject {
             if let selectedTopic = getSelectedTopic() {
                 print("Selected topic for subtopic creation: \(selectedTopic.id)")
                 addSubtopic(to: selectedTopic)
-                NSApp.keyWindow?.makeFirstResponder(nil) // Remove focus from any UI element
+                // Remove the line that changes focus
+                // NSApp.keyWindow?.makeFirstResponder(nil) // Remove focus from any UI element
             }
             
         case 49: // Space bar

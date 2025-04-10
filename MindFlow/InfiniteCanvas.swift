@@ -21,6 +21,7 @@ struct InfiniteCanvas: View {
     @State private var sidebarMode: SidebarMode = .style
     @State private var isRelationshipMode: Bool = false // Track relationship mode
     @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
+    @FocusState private var isCanvasFocused: Bool // Track canvas focus state
     
     // Reference to the NSViewRepresentable for exporting
     @State private var canvasViewRef: CanvasViewRepresentable?
@@ -214,6 +215,13 @@ struct InfiniteCanvas: View {
                     TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
                         .scaleEffect(scale)
                         .offset(x: offset.x, y: offset.y)
+                    
+                    // Invisible focusable view to maintain focus on canvas
+                    Color.clear
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .contentShape(Rectangle())
+                        .focusable(true)
+                        .focused($isCanvasFocused)
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
                 .background(
@@ -222,6 +230,10 @@ struct InfiniteCanvas: View {
                         self.canvasViewRef = view
                     })
                 )
+                .onTapGesture {
+                    // Set focus to canvas when clicked
+                    isCanvasFocused = true
+                }
                 
                 // Top bar
                 Rectangle()
@@ -445,6 +457,9 @@ struct InfiniteCanvas: View {
                 touchBarDelegate?.updateTouchBar()
             }
             .onAppear {
+                // Set initial focus to canvas
+                isCanvasFocused = true
+                
                 KeyboardMonitor.shared.keyHandler = { event in
                     if let window = NSApp.keyWindow {
                         let mouseLocation = NSEvent.mouseLocation
@@ -454,6 +469,13 @@ struct InfiniteCanvas: View {
                             cursorPosition = viewPoint
                             let canvasPosition = screenToCanvasPosition(cursorPosition)
                             viewModel.handleKeyPress(event, at: canvasPosition)
+                            
+                            // Ensure canvas stays focused after tab key is pressed
+                            if event.keyCode == 48 { // Tab key
+                                DispatchQueue.main.async {
+                                    isCanvasFocused = true
+                                }
+                            }
                         }
                     }
                 }
