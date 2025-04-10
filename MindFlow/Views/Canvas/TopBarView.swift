@@ -39,6 +39,7 @@ struct TopBarView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .help("Automatically arrange topics with perfect spacing")
+                        .focusable(false) // Prevent Auto Layout button from gaining focus
                         
                         // Collapse button - enabled when a topic with children is selected
                         Button(action: {
@@ -78,6 +79,7 @@ struct TopBarView: View {
                                      viewModel.countAllDescendants(for: topic)
                                  } ?? 0) == 0)
                         .help("Collapse or expand the selected topic")
+                        .focusable(false) // Prevent Collapse button from gaining focus
                         
                         // Relationship button
                         Button(action: {
@@ -101,6 +103,7 @@ struct TopBarView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .help("Create relationships between topics")
+                        .focusable(false) // Prevent Relationship button from gaining focus
                     }
                     
                     Spacer()

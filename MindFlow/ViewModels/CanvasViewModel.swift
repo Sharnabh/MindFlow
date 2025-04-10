@@ -972,6 +972,20 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    // Check if a key event was handled by the canvas actions
+    // Returns true if the event was handled and should not be propagated
+    func handleCanvasAction(_ event: NSEvent) -> Bool {
+        // We're specifically checking for Tab key actions
+        if event.keyCode == 48 { // Tab key
+            // Only consider it handled if there's a selected topic
+            if let selectedId = selectedTopicId,
+               let _ = getTopicById(selectedId) {
+                return true // Tab was used for a mind map operation
+            }
+        }
+        return false // Event wasn't handled by canvas actions
+    }
+    
     // Check if any topic in the mind map is currently being edited
     private func isAnyTopicEditing() -> Bool {
         for topic in topics {

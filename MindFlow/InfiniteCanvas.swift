@@ -23,7 +23,7 @@ struct InfiniteCanvas: View {
     @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
     
     // Reference to the NSViewRepresentable for exporting
-    @State private var canvasViewRef: CanvasViewRepresentable?
+    @State private var canvasViewRef: FocusableCanvasView?
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -121,11 +121,10 @@ struct InfiniteCanvas: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                // Background layer with grid and topics
+                // Background layer with focusable container
                 ZStack {
-                    // Background layer
+                    // Draw background
                     Canvas { context, size in
-                        // Draw background
                         context.fill(
                             Path(CGRect(origin: .zero, size: size)),
                             with: .color(backgroundColor.opacity(backgroundOpacity))
@@ -209,6 +208,20 @@ struct InfiniteCanvas: View {
                             }
                         }
                     }
+                    .background(
+                        // Add a custom NSView representable that can become first responder
+                        FocusableCanvasView(onViewCreated: { view in
+                            // Store reference to the canvas view for focus
+                            self.canvasViewRef = view
+                            
+                            // Set this view as first responder when created
+                            DispatchQueue.main.async {
+                                if let window = NSApp.keyWindow {
+                                    window.makeFirstResponder(view.nsView)
+                                }
+                            }
+                        })
+                    )
                     
                     // Topics layer
                     TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
@@ -216,12 +229,6 @@ struct InfiniteCanvas: View {
                         .offset(x: offset.x, y: offset.y)
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
-                .background(
-                    // Add a representable that gives us access to the underlying NSView
-                    CanvasViewRepresentable(onViewCreated: { view in
-                        self.canvasViewRef = view
-                    })
-                )
                 
                 // Top bar
                 Rectangle()
@@ -256,6 +263,7 @@ struct InfiniteCanvas: View {
                                 }
                                 .buttonStyle(PlainButtonStyle())
                                 .help("Automatically arrange topics with perfect spacing")
+                                .focusable(false) // Prevent Auto Layout button from gaining focus
                                 
                                 // Collapse button - enabled when a topic with children is selected
                                 Button(action: {
@@ -459,6 +467,14 @@ struct InfiniteCanvas: View {
                 }
                 KeyboardMonitor.shared.startMonitoring()
                 
+                // Give focus to the canvas view immediately to prevent buttons from getting initial focus
+                DispatchQueue.main.async {
+                    if let window = NSApp.keyWindow {
+                        // Set the first responder to the window's content view, not any specific button
+                        window.makeFirstResponder(window.contentView)
+                    }
+                }
+                
                 // Initialize Touch Bar Delegate
                 touchBarDelegate = InfiniteCanvasTouchBarDelegate(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
                 
@@ -582,6 +598,44 @@ struct CanvasViewRepresentable: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSView, context: Context) {
         // Nothing to update
+    }
+}
+
+// Focusable canvas view that can become first responder
+struct FocusableCanvasView: NSViewRepresentable {
+    var onViewCreated: (FocusableCanvasView) -> Void
+    var nsView: FocusableNSView?
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = FocusableNSView()
+        view.wantsLayer = true
+        
+        // Create a mutable copy with the view set
+        var mutableSelf = self
+        mutableSelf.nsView = view
+        
+        // Call back with the reference to this representable
+        DispatchQueue.main.async {
+            onViewCreated(mutableSelf)
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Nothing to update
+    }
+    
+    // Custom NSView subclass that can become first responder
+    class FocusableNSView: NSView {
+        override var acceptsFirstResponder: Bool {
+            return true
+        }
+        
+        override func keyDown(with event: NSEvent) {
+            // Just pass the event to the next responder
+            super.keyDown(with: event)
+        }
     }
 }
 
