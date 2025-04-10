@@ -41,7 +41,8 @@ struct TopicStyleSection: View {
                                 set: { newOpacity in
                                     viewModel.updateTopicBackgroundOpacity(selectedTopic.id, opacity: newOpacity)
                                 }
-                            )
+                            ),
+                            viewModel: viewModel
                         )
                     }
                 }
@@ -71,7 +72,8 @@ struct TopicStyleSection: View {
                                 set: { newOpacity in
                                     viewModel.updateTopicBorderOpacity(selectedTopic.id, opacity: newOpacity)
                                 }
-                            )
+                            ),
+                            viewModel: viewModel
                         )
                     }
                 }

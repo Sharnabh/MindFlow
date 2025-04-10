@@ -42,8 +42,6 @@ struct BranchStyleSection: View {
                             Text(selectedTopic.branchStyle.displayName)
                                 .foregroundColor(.white)
                             Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)

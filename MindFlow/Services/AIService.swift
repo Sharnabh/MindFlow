@@ -6,6 +6,7 @@ class AIService {
     static let shared = AIService()
     private let networkMonitor = NWPathMonitor()
     private var isNetworkAvailable = true
+    private var currentSystemPrompt: String = ""
     
     private init() {
         // Set up network monitoring
@@ -310,13 +311,14 @@ class AIService {
         let requestBody: [String: Any] = [
             "contents": [
                 [
+                    "role": "user",
                     "parts": [
-                        ["text": prompt]
+                        ["text": currentSystemPrompt.isEmpty ? prompt : "\(currentSystemPrompt)\n\n\(prompt)"]
                     ]
                 ]
             ],
             "generationConfig": [
-                "temperature": 0.7, // Higher temperature for creativity
+                "temperature": 0.7,
                 "maxOutputTokens": 800,
                 "topP": 0.95,
                 "topK": 40
@@ -465,6 +467,11 @@ class AIService {
         } catch {
             return .failure(error)
         }
+    }
+    
+    // Add updateSystemPrompt method
+    func updateSystemPrompt(_ prompt: String) {
+        currentSystemPrompt = prompt
     }
 }
 

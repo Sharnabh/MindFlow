@@ -72,8 +72,18 @@ extension View {
 
 // MARK: - TopicView
 struct TopicView: View {
-    let topic: Topic
+    var topic: Topic
     let isSelected: Bool
+    
+    // State for editing
+    @State private var editingName: String = ""
+    @FocusState private var isFocused: Bool
+    @State private var animatedPosition: CGPoint
+    @State private var isDragging: Bool = false
+    @State private var isControlPressed: Bool = false
+    @GestureState private var dragOffset: CGSize = .zero
+    
+    // Callbacks
     let onSelect: () -> Void
     let onDragChanged: (CGPoint) -> Void
     let onDragEnded: () -> Void
@@ -83,14 +93,21 @@ struct TopicView: View {
     let onRelationDragEnded: (() -> Void)?
     let isRelationshipMode: Bool
     
-    @GestureState private var dragOffset: CGSize = .zero
-    @State private var editingName: String = ""
-    @FocusState private var isFocused: Bool
-    @State private var isControlPressed: Bool = false
-    @State private var animatedPosition: CGPoint
-    @State private var isDragging: Bool = false
+    // Get access to the view model
+    @ObservedObject var viewModel: CanvasViewModel
     
-    init(topic: Topic, isSelected: Bool, onSelect: @escaping () -> Void, onDragChanged: @escaping (CGPoint) -> Void, onDragEnded: @escaping () -> Void, onNameChange: @escaping (String) -> Void, onEditingChange: @escaping (Bool) -> Void, onRelationDragChanged: ((CGPoint) -> Void)?, onRelationDragEnded: (() -> Void)?, isRelationshipMode: Bool) {
+    init(topic: Topic, 
+         isSelected: Bool, 
+         onSelect: @escaping () -> Void, 
+         onDragChanged: @escaping (CGPoint) -> Void, 
+         onDragEnded: @escaping () -> Void, 
+         onNameChange: @escaping (String) -> Void, 
+         onEditingChange: @escaping (Bool) -> Void, 
+         onRelationDragChanged: ((CGPoint) -> Void)? = nil, 
+         onRelationDragEnded: (() -> Void)? = nil,
+         isRelationshipMode: Bool = false,
+         viewModel: CanvasViewModel) {
+        
         self.topic = topic
         self.isSelected = isSelected
         self.onSelect = onSelect
@@ -101,6 +118,7 @@ struct TopicView: View {
         self.onRelationDragChanged = onRelationDragChanged
         self.onRelationDragEnded = onRelationDragEnded
         self.isRelationshipMode = isRelationshipMode
+        self.viewModel = viewModel
         
         // Initialize position state
         self._animatedPosition = State(initialValue: topic.position)
@@ -113,7 +131,8 @@ struct TopicView: View {
             editingName: $editingName,
             isFocused: _isFocused,
             onNameChange: onNameChange,
-            onEditingChange: onEditingChange
+            onEditingChange: onEditingChange,
+            viewModel: viewModel
         )
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
         .scaleEffect(isSelected ? 1.03 : 1.0)
@@ -124,6 +143,13 @@ struct TopicView: View {
                 .onEnded {
                     if !topic.isEditing {
                         onSelect()
+                        
+                        // Clear any active text fields when tapping on a topic
+                        if viewModel.isTextInputActive {
+                            viewModel.isTextInputActive = false
+                            // Return focus to the canvas
+                            NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                        }
                     }
                 }
         )
@@ -220,6 +246,20 @@ struct TopicsCanvasView: View {
     
     var body: some View {
         ZStack {
+            // Background detection area - must be first in ZStack to be behind everything
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Clear focus only when tapping empty canvas area
+                    if viewModel.isTextInputActive {
+                        viewModel.isTextInputActive = false
+                        // Return focus to the canvas
+                        NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                    }
+                    // Deselect any selected topic when clicking empty area
+                    viewModel.selectTopic(id: nil)
+                }
+            
             // Draw all connection lines first (background layer)
             ConnectionLinesView(
                 topics: viewModel.topics,
@@ -238,7 +278,8 @@ struct TopicsCanvasView: View {
                 onEditingChange: viewModel.setTopicEditing,
                 onRelationDragChanged: viewModel.handleRelationDragChanged,
                 onRelationDragEnded: viewModel.handleRelationDragEnded,
-                isRelationshipMode: isRelationshipMode
+                isRelationshipMode: isRelationshipMode,
+                viewModel: viewModel
             )
             
             // Draw temporary relation line if dragging
@@ -287,6 +328,7 @@ private struct TopicsView: View {
     let onRelationDragChanged: ((UUID, CGPoint) -> Void)?
     let onRelationDragEnded: ((UUID) -> Void)?
     let isRelationshipMode: Bool
+    @ObservedObject var viewModel: CanvasViewModel
     
     var body: some View {
         ZStack {
@@ -301,19 +343,22 @@ private struct TopicsView: View {
                     onDragEnded: {
                         onDragEnded(topic.id)
                     },
-                    onNameChange: { newName in
-                        onNameChange(topic.id, newName)
+                    onNameChange: { name in
+                        onNameChange(topic.id, name)
                     },
                     onEditingChange: { isEditing in
                         onEditingChange(topic.id, isEditing)
                     },
                     onRelationDragChanged: onRelationDragChanged.map { handler in
-                        { newPosition in handler(topic.id, newPosition) }
+                        { position in
+                            handler(topic.id, position)
+                        }
                     },
                     onRelationDragEnded: onRelationDragEnded.map { handler in
                         { handler(topic.id) }
                     },
-                    isRelationshipMode: isRelationshipMode
+                    isRelationshipMode: isRelationshipMode,
+                    viewModel: viewModel
                 )
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
                 .zIndex(topic.id == selectedId ? 1 : 0)
@@ -330,7 +375,8 @@ private struct TopicsView: View {
                         onEditingChange: onEditingChange,
                         onRelationDragChanged: onRelationDragChanged,
                         onRelationDragEnded: onRelationDragEnded,
-                        isRelationshipMode: isRelationshipMode
+                        isRelationshipMode: isRelationshipMode,
+                        viewModel: viewModel
                     )
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: !topic.isCollapsed)

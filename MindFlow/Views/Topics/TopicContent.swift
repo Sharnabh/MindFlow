@@ -17,6 +17,7 @@ struct TopicContent: View {
     @FocusState var isFocused: Bool
     let onNameChange: (String) -> Void
     let onEditingChange: (Bool) -> Void
+    @ObservedObject var viewModel: CanvasViewModel
     
     // MARK: - Private Properties
     
@@ -129,6 +130,9 @@ struct TopicContent: View {
             .focused($isFocused)
             .onChange(of: editingName) { oldValue, newValue in
                 onNameChange(newValue)
+            }
+            .onChange(of: isFocused) { oldValue, newValue in
+                viewModel.isTextInputActive = newValue
             }
             .onExitCommand {
                 isFocused = false

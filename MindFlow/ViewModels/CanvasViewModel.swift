@@ -5,6 +5,7 @@ class CanvasViewModel: ObservableObject {
     @Published var topics: [Topic] = []
     @Published var selectedTopicId: UUID?
     @Published var relationDragState: (fromId: UUID, toPosition: CGPoint)?
+    @Published var isTextInputActive: Bool = false
     
     // History for undo/redo
     private var history: [[Topic]] = []
@@ -361,6 +362,9 @@ class CanvasViewModel: ObservableObject {
             setTopicEditing(selectedTopicId, isEditing: false)
         }
         selectedTopicId = id
+        
+        // Ensure text input is not active when selecting a topic
+        isTextInputActive = false
     }
     
     func setTopicEditing(_ id: UUID?, isEditing: Bool) {
@@ -667,7 +671,14 @@ class CanvasViewModel: ObservableObject {
         
         // Update the published property with all changes
         DispatchQueue.main.async {
+            // Store the current selected topic ID
+            let currentSelectedId = self.selectedTopicId
+            
+            // Update topics
             self.topics = updatedTopics
+            
+            // Ensure selection is maintained
+            self.selectedTopicId = currentSelectedId
             
             // Organize relation lines after repositioning
             self.updateAllRelations()
@@ -918,41 +929,151 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Keyboard Events
     
     func handleKeyPress(_ event: NSEvent, at position: CGPoint) {
-        // Check if any topic is being edited
-        let isAnyTopicEditing = topics.contains { topic in
-            isTopicOrSubtopicsEditing(topic)
+        // Ignore keyboard events if text input is active or any topic is being edited
+        guard !isTextInputActive && !isAnyTopicEditing() else { 
+            // When text input is active, let the system handle the keyboard events naturally
+            // without trying to process them for canvas shortcuts
+            return 
         }
         
-        // If a topic is being edited, don't handle any keyboard events
-        if isAnyTopicEditing {
-            return
-        }
-        
+        // Handle key events
         switch event.keyCode {
-        case 36: // Return key
-            addMainTopic(at: position)
-            
-        case 48: // Tab key
-            if let selectedTopic = getSelectedTopic() {
-                print("Selected topic for subtopic creation: \(selectedTopic.id)")
-                addSubtopic(to: selectedTopic)
-                NSApp.keyWindow?.makeFirstResponder(nil) // Remove focus from any UI element
-            }
-            
-        case 49: // Space bar
-            if let selectedId = selectedTopicId {
-                setTopicEditing(selectedId, isEditing: true)
-            }
-            
-        case 51: // Delete/Backspace key
+        case 51: // Delete key
             if let selectedId = selectedTopicId {
                 deleteTopic(id: selectedId)
-                selectedTopicId = nil
             }
-            
+        case 36: // Return key
+            addMainTopic(at: position)
+        case 49: // Space key
+            if let selectedId = selectedTopicId {
+                if event.modifierFlags.contains(.control) {
+                    // Control+Space to toggle collapse
+                    toggleCollapseState(topicId: selectedId)
+                } else {
+                    // Regular Space to edit topic
+                    setTopicEditing(selectedId, isEditing: true)
+                }
+            }
+        case 48: // Tab key
+            if let selectedId = selectedTopicId,
+               let selectedTopic = getTopicById(selectedId) {
+                if event.modifierFlags.contains(.shift) {
+                    // Shift+Tab: Move topic up one level if possible
+                    if let parentId = findParentTopicId(for: selectedId) {
+                        moveTopicToParentLevel(topicId: selectedId, parentId: parentId)
+                    }
+                } else {
+                    // Tab: Create subtopic
+                    addSubtopic(to: selectedTopic)
+                }
+            }
         default:
             break
         }
+    }
+    
+    // Check if any topic in the mind map is currently being edited
+    private func isAnyTopicEditing() -> Bool {
+        for topic in topics {
+            if isTopicOrSubtopicsEditing(topic) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // Find the parent topic ID for a given topic ID
+    private func findParentTopicId(for topicId: UUID) -> UUID? {
+        // Check main topics' subtopics first
+        for topic in topics {
+            if topic.subtopics.contains(where: { $0.id == topicId }) {
+                return topic.id
+            }
+            
+            // Check nested subtopics
+            if let parentId = findParentTopicIdInSubtopics(topicId, in: topic) {
+                return parentId
+            }
+        }
+        return nil
+    }
+    
+    // Recursively search for parent topic ID in subtopics
+    private func findParentTopicIdInSubtopics(_ targetId: UUID, in topic: Topic) -> UUID? {
+        for subtopic in topic.subtopics {
+            if subtopic.subtopics.contains(where: { $0.id == targetId }) {
+                return subtopic.id
+            }
+            
+            if let parentId = findParentTopicIdInSubtopics(targetId, in: subtopic) {
+                return parentId
+            }
+        }
+        return nil
+    }
+    
+    // Move a topic up one level in the hierarchy
+    private func moveTopicToParentLevel(topicId: UUID, parentId: UUID) {
+        saveState()
+        
+        // Find the topic to move
+        guard let topicToMove = getTopicById(topicId) else { return }
+        
+        // Find the parent's parent (grandparent) if it exists
+        let grandparentId = findParentTopicId(for: parentId)
+        
+        // Remove the topic from its current parent
+        if let parentIndex = topics.firstIndex(where: { $0.id == parentId }) {
+            // If parent is a main topic, move the topic to main level
+            topics[parentIndex].subtopics.removeAll { $0.id == topicId }
+            
+            var newTopic = Topic.createMainTopic(at: topicToMove.position, count: mainTopicCount + 1)
+            newTopic.name = topicToMove.name
+            newTopic.subtopics = topicToMove.subtopics
+            newTopic.backgroundColor = topicToMove.backgroundColor
+            newTopic.borderColor = topicToMove.borderColor
+            newTopic.foregroundColor = topicToMove.foregroundColor
+            newTopic.branchStyle = topicToMove.branchStyle
+            
+            topics.append(newTopic)
+            mainTopicCount += 1
+        } else {
+            // Find and update the topic in the hierarchy
+            for i in 0..<topics.count {
+                var topic = topics[i]
+                if moveTopicUpInHierarchy(topicId: topicId, parentId: parentId, in: &topic) {
+                    topics[i] = topic
+                    break
+                }
+            }
+        }
+        
+        // Update layout
+        performAutoLayout()
+    }
+    
+    // Recursively move a topic up in the hierarchy
+    private func moveTopicUpInHierarchy(topicId: UUID, parentId: UUID, in topic: inout Topic) -> Bool {
+        for i in 0..<topic.subtopics.count {
+            if topic.subtopics[i].id == parentId {
+                // Found the parent, remove the topic from its subtopics
+                let topicToMove = topic.subtopics[i].subtopics.first(where: { $0.id == topicId })
+                topic.subtopics[i].subtopics.removeAll { $0.id == topicId }
+                
+                // Add it to the current level
+                if let movedTopic = topicToMove {
+                    topic.subtopics.append(movedTopic)
+                }
+                return true
+            }
+            
+            var subtopic = topic.subtopics[i]
+            if moveTopicUpInHierarchy(topicId: topicId, parentId: parentId, in: &subtopic) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        return false
     }
     
     private func isTopicOrSubtopicsEditing(_ topic: Topic) -> Bool {
@@ -1129,7 +1250,7 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - Topic Deletion
     
-    private func deleteTopic(id: UUID) {
+    func deleteTopic(id: UUID) {
         saveState() // Save state before deletion
         // First try to delete from main topics
         if let index = topics.firstIndex(where: { $0.id == id }) {
@@ -1836,7 +1957,7 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Undo/Redo Functionality
     
     /// Save current state for undo history
-    private func saveState() {
+    func saveState() {
         // If we're not at the end of history, truncate it
         if currentHistoryIndex < history.count - 1 {
             history = Array(history[0...currentHistoryIndex])
@@ -2285,6 +2406,14 @@ class CanvasViewModel: ObservableObject {
         // Select the new topic
         selectedTopicId = topic.id
         
+        // Reset text input active flag to ensure keyboard shortcuts work
+        isTextInputActive = false
+        
+        // Ensure the focus returns to the canvas by posting a notification
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+        }
+        
         // Apply auto-layout while maintaining the new topic's position
         performAutoLayout()
     }
@@ -2400,6 +2529,14 @@ class CanvasViewModel: ObservableObject {
                 // Increase vertical offset for next child
                 verticalOffset += 80
             }
+        }
+        
+        // Reset text input active flag to ensure keyboard shortcuts work
+        isTextInputActive = false
+        
+        // Ensure the focus returns to the canvas by posting a notification
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
         }
         
         // Apply auto-layout for better organization

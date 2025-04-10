@@ -13,6 +13,14 @@ struct ColorPickerView: View {
     @Binding var opacity: Double
     @State private var hexValue: String = ""
     @State private var showColorPicker = false
+    @FocusState private var isTextFieldFocused: Bool
+    @ObservedObject private var viewModel: CanvasViewModel
+    
+    init(selectedColor: Binding<Color>, opacity: Binding<Double>, viewModel: CanvasViewModel) {
+        self._selectedColor = selectedColor
+        self._opacity = opacity
+        self.viewModel = viewModel
+    }
     
     let colors: [[Color]] = [
         [.white, .gray.opacity(0.2), .gray.opacity(0.4), .gray.opacity(0.6), .gray.opacity(0.8), .gray, .black],
@@ -57,6 +65,10 @@ struct ColorPickerView: View {
                 TextField("", text: $hexValue)
                     .textFieldStyle(PlainTextFieldStyle())
                     .frame(width: 60)
+                    .focused($isTextFieldFocused)
+                    .onChange(of: isTextFieldFocused) { oldValue, newValue in
+                        viewModel.isTextInputActive = newValue
+                    }
                     .onChange(of: hexValue) { oldValue, newValue in
                         if let color = Color(hex: newValue) {
                             selectedColor = color

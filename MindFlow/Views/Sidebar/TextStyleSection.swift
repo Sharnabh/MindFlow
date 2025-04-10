@@ -16,9 +16,7 @@ struct TextStyleSection: View {
                     
                     Spacer()
                     
-                    StyledMenuButton(width: 120, action: {
-                        // Action is handled in the Menu
-                    }) {
+                    HStack(spacing: 6) {
                         Menu {
                             ForEach(["Apple SD Gothic", "System", "Helvetica", "Arial", "Times New Roman"], id: \.self) { font in
                                 Button(action: {
@@ -32,10 +30,10 @@ struct TextStyleSection: View {
                                 Text(selectedTopic.font)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
-                                Spacer()
                             }
                         }
                     }
+                    .frame(width: 120)
                 }
                 .padding(.horizontal)
                 
@@ -47,9 +45,7 @@ struct TextStyleSection: View {
                     
                     Spacer()
                     
-                    StyledMenuButton(width: 120, action: {
-                        // Action is handled in the Menu
-                    }) {
+                    HStack(spacing: 6) {
                         Menu {
                             ForEach([8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64], id: \.self) { size in
                                 Button(action: {
@@ -61,10 +57,10 @@ struct TextStyleSection: View {
                         } label: {
                             HStack {
                                 Text("\(Int(selectedTopic.fontSize))")
-                                Spacer()
                             }
                         }
                     }
+                    .frame(width: 120)
                 }
                 .padding(.horizontal)
                 
@@ -76,9 +72,7 @@ struct TextStyleSection: View {
                     
                     Spacer()
                     
-                    StyledMenuButton(width: 120, action: {
-                        // Action is handled in the Menu
-                    }) {
+                    HStack(spacing: 6) {
                         Menu {
                             ForEach(Font.Weight.allCases, id: \.self) { weight in
                                 Button(action: {
@@ -90,10 +84,10 @@ struct TextStyleSection: View {
                         } label: {
                             HStack {
                                 Text(selectedTopic.fontWeight.displayName)
-                                Spacer()
                             }
                         }
                     }
+                    .frame(width: 120)
                 }
                 .padding(.horizontal)
                 
@@ -121,7 +115,8 @@ struct TextStyleSection: View {
                                 set: { newOpacity in
                                     viewModel.updateTopicForegroundOpacity(selectedTopic.id, opacity: newOpacity)
                                 }
-                            )
+                            ),
+                            viewModel: viewModel
                         )
                     }
                 }
