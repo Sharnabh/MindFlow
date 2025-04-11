@@ -162,11 +162,10 @@ class CanvasViewModel: ObservableObject {
         
         topics.append(topic)
         
-        // Select the new topic so it becomes the center reference for auto-layout
+        // Select the new topic
         selectedTopicId = topic.id
         
-        // Apply auto-layout while maintaining the new topic's position
-        performAutoLayout()
+        // Don't call performAutoLayout() to maintain exact cursor position
     }
     
     func addSubtopic(to parentTopic: Topic) {
@@ -566,48 +565,101 @@ class CanvasViewModel: ObservableObject {
         // First position main topics horizontally with equal spacing
         let numMainTopics = updatedTopics.count
         if numMainTopics > 0 {
-            // Get the selected topic as a reference point
-            var centerTopic: Topic?
-            var centerTopicIndex: Int = 0
-            
-            if let selectedId = selectedTopicId, let index = updatedTopics.firstIndex(where: { $0.id == selectedId }) {
-                // If a main topic is selected, use it as center
-                centerTopic = updatedTopics[index]
-                centerTopicIndex = index
+            // If there's only one main topic, position it in the center
+            if numMainTopics == 1 {
+                var firstTopic = updatedTopics[0]
+                firstTopic.position = CGPoint(x: 400, y: 300) // Center position
+                
+                // Position all subtopics in a tree layout
+                if !firstTopic.subtopics.isEmpty {
+                    layoutSubtopicTreeImproved(in: &firstTopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                }
+                
+                updatedTopics[0] = firstTopic
             } else {
-                // Otherwise use the first topic
-                centerTopic = updatedTopics.first
-                centerTopicIndex = 0
+                // For multiple main topics, only auto-layout their subtopics
+                for i in 0..<numMainTopics {
+                    var topic = updatedTopics[i]
+                    if !topic.subtopics.isEmpty {
+                        layoutSubtopicTreeImproved(in: &topic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                    }
+                    updatedTopics[i] = topic
+                }
             }
             
-            // Ensure we have a center topic
-            guard let centerTopic = centerTopic else { return }
-            
-            // Keep the center topic fixed at its current position
-            let centerPosition = centerTopic.position
-            
-            // Position topics to the left of center topic
-            var currentX = centerPosition.x
-            for i in stride(from: centerTopicIndex - 1, through: 0, by: -1) {
-                var topic = updatedTopics[i]
+            // Ensure branch styles are preserved after layout
+            if let firstTopic = updatedTopics.first {
+                // Get the current global branch style from the first topic
+                let globalStyle = firstTopic.branchStyle
                 
-                // Calculate width needed for this topic and get its box
-                let topicWidth = calculateTreeWidth(topic)
-                let centerTopicBox = getTopicBox(topic: centerTopic)
+                // Re-apply to all topics to ensure consistency
+                for i in 0..<updatedTopics.count {
+                    var mainTopic = updatedTopics[i]
+                    updateBranchStyleRecursively(&mainTopic, globalStyle)
+                    updatedTopics[i] = mainTopic
+                }
+            }
+        }
+        
+        // Update the published property with all changes
+        DispatchQueue.main.async {
+            // Store the current selected topic ID
+            let currentSelectedId = self.selectedTopicId
+            
+            // Update topics
+            self.topics = updatedTopics
+            
+            // Ensure selection is maintained
+            self.selectedTopicId = currentSelectedId
+            
+            // Organize relation lines after repositioning
+            self.updateAllRelations()
+        }
+    }
+
+    // New function for the auto-layout button that implements the previous behavior
+    func performFullAutoLayout() {
+        saveState() // Save state before rearranging
+
+        // Constants for ideal spacing
+        let horizontalSpacing: CGFloat = 250 // Space between parent and child
+        let verticalSpacing: CGFloat = 100 // Space between siblings
+        let baseMainTopicSpacing: CGFloat = 350 // Base space between main topics
+        
+        // Create a copy of topics to work with
+        var updatedTopics = topics
+        
+        // First position main topics horizontally with equal spacing
+        let numMainTopics = updatedTopics.count
+        if numMainTopics > 0 {
+            // Calculate total width needed for all main topics
+            var totalWidth: CGFloat = 0
+            var maxHeight: CGFloat = 0
+            
+            // First pass: calculate dimensions
+            for topic in updatedTopics {
+                let topicBox = getTopicBox(topic: topic)
+                totalWidth += topicBox.width
+                maxHeight = max(maxHeight, topicBox.height)
+            }
+            
+            // Add spacing between topics
+            totalWidth += baseMainTopicSpacing * CGFloat(numMainTopics - 1)
+            
+            // Calculate starting X position (centered)
+            let startX = 400 - totalWidth / 2
+            var currentX = startX
+            
+            // Second pass: position topics
+            for i in 0..<numMainTopics {
+                var topic = updatedTopics[i]
                 let topicBox = getTopicBox(topic: topic)
                 
-                // Calculate adaptive spacing based on the actual widths of the topics
-                let adaptiveSpacing = baseMainTopicSpacing + (centerTopicBox.width + topicBox.width) * 0.3
-                
-                // Position to the left of the previous topic
-                currentX -= (topicWidth/2 + adaptiveSpacing)
-                
+                // Position the main topic
                 topic.position = CGPoint(
-                    x: currentX,
-                    y: centerPosition.y
+                    x: currentX + topicBox.width / 2,
+                    y: 300 // Center vertically
                 )
-                
-                currentX -= topicWidth/2
                 
                 // Position all subtopics in a tree layout
                 if !topic.subtopics.isEmpty {
@@ -615,44 +667,7 @@ class CanvasViewModel: ObservableObject {
                 }
                 
                 updatedTopics[i] = topic
-            }
-            
-            // Reset and position topics to the right of center topic
-            currentX = centerPosition.x
-            let centerTopicWidth = calculateTreeWidth(centerTopic)
-            let centerTopicBox = getTopicBox(topic: centerTopic)
-            
-            // Position center topic's subtopics without moving the center topic
-            var updatedCenterTopic = updatedTopics[centerTopicIndex]
-            if !updatedCenterTopic.subtopics.isEmpty {
-                layoutSubtopicTreeImproved(in: &updatedCenterTopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
-            }
-            updatedTopics[centerTopicIndex] = updatedCenterTopic
-            
-            // Position topics to the right of center topic
-            for i in (centerTopicIndex + 1)..<numMainTopics {
-                var topic = updatedTopics[i]
-                let topicBox = getTopicBox(topic: topic)
-                
-                // Calculate adaptive spacing based on the actual widths of the topics
-                let adaptiveSpacing = baseMainTopicSpacing + (centerTopicBox.width + topicBox.width) * 0.3
-                
-                currentX += centerTopicWidth/2 + adaptiveSpacing
-                
-                topic.position = CGPoint(
-                    x: currentX + topicBox.width/2,
-                    y: centerPosition.y
-                )
-                
-                // Position all subtopics in a tree layout
-                if !topic.subtopics.isEmpty {
-                    layoutSubtopicTreeImproved(in: &topic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
-                }
-                
-                // Update currentX for next topic
-                currentX += calculateTreeWidth(topic)
-                
-                updatedTopics[i] = topic
+                currentX += topicBox.width + baseMainTopicSpacing
             }
             
             // Ensure branch styles are preserved after layout

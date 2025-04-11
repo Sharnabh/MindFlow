@@ -98,6 +98,44 @@ struct TopicContent: View {
                     .offset(x: 8, y: -8)
             }
         }
+        .overlay {
+            if isSelected {
+                // Connection handles
+                VStack {
+                    // Top handle
+                    Circle()
+                        .fill(topic.borderColor)
+                        .frame(width: 8, height: 8)
+                        .offset(y: -4)
+                    
+                    Spacer()
+                    
+                    // Bottom handle
+                    Circle()
+                        .fill(topic.borderColor)
+                        .frame(width: 8, height: 8)
+                        .offset(y: 4)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                HStack {
+                    // Left handle
+                    Circle()
+                        .fill(topic.borderColor)
+                        .frame(width: 8, height: 8)
+                        .offset(x: -4)
+                    
+                    Spacer()
+                    
+                    // Right handle
+                    Circle()
+                        .fill(topic.borderColor)
+                        .frame(width: 8, height: 8)
+                        .offset(x: 4)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
     }
     
     // MARK: - Text Field Creation
@@ -116,16 +154,16 @@ struct TopicContent: View {
                      topic.textCase == .lowercase ? .lowercase :
                      nil)
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(width: size.width, height: size.height)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .frame(width: size.width + 40, height: size.height + 24)
             .background(
                 createBackground()
-                    .frame(width: size.width + 32, height: size.height)
+                    .frame(width: size.width + 40, height: size.height + 24)
             )
             .overlay(
                 createBorder()
-                    .frame(width: size.width + 32, height: size.height)
+                    .frame(width: size.width + 40, height: size.height + 24)
             )
             .focused($isFocused)
             .onChange(of: editingName) { oldValue, newValue in
@@ -163,15 +201,15 @@ struct TopicContent: View {
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(width: size.width)
+            .padding(.vertical, 12)
+            .frame(width: size.width, height: size.height + 16)
             .background(
                 createBackground()
-                    .frame(width: size.width + 32, height: size.height)
+                    .frame(width: size.width + 32, height: size.height + 16)
             )
             .overlay(
                 createBorder()
-                    .frame(width: size.width + 32, height: size.height)
+                    .frame(width: size.width + 32, height: size.height + 16)
             )
     }
     
@@ -348,9 +386,9 @@ struct TopicContent: View {
                         }
                     }
                 } else {
-                    // Regular Return: commit changes
+                    // Regular Return: commit changes without adding a new line
                     DispatchQueue.main.async {
-                        self.onNameChange(self.editingName)
+                        self.onNameChange(self.editingName.trimmingCharacters(in: .whitespacesAndNewlines))
                         self.isFocused = false
                         self.onEditingChange(false)
                     }

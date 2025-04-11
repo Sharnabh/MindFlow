@@ -229,6 +229,16 @@ struct InfiniteCanvas: View {
                         .offset(x: offset.x, y: offset.y)
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
+                .onContinuousHover { phase in
+                    if let window = NSApp.keyWindow {
+                        let mouseLocation = NSEvent.mouseLocation
+                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+                        if let view = window.contentView {
+                            let viewPoint = view.convert(windowPoint, from: nil)
+                            cursorPosition = viewPoint
+                        }
+                    }
+                }
                 
                 // Top bar
                 Rectangle()
@@ -246,7 +256,7 @@ struct InfiniteCanvas: View {
                             HStack(spacing: 12) {
                                 // Auto layout button
                                 Button(action: {
-                                    viewModel.performAutoLayout()
+                                    viewModel.performFullAutoLayout()
                                 }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: "rectangle.grid.1x2")
