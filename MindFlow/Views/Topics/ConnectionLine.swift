@@ -11,6 +11,7 @@ import SwiftUI
 struct ConnectionLinesView: View {
     let topics: [Topic]
     let onDeleteRelation: (UUID, UUID) -> Void
+    let onDeleteParentChild: (UUID, UUID) -> Void
     let selectedId: UUID?
     
     var body: some View {
@@ -25,7 +26,7 @@ struct ConnectionLinesView: View {
                             to: subtopic,
                             color: subtopic.borderColor,
                             forceCurved: false, // Not forcing curved, will use individual topic settings
-                            onDelete: {}, // No delete for parent-child relationships
+                            onDelete: { onDeleteParentChild(topic.id, subtopic.id) }, // Pass parent-child delete action
                             isRelationship: false, // This is a parent-child relationship
                             selectedId: selectedId
                         )
@@ -55,6 +56,7 @@ struct ConnectionLinesView: View {
                 ConnectionLinesView(
                     topics: topic.subtopics,
                     onDeleteRelation: onDeleteRelation,
+                    onDeleteParentChild: onDeleteParentChild,
                     selectedId: selectedId
                 )
                 .transition(.opacity)
@@ -74,8 +76,6 @@ private struct ConnectionLine: View {
     let isRelationship: Bool
     let selectedId: UUID?
     
-    @State private var isHovered = false
-    @State private var hoverPoint: CGPoint = .zero
     @State private var animatedStartPoint: CGPoint = .zero
     @State private var animatedEndPoint: CGPoint = .zero
     
@@ -100,50 +100,41 @@ private struct ConnectionLine: View {
                 if shouldUseCurvedStyle {
                     // Draw curved path with animation
                     AnimatedCurvePath(start: animatedStartPoint, end: animatedEndPoint)
-                        .stroke(color.opacity(1.0), lineWidth: 1)
+                        .stroke(color.opacity((selectedId == from.id || selectedId == to.id) ? 1.0 : 0.5), lineWidth: 2)
                 } else {
                     // Draw straight line with animation
                     AnimatedLinePath(start: animatedStartPoint, end: animatedEndPoint)
-                        .stroke(color.opacity(1.0), lineWidth: 1)
+                        .stroke(color.opacity((selectedId == from.id || selectedId == to.id) ? 1.0 : 0.5), lineWidth: 2)
                 }
             }
             
-            // Add hover area with smaller width
-            Path { path in
-                path.move(to: animatedStartPoint)
-                path.addLine(to: animatedEndPoint)
-            }
-            .stroke(Color.clear, lineWidth: 10) // 10px hover area
-            .onHover { hovering in
-                if hovering {
-                    // Get the current mouse position
-                    if let window = NSApp.keyWindow,
-                       let contentView = window.contentView {
-                        let mouseLocation = NSEvent.mouseLocation
-                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
-                        let viewPoint = contentView.convert(windowPoint, from: nil)
-                        hoverPoint = viewPoint
-                        
-                        // Calculate distance from point to line
-                        let distance = distanceFromPointToLine(point: hoverPoint, lineStart: animatedStartPoint, lineEnd: animatedEndPoint)
-                        isHovered = distance < 10 // Show button if within 10px of the line
-                    }
-                } else {
-                    isHovered = false
-                }
-            }
-            
-            // Delete button - show for relationship lines when hovered or when connected topics are selected
-            if isRelationship && (isHovered || from.id == selectedId || to.id == selectedId) {
+            // Detach button for parent-child relationships
+            if !isRelationship && (selectedId == from.id || selectedId == to.id) {
                 Button(action: onDelete) {
                     ZStack {
-                        // Background circle with line color and very low opacity
                         Circle()
                             .fill(color.opacity(0.1))
                             .frame(width: 24, height: 24)
-                        
-                        // Minus icon
-                        Image(systemName: "minus.circle.fill")
+                        Image(systemName: "link.badge.minus")
+                            .foregroundColor(color)
+                            .font(.system(size: 16))
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .position(
+                    x: (animatedStartPoint.x + animatedEndPoint.x) / 2,
+                    y: (animatedStartPoint.y + animatedEndPoint.y) / 2
+                )
+            }
+            
+            // Delete button for relationship lines
+            if isRelationship && (selectedId == from.id || selectedId == to.id) {
+                Button(action: onDelete) {
+                    ZStack {
+                        Circle()
+                            .fill(color.opacity(0.1))
+                            .frame(width: 24, height: 24)
+                        Image(systemName: "xmark")
                             .foregroundColor(color)
                             .font(.system(size: 16))
                     }

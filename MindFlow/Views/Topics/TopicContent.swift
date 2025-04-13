@@ -98,44 +98,6 @@ struct TopicContent: View {
                     .offset(x: 8, y: -8)
             }
         }
-        .overlay {
-            if isSelected {
-                // Connection handles
-                VStack {
-                    // Top handle
-                    Circle()
-                        .fill(topic.borderColor)
-                        .frame(width: 8, height: 8)
-                        .offset(y: -4)
-                    
-                    Spacer()
-                    
-                    // Bottom handle
-                    Circle()
-                        .fill(topic.borderColor)
-                        .frame(width: 8, height: 8)
-                        .offset(y: 4)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                HStack {
-                    // Left handle
-                    Circle()
-                        .fill(topic.borderColor)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -4)
-                    
-                    Spacer()
-                    
-                    // Right handle
-                    Circle()
-                        .fill(topic.borderColor)
-                        .frame(width: 8, height: 8)
-                        .offset(x: 4)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
     }
     
     // MARK: - Text Field Creation
