@@ -4,6 +4,7 @@ struct TopBarView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @Binding var isSidebarOpen: Bool
     @Binding var isRelationshipMode: Bool
+    @State private var showingNoteEditor = false
     let topBarHeight: CGFloat
     
     var body: some View {
@@ -22,7 +23,7 @@ struct TopBarView: View {
                     HStack(spacing: 12) {
                         // Auto layout button
                         Button(action: {
-                            viewModel.performAutoLayout()
+                            viewModel.performFullAutoLayout()
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "rectangle.grid.1x2")
@@ -104,6 +105,62 @@ struct TopBarView: View {
                         .buttonStyle(PlainButtonStyle())
                         .help("Create relationships between topics")
                         .focusable(false) // Prevent Relationship button from gaining focus
+                        
+                        // Note button - for adding/editing notes to the selected topic
+                        Button(action: {
+                            if let selectedId = viewModel.selectedTopicId {
+                                // Check if topic has a note
+                                let hasNote = viewModel.selectedTopicId.flatMap { id in
+                                    viewModel.getTopicById(id)
+                                }.flatMap { topic in
+                                    viewModel.topicHasNote(topic)
+                                } ?? false
+                                
+                                if hasNote {
+                                    // If topic already has a note, open editor directly next to the topic
+                                    viewModel.showingNoteEditorForTopicId = selectedId
+                                    if let topic = viewModel.getTopicById(selectedId), let note = topic.note {
+                                        viewModel.currentNoteContent = note.content
+                                        viewModel.isEditingNote = true
+                                    }
+                                } else {
+                                    // For topics without notes, use the popover
+                                    viewModel.addNoteToSelectedTopic()
+                                    showingNoteEditor = true
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                // Show different icon if the selected topic has a note
+                                let hasNote = viewModel.selectedTopicId.flatMap { id in
+                                    viewModel.getTopicById(id)
+                                }.flatMap { topic in
+                                    viewModel.topicHasNote(topic)
+                                } ?? false
+                                
+                                Image(systemName: hasNote ? "doc.text.fill" : "doc.badge.plus")
+                                    .foregroundColor(viewModel.selectedTopicId != nil ? (hasNote ? .blue : .primary) : .gray)
+                                    .font(.system(size: 14))
+                                
+                                Text("Note")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(viewModel.selectedTopicId != nil ? (hasNote ? .blue : .primary) : .gray)
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.gray.opacity(0.15))
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(viewModel.selectedTopicId == nil)
+                        .help("Add or edit a note for the selected topic")
+                        .focusable(false)
+                        .popover(isPresented: $showingNoteEditor) {
+                            // Only show popover for new notes
+                            NoteEditorView(viewModel: viewModel, isPresented: $showingNoteEditor)
+                        }
                     }
                     
                     Spacer()
@@ -127,5 +184,75 @@ struct TopBarView: View {
             )
             .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
             .zIndex(1) // Ensure top bar stays above other content
+    }
+}
+
+// Note Editor View
+struct NoteEditorView: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Topic Note")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button(action: {
+                    viewModel.saveNote()
+                    isPresented = false
+                }) {
+                    Text("Save")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                
+                Button(action: {
+                    viewModel.deleteNoteFromSelectedTopic()
+                    isPresented = false
+                }) {
+                    Text("Delete")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(viewModel.selectedTopicId.flatMap { id in
+                    viewModel.getTopicById(id)
+                }.flatMap { topic in
+                    !viewModel.topicHasNote(topic)
+                } ?? true)
+            }
+            .padding()
+            .background(Color(.controlBackgroundColor))
+            
+            TextEditor(text: $viewModel.currentNoteContent)
+                .font(.body)
+                .padding(8)
+                .frame(minWidth: 400, minHeight: 250)
+                .overlay(
+                    Group {
+                        if viewModel.currentNoteContent.isEmpty {
+                            Text("Enter note text here...")
+                                .foregroundColor(.gray)
+                                .padding(16)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                )
+                .onChange(of: viewModel.currentNoteContent) { _, _ in
+                    // Autosave as content changes
+                    viewModel.saveNote()
+                }
+        }
+        .onDisappear {
+            // Final save when editor is closed
+            viewModel.saveNote()
+            // Clean up and reset state when the editor is closed
+            viewModel.isEditingNote = false
+        }
     }
 } 

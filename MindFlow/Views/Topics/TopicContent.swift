@@ -98,6 +98,49 @@ struct TopicContent: View {
                     .offset(x: 8, y: -8)
             }
         }
+        .overlay(alignment: .topLeading) {
+            // Note indicator
+            if viewModel.topicHasNote(topic) {
+                Button(action: {
+                    // Open note editor for this topic
+                    viewModel.showingNoteEditorForTopicId = topic.id
+                    if let note = topic.note {
+                        viewModel.currentNoteContent = note.content
+                        viewModel.isEditingNote = true
+                    }
+                }) {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                        .padding(4)
+                        .background(Circle().fill(Color.white.opacity(0.7)))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .offset(x: -8, y: -8)
+            } else if topic.isSelected {
+                // Show an "add note" button for selected topics without notes
+                Button(action: {
+                    // Create and open note editor for this topic
+                    viewModel.showingNoteEditorForTopicId = topic.id
+                    viewModel.currentNoteContent = ""
+                    viewModel.isEditingNote = true
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                        .padding(4)
+                        .background(Circle().fill(Color.white.opacity(0.7)))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .offset(x: -8, y: -8)
+            }
+            
+            // Note editor popover
+            if viewModel.showingNoteEditorForTopicId == topic.id && viewModel.isEditingNote {
+                NoteEditorPopover(viewModel: viewModel, topicId: topic.id)
+                    .offset(x: 30, y: 30)
+            }
+        }
     }
     
     // MARK: - Text Field Creation
@@ -361,5 +404,94 @@ struct TopicContent: View {
     
     private func removeReturnKeyMonitor() {
         NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ReturnKeyPressed"), object: nil)
+    }
+}
+
+// MARK: - Note Editor Popover
+
+struct NoteEditorPopover: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    let topicId: UUID
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Topic Note")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button(action: {
+                    viewModel.saveNote()
+                    viewModel.showingNoteEditorForTopicId = nil
+                    viewModel.isEditingNote = false
+                }) {
+                    Text("Save")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                
+                Button(action: {
+                    viewModel.deleteNoteFromSelectedTopic()
+                    viewModel.showingNoteEditorForTopicId = nil
+                    viewModel.isEditingNote = false
+                }) {
+                    Text("Delete")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                
+                Button(action: {
+                    viewModel.showingNoteEditorForTopicId = nil
+                    viewModel.isEditingNote = false
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(Color(.controlBackgroundColor))
+            
+            TextEditor(text: $viewModel.currentNoteContent)
+                .font(.body)
+                .padding(8)
+                .frame(width: 300, height: 200)
+                .overlay(
+                    Group {
+                        if viewModel.currentNoteContent.isEmpty {
+                            Text("Enter note text here...")
+                                .foregroundColor(.gray)
+                                .padding(16)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                )
+                .onChange(of: viewModel.currentNoteContent) { _, _ in
+                    // Autosave as content changes
+                    viewModel.saveNote()
+                }
+        }
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.windowBackgroundColor))
+                .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+        )
+        .onAppear {
+            // Make sure the selected topic is the one we're editing notes for
+            viewModel.selectedTopicId = topicId
+        }
+        .onDisappear {
+            // Final save on disappear
+            viewModel.saveNote()
+            // Clean up and reset state
+            viewModel.isEditingNote = false
+            viewModel.showingNoteEditorForTopicId = nil
+        }
     }
 }

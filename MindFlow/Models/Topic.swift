@@ -1,6 +1,31 @@
 import Foundation
 import SwiftUI
 
+// Note model for storing topic notes
+struct Note: Identifiable, Equatable, Codable {
+    let id: UUID
+    var content: String
+    var createdAt: Date
+    var updatedAt: Date
+    var isVisible: Bool
+    
+    init(id: UUID = UUID(), content: String = "", createdAt: Date = Date(), updatedAt: Date = Date(), isVisible: Bool = true) {
+        self.id = id
+        self.content = content
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.isVisible = isVisible
+    }
+    
+    static func == (lhs: Note, rhs: Note) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.content == rhs.content &&
+        lhs.createdAt == rhs.createdAt &&
+        lhs.updatedAt == rhs.updatedAt &&
+        lhs.isVisible == rhs.isVisible
+    }
+}
+
 struct Topic: Identifiable, Equatable {
     enum Shape: Codable {
         case rectangle
@@ -68,6 +93,7 @@ struct Topic: Identifiable, Equatable {
     var borderOpacity: Double
     var borderWidth: BorderWidth
     var branchStyle: BranchStyle = .default
+    var note: Note? // Add note property to Topic
     
     // Text formatting properties
     var font: String = "System"
@@ -106,7 +132,8 @@ struct Topic: Identifiable, Equatable {
         foregroundOpacity: Double = 1.0,
         textStyles: Set<TextStyle> = [],
         textCase: TextCase = .none,
-        textAlignment: TextAlignment = .center
+        textAlignment: TextAlignment = .center,
+        note: Note? = nil
     ) {
         self.id = id
         self.name = name
@@ -132,6 +159,7 @@ struct Topic: Identifiable, Equatable {
         self.textStyles = textStyles
         self.textCase = textCase
         self.textAlignment = textAlignment
+        self.note = note
     }
     
     // Implement Equatable
@@ -159,7 +187,8 @@ struct Topic: Identifiable, Equatable {
         lhs.foregroundOpacity == rhs.foregroundOpacity &&
         lhs.textStyles == rhs.textStyles &&
         lhs.textCase == rhs.textCase &&
-        lhs.textAlignment == rhs.textAlignment
+        lhs.textAlignment == rhs.textAlignment &&
+        lhs.note == rhs.note
     }
 }
 
@@ -229,7 +258,8 @@ extension Topic {
             foregroundOpacity: self.foregroundOpacity,
             textStyles: self.textStyles,
             textCase: self.textCase,
-            textAlignment: self.textAlignment
+            textAlignment: self.textAlignment,
+            note: self.note
         )
         
         // Recursively copy subtopics

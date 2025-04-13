@@ -25,6 +25,22 @@ class CanvasViewModel: ObservableObject {
     private var currentThemeBorderColor: Color?
     private var currentThemeTextColor: Color?
     
+    // MARK: - Notes Management
+    
+    // Property to track currently editing note
+    @Published var isEditingNote: Bool = false
+    @Published var currentNoteContent: String = ""
+    @Published var showingNoteEditorForTopicId: UUID? = nil
+    
+    // This flag prevents keyboard shortcuts from affecting topics when editing notes
+    var shouldBlockKeyboardShortcuts: Bool {
+        return isEditingNote
+    }
+    
+    // Time of the last state save for notes
+    private var lastNoteSaveTime = Date()
+    private let noteSaveStateInterval: TimeInterval = 3.0 // Save state every 3 seconds for notes
+    
     init() {
         // Initialize history with current empty state
         history.append([])
@@ -944,8 +960,8 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Keyboard Events
     
     func handleKeyPress(_ event: NSEvent, at position: CGPoint) {
-        // Ignore keyboard events if text input is active or any topic is being edited
-        guard !isTextInputActive && !isAnyTopicEditing() else { 
+        // Don't handle keyboard events if text input is active or any topic is being edited
+        guard !isTextInputActive && !isAnyTopicEditing() && !shouldBlockKeyboardShortcuts else { 
             // When text input is active, let the system handle the keyboard events naturally
             // without trying to process them for canvas shortcuts
             return 
@@ -2898,5 +2914,134 @@ class CanvasViewModel: ObservableObject {
             updateSubtopicInPath(updatedTopic, at: Array(path.dropFirst()), in: &subtopic)
             topic.subtopics[firstIndex] = subtopic
         }
+    }
+    
+    // MARK: - Notes Management
+    
+    // Add a note to the currently selected topic
+    func addNoteToSelectedTopic() {
+        guard let selectedId = selectedTopicId else { return }
+        saveState()
+        
+        // Find and update the selected topic
+        mutateTopicById(id: selectedId) { topic in
+            // If note exists, prepare for editing
+            if let existingNote = topic.note {
+                self.currentNoteContent = existingNote.content
+                self.isEditingNote = true
+            } else {
+                // Create a new note
+                topic.note = Note()
+                self.currentNoteContent = ""
+                self.isEditingNote = true
+            }
+        }
+    }
+    
+    // Save the current note content
+    func saveNote() {
+        let topicId = showingNoteEditorForTopicId ?? selectedTopicId
+        guard let id = topicId, isEditingNote else { return }
+        
+        // Only save state to history occasionally to avoid filling undo history with every keystroke
+        let now = Date()
+        let shouldSaveState = now.timeIntervalSince(lastNoteSaveTime) >= noteSaveStateInterval
+        
+        if shouldSaveState {
+            saveState()
+            lastNoteSaveTime = now
+        }
+        
+        let trimmedContent = currentNoteContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        mutateTopicById(id: id) { topic in
+            if trimmedContent.isEmpty {
+                // If content is empty, remove the note entirely
+                topic.note = nil
+            } else if let existingNote = topic.note {
+                var updatedNote = existingNote
+                updatedNote.content = self.currentNoteContent
+                updatedNote.updatedAt = Date()
+                topic.note = updatedNote
+            } else {
+                topic.note = Note(content: self.currentNoteContent)
+            }
+        }
+    }
+    
+    // Delete the note from the selected topic
+    func deleteNoteFromSelectedTopic() {
+        let topicId = showingNoteEditorForTopicId ?? selectedTopicId
+        guard let id = topicId else { return }
+        saveState()
+        
+        mutateTopicById(id: id) { topic in
+            topic.note = nil
+        }
+        
+        isEditingNote = false
+        currentNoteContent = ""
+    }
+    
+    // Toggle note visibility
+    func toggleNoteVisibility() {
+        guard let selectedId = selectedTopicId else { return }
+        saveState()
+        
+        mutateTopicById(id: selectedId) { topic in
+            if var note = topic.note {
+                note.isVisible.toggle()
+                topic.note = note
+            }
+        }
+    }
+    
+    // Check if a topic has a note
+    func topicHasNote(_ topic: Topic) -> Bool {
+        guard let note = topic.note else { return false }
+        return !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    // Check if a topic's note is visible
+    func isNoteVisible(_ topic: Topic) -> Bool {
+        return topic.note?.isVisible ?? false
+    }
+    
+    // Helper method to find and mutate a topic by ID
+    private func mutateTopicById(id: UUID, mutation: (inout Topic) -> Void) {
+        // Check main topics first
+        if let index = topics.firstIndex(where: { $0.id == id }) {
+            var topic = topics[index]
+            mutation(&topic)
+            topics[index] = topic
+            return
+        }
+        
+        // Check subtopics
+        for i in 0..<topics.count {
+            if mutateTopicInSubtopicsRecursively(id: id, in: &topics[i], mutation: mutation) {
+                return
+            }
+        }
+    }
+    
+    // Recursively find and mutate a topic in the subtopics hierarchy
+    private func mutateTopicInSubtopicsRecursively(id: UUID, in parentTopic: inout Topic, mutation: (inout Topic) -> Void) -> Bool {
+        // Check if this is the topic we're looking for
+        if parentTopic.id == id {
+            mutation(&parentTopic)
+            return true
+        }
+        
+        // Check in subtopics
+        for i in 0..<parentTopic.subtopics.count {
+            var subtopic = parentTopic.subtopics[i]
+            if mutateTopicInSubtopicsRecursively(id: id, in: &subtopic, mutation: mutation) {
+                parentTopic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
     }
 }

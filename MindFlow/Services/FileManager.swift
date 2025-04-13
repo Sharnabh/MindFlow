@@ -176,7 +176,7 @@ extension Topic: Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, positionX, positionY, parentId, subtopics, shape, backgroundColor, backgroundOpacity, 
              borderColor, borderOpacity, borderWidth, branchStyle, font, fontSize, fontWeight, 
-             foregroundColor, foregroundOpacity, textStyles, textCase, textAlignment, isCollapsed
+             foregroundColor, foregroundOpacity, textStyles, textCase, textAlignment, isCollapsed, note
     }
     
     init(from decoder: Decoder) throws {
@@ -248,6 +248,9 @@ extension Topic: Codable {
         textAlignment = TextAlignment.fromIntValue(textAlignmentValue)
         
         isCollapsed = try container.decode(Bool.self, forKey: .isCollapsed)
+        
+        // Decode note if present
+        note = try container.decodeIfPresent(Note.self, forKey: .note)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -303,6 +306,9 @@ extension Topic: Codable {
         try container.encode(textAlignment.intValue, forKey: .textAlignment)
         
         try container.encode(isCollapsed, forKey: .isCollapsed)
+        
+        // Encode note if present
+        try container.encodeIfPresent(note, forKey: .note)
     }
 }
 
