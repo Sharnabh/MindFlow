@@ -1,12 +1,55 @@
 import SwiftUI
 import AppKit
 
-class KeyboardMonitor {
+// MARK: - Key Code Constants
+enum KeyCode {
+    static let returnKey = UInt16(36)
+    static let deleteKey = UInt16(51)
+    static let tabKey = UInt16(48)
+    static let spaceKey = UInt16(49)
+    static let zKey = UInt16(6)
+}
+
+// MARK: - Notification Name Constants
+extension NSNotification.Name {
+    static let returnKeyPressed = NSNotification.Name("ReturnKeyPressed")
+    static let undoRequested = NSNotification.Name("UndoRequested")
+    static let redoRequested = NSNotification.Name("RedoRequested")
+    static let returnFocusToCanvas = NSNotification.Name("ReturnFocusToCanvas")
+}
+
+// MARK: - KeyboardMonitor Protocol for testability
+protocol KeyboardMonitorProtocol {
+    var keyHandler: ((NSEvent) -> Void)? { get set }
+    func startMonitoring()
+    func stopMonitoring()
+}
+
+// MARK: - NotificationCenter Protocol for testability
+protocol NotificationCenterProtocol {
+    func post(name: NSNotification.Name, object: Any?, userInfo: [AnyHashable: Any]?)
+}
+
+// Extension to allow standard NotificationCenter to conform to our protocol
+extension NotificationCenter: NotificationCenterProtocol {}
+
+class KeyboardMonitor: KeyboardMonitorProtocol {
+    // Singleton instance for backward compatibility
     static let shared = KeyboardMonitor()
-    private var monitor: Any?
+    
+    // Callback handler
     var keyHandler: ((NSEvent) -> Void)?
     
-    private init() {}
+    // Event monitor reference
+    private var monitor: Any?
+    
+    // Notification center
+    private let notificationCenter: NotificationCenterProtocol
+    
+    // Initializer with dependency injection for both singleton and testing
+    init(notificationCenter: NotificationCenterProtocol = NotificationCenter.default) {
+        self.notificationCenter = notificationCenter
+    }
     
     func startMonitoring() {
         guard monitor == nil else { return }
@@ -16,16 +59,16 @@ class KeyboardMonitor {
             
             var shouldPassEvent = true
             
-            // Post notification for Return key (code 36)
-            if event.keyCode == 36 {
+            // Post notification for Return key
+            if event.keyCode == KeyCode.returnKey {
                 // Log the modifiers for debugging
                 let isCommandPressed = event.modifierFlags.contains(.command)
                 let isShiftPressed = event.modifierFlags.contains(.shift)
                 print("Return pressed - Command: \(isCommandPressed), Shift: \(isShiftPressed)")
                 
                 // Post notification with the event for our custom handlers
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("ReturnKeyPressed"),
+                self?.notificationCenter.post(
+                    name: .returnKeyPressed,
                     object: nil,
                     userInfo: ["event": event]
                 )
@@ -56,8 +99,8 @@ class KeyboardMonitor {
                 }
             }
             
-            // Handle Tab key (keyCode 48) - prevent focus traversal in canvas
-            if event.keyCode == 48 {
+            // Handle Tab key - prevent focus traversal in canvas
+            if event.keyCode == KeyCode.tabKey {
                 // Check if we're in text editing mode
                 if let window = NSApp.keyWindow,
                    let firstResponder = window.firstResponder {
@@ -74,10 +117,10 @@ class KeyboardMonitor {
                 }
             }
             
-            // Detect Cmd+Z for Undo (key code 6 is 'z')
-            if event.keyCode == 6 && event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.shift) {
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("UndoRequested"),
+            // Detect Cmd+Z for Undo
+            if event.keyCode == KeyCode.zKey && event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.shift) {
+                self?.notificationCenter.post(
+                    name: .undoRequested,
                     object: nil,
                     userInfo: ["event": event]
                 )
@@ -86,9 +129,9 @@ class KeyboardMonitor {
             }
             
             // Detect Cmd+Shift+Z for Redo
-            if event.keyCode == 6 && event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("RedoRequested"),
+            if event.keyCode == KeyCode.zKey && event.modifierFlags.contains(.command) && event.modifierFlags.contains(.shift) {
+                self?.notificationCenter.post(
+                    name: .redoRequested,
                     object: nil,
                     userInfo: ["event": event]
                 )

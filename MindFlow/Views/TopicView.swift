@@ -165,7 +165,7 @@ struct TopicView: View {
                             if viewModel.isTextInputActive {
                                 viewModel.isTextInputActive = false
                                 // Return focus to the canvas
-                                NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                                NotificationCenter.default.post(name: .returnFocusToCanvas, object: nil)
                             }
                         }
                     }
@@ -298,7 +298,7 @@ struct TopicsCanvasView: View {
                     if viewModel.isTextInputActive {
                         viewModel.isTextInputActive = false
                         // Return focus to the canvas
-                        NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                        NotificationCenter.default.post(name: .returnFocusToCanvas, object: nil)
                     }
                     // Deselect any selected topic when clicking empty area
                     viewModel.selectTopic(withId: nil)
