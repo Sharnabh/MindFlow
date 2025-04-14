@@ -77,7 +77,7 @@ struct Topic: Identifiable, Equatable {
         }
     }
     
-    let id: UUID
+    var id: UUID
     var name: String
     var position: CGPoint
     var parentId: UUID?

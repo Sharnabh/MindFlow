@@ -301,14 +301,16 @@ struct TopicsCanvasView: View {
                         NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
                     }
                     // Deselect any selected topic when clicking empty area
-                    viewModel.selectTopic(id: nil)
+                    viewModel.selectTopic(withId: nil)
                 }
             
             // Draw all connection lines first (background layer)
             ConnectionLinesView(
                 topics: viewModel.topics,
                 onDeleteRelation: viewModel.removeRelation,
-                onDeleteParentChild: viewModel.removeParentChildRelation,
+                onDeleteParentChild: { _, childId in 
+                    viewModel.removeParentChildRelation(childId: childId)
+                },
                 selectedId: viewModel.selectedTopicId
             )
             
@@ -316,7 +318,7 @@ struct TopicsCanvasView: View {
             TopicsView(
                 topics: viewModel.topics,
                 selectedId: viewModel.selectedTopicId,
-                onSelect: viewModel.selectTopic,
+                onSelect: viewModel.selectTopic(withId:),
                 onDragChanged: viewModel.updateDraggedTopicPosition,
                 onDragEnded: viewModel.handleDragEnd,
                 onNameChange: viewModel.updateTopicName,

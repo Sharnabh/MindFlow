@@ -9,11 +9,16 @@ import SwiftUI
 
 @main
 struct MindFlowApp: App {
+    // Use the DependencyContainer to manage service dependencies
+    private let dependencies = DependencyContainer.shared
+    
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .frame(minWidth: 800, minHeight: 600)
+                .environmentObject(dependencies.makeCanvasViewModel())
                 .onAppear {
                     // Register for our save notifications
                     NotificationCenter.default.addObserver(forName: NSNotification.Name("SaveMindMap"), object: nil, queue: .main) { _ in
@@ -33,6 +38,8 @@ struct MindFlowApp: App {
                     }
                 }
         }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Mind Map") {

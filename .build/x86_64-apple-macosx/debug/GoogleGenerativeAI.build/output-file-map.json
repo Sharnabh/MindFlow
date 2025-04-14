@@ -1,0 +1,113 @@
+{
+  "": {
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/master.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/Chat.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Chat.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Chat.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Chat~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Chat.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/CountTokensRequest.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/CountTokensRequest.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/CountTokensRequest.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/CountTokensRequest~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/CountTokensRequest.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/Errors.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Errors.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Errors.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Errors~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Errors.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/FunctionCalling.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/FunctionCalling.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/FunctionCalling.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/FunctionCalling~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/FunctionCalling.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerateContentError.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentError.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentError.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentError~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentError.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerateContentRequest.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentRequest.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentRequest.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentRequest~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentRequest.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerateContentResponse.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentResponse.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentResponse.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentResponse~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerateContentResponse.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerationConfig.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerationConfig.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerationConfig.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerationConfig~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerationConfig.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerativeAIRequest.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIRequest.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIRequest.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIRequest~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIRequest.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerativeAIService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAIService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerativeAISwift.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAISwift.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAISwift.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAISwift~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeAISwift.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/GenerativeModel.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeModel.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeModel.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GenerativeModel.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/JSONValue.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/JSONValue.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/JSONValue.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/JSONValue~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/JSONValue.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/Logging.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Logging.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Logging.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Logging~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Logging.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/ModelContent.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/ModelContent.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/ModelContent.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/ModelContent~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/ModelContent.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/PartsRepresentable+Image.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable+Image.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable+Image.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable+Image~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable+Image.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/PartsRepresentable.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/PartsRepresentable.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/.build/checkouts/generative-ai-swift/Sources/GoogleAI/Safety.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Safety.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Safety.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Safety~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/Safety.swiftdeps"
+  }
+}

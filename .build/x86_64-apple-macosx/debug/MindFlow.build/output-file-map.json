@@ -1,0 +1,275 @@
+{
+  "": {
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/master.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Config/APIConfig.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/APIConfig.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/APIConfig.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/APIConfig~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/APIConfig.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/ContentView.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ContentView.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ContentView.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ContentView~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ContentView.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/InfiniteCanvas.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/InfiniteCanvas.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/InfiniteCanvas.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/InfiniteCanvas~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/InfiniteCanvas.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/MindFlowApp.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MindFlowApp.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MindFlowApp.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MindFlowApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MindFlowApp.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Models/AIModels.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModels.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModels.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModels~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModels.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Models/BranchStyle.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyle.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyle.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyle~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyle.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Models/Enums/Enums.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Enums.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Enums.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Enums~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Enums.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Models/Topic.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Topic.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Topic.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Topic~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Topic.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/AIService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/DependencyContainer.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DependencyContainer.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DependencyContainer.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DependencyContainer~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DependencyContainer.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/ExportManager.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ExportManager.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ExportManager.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ExportManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ExportManager.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/FileManager.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileManager.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileManager.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileManager.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/FileService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/FileService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/HistoryService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/HistoryService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/HistoryService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/HistoryService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/HistoryService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/KeyboardService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/LayoutService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/ThemeService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Services/TopicService.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicService.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicService.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicService~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicService.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Utils/Extensions/Color+Font.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Color+Font.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Color+Font.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Color+Font~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Color+Font.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Utils/KeyboardMonitor.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardMonitor.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardMonitor.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardMonitor~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/KeyboardMonitor.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Utils/NotificationManager.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/NotificationManager.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/NotificationManager.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/NotificationManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/NotificationManager.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Utils/ThemeManager.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeManager.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeManager.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeManager.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/ViewModels/CanvasViewModel.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/CanvasViewModel.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/CanvasViewModel.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/CanvasViewModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/CanvasViewModel.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/ViewModels/DragPhysics.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DragPhysics.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DragPhysics.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DragPhysics~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/DragPhysics.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/ViewModels/LayoutViewModel.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutViewModel.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutViewModel.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutViewModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/LayoutViewModel.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/ViewModels/RelationViewModel.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/RelationViewModel.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/RelationViewModel.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/RelationViewModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/RelationViewModel.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/ViewModels/TouchBar.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TouchBar.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TouchBar.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TouchBar~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TouchBar.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Canvas/BackgroundView.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundView.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundView.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundView~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundView.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Canvas/MiniMap.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MiniMap.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MiniMap.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MiniMap~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MiniMap.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Canvas/TopBarView.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopBarView.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopBarView.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopBarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopBarView.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Shapes/Shapes.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Shapes.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Shapes.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Shapes~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/Shapes.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/AIModeContent.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModeContent.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModeContent.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModeContent~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AIModeContent.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/AutoLayoutSection.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AutoLayoutSection.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AutoLayoutSection.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AutoLayoutSection~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AutoLayoutSection.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/BackgroundSection.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundSection.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundSection.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundSection~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BackgroundSection.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/BranchStyleSection.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyleSection.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyleSection.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyleSection~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/BranchStyleSection.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/ColourPicker.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ColourPicker.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ColourPicker.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ColourPicker~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ColourPicker.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/ShapePreview.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ShapePreview.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ShapePreview.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ShapePreview~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ShapePreview.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/TextStyleSection.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TextStyleSection.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TextStyleSection.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TextStyleSection~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TextStyleSection.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/ThemeSection.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeSection.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeSection.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeSection~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ThemeSection.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Sidebar/TopicStyleSection.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicStyleSection.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicStyleSection.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicStyleSection~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicStyleSection.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/SidebarView.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/SidebarView.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/SidebarView.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/SidebarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/SidebarView.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/TopicView.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicView.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicView.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicView~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicView.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Topics/AnimatedLine.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AnimatedLine.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AnimatedLine.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AnimatedLine~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/AnimatedLine.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Topics/ConnectionLine.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ConnectionLine.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ConnectionLine.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ConnectionLine~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/ConnectionLine.swiftdeps"
+  },
+  "/Users/user/Documents/MindFlow/MindFlow/Views/Topics/TopicContent.swift": {
+    "dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicContent.d",
+    "object": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicContent.swift.o",
+    "swiftmodule": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicContent~partial.swiftmodule",
+    "swift-dependencies": "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/TopicContent.swiftdeps"
+  }
+}

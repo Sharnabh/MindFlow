@@ -7,9 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CE4786122DAD7F7400B1888D /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */; };
 		CED8ED182D83F85D00F37456 /* MindFlow.pages in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED172D83F85D00F37456 /* MindFlow.pages */; };
 		CED8ED1A2D83FA5600F37456 /* MindFlow.docx in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED192D83FA5600F37456 /* MindFlow.docx */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CE4785FB2DAD6F3800B1888D /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		CED8ED172D83F85D00F37456 /* MindFlow.pages */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.pages; sourceTree = "<group>"; };
@@ -30,12 +44,20 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE4786122DAD7F7400B1888D /* GoogleGenerativeAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		CE4785F72DAD6F3700B1888D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		CED8ECFC2D83F83C00F37456 = {
 			isa = PBXGroup;
 			children = (
@@ -43,6 +65,7 @@
 				CED8ED172D83F85D00F37456 /* MindFlow.pages */,
 				CED8ED192D83FA5600F37456 /* MindFlow.docx */,
 				CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */,
+				CE4785F72DAD6F3700B1888D /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -56,6 +79,7 @@
 				CED8ED012D83F83C00F37456 /* Sources */,
 				CED8ED022D83F83C00F37456 /* Frameworks */,
 				CED8ED032D83F83C00F37456 /* Resources */,
+				CE4785FB2DAD6F3800B1888D /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -66,6 +90,7 @@
 			);
 			name = MindFlow;
 			packageProductDependencies = (
+				CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */,
 			);
 			productName = MindFlow;
 			productReference = CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */;
@@ -95,6 +120,9 @@
 			);
 			mainGroup = CED8ECFC2D83F83C00F37456;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CE4786102DAD7F7400B1888D /* XCRemoteSwiftPackageReference "generative-ai-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CED8ECFC2D83F83C00F37456;
 			projectDirPath = "";
@@ -332,6 +360,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CE4786102DAD7F7400B1888D /* XCRemoteSwiftPackageReference "generative-ai-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/generative-ai-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE4786102DAD7F7400B1888D /* XCRemoteSwiftPackageReference "generative-ai-swift" */;
+			productName = GoogleGenerativeAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CED8ECFD2D83F83C00F37456 /* Project object */;
 }
