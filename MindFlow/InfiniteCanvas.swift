@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import Combine
+import CoreGraphics
 
 
 struct InfiniteCanvas: View {
@@ -23,7 +25,7 @@ struct InfiniteCanvas: View {
     @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
     
     // Reference to the NSViewRepresentable for exporting
-    @State private var canvasViewRef: CanvasViewRepresentable?
+    @State private var canvasViewRef: FocusableCanvasView?
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -121,11 +123,10 @@ struct InfiniteCanvas: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                // Background layer with grid and topics
+                // Background layer with focusable container
                 ZStack {
-                    // Background layer
+                    // Draw background
                     Canvas { context, size in
-                        // Draw background
                         context.fill(
                             Path(CGRect(origin: .zero, size: size)),
                             with: .color(backgroundColor.opacity(backgroundOpacity))
@@ -209,6 +210,20 @@ struct InfiniteCanvas: View {
                             }
                         }
                     }
+                    .background(
+                        // Add a custom NSView representable that can become first responder
+                        FocusableCanvasView(onViewCreated: { view in
+                            // Store reference to the canvas view for focus
+                            self.canvasViewRef = view
+                            
+                            // Set this view as first responder when created
+                            DispatchQueue.main.async {
+                                if let window = NSApp.keyWindow {
+                                    window.makeFirstResponder(view.nsView)
+                                }
+                            }
+                        })
+                    )
                     
                     // Topics layer
                     TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
@@ -216,131 +231,24 @@ struct InfiniteCanvas: View {
                         .offset(x: offset.x, y: offset.y)
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
-                .background(
-                    // Add a representable that gives us access to the underlying NSView
-                    CanvasViewRepresentable(onViewCreated: { view in
-                        self.canvasViewRef = view
-                    })
-                )
-                
-                // Top bar
-                Rectangle()
-                    .fill(Color(.windowBackgroundColor))
-                    .frame(height: topBarHeight)
-                    .overlay(
-                        HStack(spacing: 0) {
-                            Text("MindFlow")
-                                .foregroundColor(.primary)
-                                .padding(.horizontal)
-                            
-                            Spacer()
-                            
-                            // Group all central buttons together in the middle
-                            HStack(spacing: 12) {
-                                // Auto layout button
-                                Button(action: {
-                                    viewModel.performAutoLayout()
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "rectangle.grid.1x2")
-                                            .font(.system(size: 14))
-                                        Text("Auto Layout")
-                                            .font(.system(size: 13))
-                                    }
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 10)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.15))
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .help("Automatically arrange topics with perfect spacing")
-                                
-                                // Collapse button - enabled when a topic with children is selected
-                                Button(action: {
-                                    if let selectedId = viewModel.selectedTopicId {
-                                        viewModel.toggleCollapseState(topicId: selectedId)
-                                    }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        let isCollapsed = viewModel.selectedTopicId.flatMap(viewModel.isTopicCollapsed) ?? false
-                                        let totalDescendants = viewModel.selectedTopicId.flatMap { id in 
-                                            if let topic = viewModel.getTopicById(id) {
-                                                return viewModel.countAllDescendants(for: topic)
-                                            }
-                                            return 0
-                                        } ?? 0
-                                        
-                                        Image(systemName: isCollapsed ? "chevron.down.circle" : "chevron.right.circle")
-                                            .foregroundColor(totalDescendants > 0 ? .primary : .gray)
-                                            .font(.system(size: 14))
-                                        
-                                        Text(isCollapsed ? "Expand" : "Collapse")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(totalDescendants > 0 ? .primary : .gray)
-                                    }
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 10)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.15))
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(viewModel.selectedTopicId == nil || 
-                                         (viewModel.selectedTopicId.flatMap { id in 
-                                             viewModel.getTopicById(id)
-                                         }.flatMap { topic in 
-                                             viewModel.countAllDescendants(for: topic)
-                                         } ?? 0) == 0)
-                                .help("Collapse or expand the selected topic")
-                                
-                                // Relationship button
-                                Button(action: {
-                                    isRelationshipMode.toggle()
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.triangle.branch")
-                                            .foregroundColor(isRelationshipMode ? .blue : .primary)
-                                            .font(.system(size: 14))
-                                        
-                                        Text("Relationship")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(isRelationshipMode ? .blue : .primary)
-                                    }
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 10)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(isRelationshipMode ? Color.blue.opacity(0.2) : Color.gray.opacity(0.15))
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .help("Create relationships between topics")
-                            }
-                            
-                            Spacer()
-                            
-                            // Sidebar toggle button
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    isSidebarOpen.toggle()
-                                }
-                            }) {
-                                Image(systemName: isSidebarOpen ? "sidebar.right" : "sidebar.right")
-                                    .foregroundColor(.primary)
-                                    .font(.system(size: 14, weight: .regular))
-                                    .frame(width: 28, height: topBarHeight)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color(.windowBackgroundColor))
-                            .focusable(false) // Prevent the button from receiving focus
+                .onContinuousHover { phase in
+                    if let window = NSApp.keyWindow {
+                        let mouseLocation = NSEvent.mouseLocation
+                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+                        if let view = window.contentView {
+                            let viewPoint = view.convert(windowPoint, from: nil)
+                            cursorPosition = viewPoint
                         }
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                    .zIndex(1) // Ensure top bar stays above other content
+                    }
+                }
+                
+                // Top bar - using the TopBarView component
+                TopBarView(
+                    viewModel: viewModel,
+                    isSidebarOpen: $isSidebarOpen,
+                    isRelationshipMode: $isRelationshipMode,
+                    topBarHeight: topBarHeight
+                )
                 
                 // Minimap overlay with conditional position
                 MinimapView(
@@ -458,6 +366,14 @@ struct InfiniteCanvas: View {
                     }
                 }
                 KeyboardMonitor.shared.startMonitoring()
+                
+                // Give focus to the canvas view immediately to prevent buttons from getting initial focus
+                DispatchQueue.main.async {
+                    if let window = NSApp.keyWindow {
+                        // Set the first responder to the window's content view, not any specific button
+                        window.makeFirstResponder(window.contentView)
+                    }
+                }
                 
                 // Initialize Touch Bar Delegate
                 touchBarDelegate = InfiniteCanvasTouchBarDelegate(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
@@ -582,6 +498,44 @@ struct CanvasViewRepresentable: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSView, context: Context) {
         // Nothing to update
+    }
+}
+
+// Focusable canvas view that can become first responder
+struct FocusableCanvasView: NSViewRepresentable {
+    var onViewCreated: (FocusableCanvasView) -> Void
+    var nsView: FocusableNSView?
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = FocusableNSView()
+        view.wantsLayer = true
+        
+        // Create a mutable copy with the view set
+        var mutableSelf = self
+        mutableSelf.nsView = view
+        
+        // Call back with the reference to this representable
+        DispatchQueue.main.async {
+            onViewCreated(mutableSelf)
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Nothing to update
+    }
+    
+    // Custom NSView subclass that can become first responder
+    class FocusableNSView: NSView {
+        override var acceptsFirstResponder: Bool {
+            return true
+        }
+        
+        override func keyDown(with event: NSEvent) {
+            // Just pass the event to the next responder
+            super.keyDown(with: event)
+        }
     }
 }
 

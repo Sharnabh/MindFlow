@@ -56,6 +56,24 @@ class KeyboardMonitor {
                 }
             }
             
+            // Handle Tab key (keyCode 48) - prevent focus traversal in canvas
+            if event.keyCode == 48 {
+                // Check if we're in text editing mode
+                if let window = NSApp.keyWindow,
+                   let firstResponder = window.firstResponder {
+                    
+                    // If we're not in a text field or text view
+                    if !firstResponder.isKind(of: NSTextView.self) && 
+                       !firstResponder.isKind(of: NSTextField.self) {
+                        // Process the key event in the canvas first
+                        self?.keyHandler?(event)
+                        
+                        // Don't let the tab event propagate to prevent focus traversal
+                        return nil
+                    }
+                }
+            }
+            
             // Detect Cmd+Z for Undo (key code 6 is 'z')
             if event.keyCode == 6 && event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.shift) {
                 NotificationCenter.default.post(

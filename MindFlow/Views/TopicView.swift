@@ -124,36 +124,80 @@ struct TopicView: View {
         self._animatedPosition = State(initialValue: topic.position)
     }
     
+    // Check if a link button should be shown
+    private var shouldShowLinkButton: Bool {
+        guard let selectedId = viewModel.selectedTopicId, 
+              selectedId != topic.id, 
+              let selectedTopic = viewModel.findTopic(id: selectedId) else {
+            return false
+        }
+        
+        // Show link button if selected topic is an orphan (no parent)
+        let isOrphan = viewModel.isOrphanTopic(selectedTopic)
+        let isNotAlreadyChild = !topic.subtopics.contains(where: { $0.id == selectedId })
+        let wouldNotCreateCycle = !viewModel.hasParentChildCycle(parentId: topic.id, childId: selectedId)
+        
+        return isOrphan && isNotAlreadyChild && wouldNotCreateCycle
+    }
+    
     var body: some View {
-        TopicContent(
-            topic: topic,
-            isSelected: isSelected,
-            editingName: $editingName,
-            isFocused: _isFocused,
-            onNameChange: onNameChange,
-            onEditingChange: onEditingChange,
-            viewModel: viewModel
-        )
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-        .scaleEffect(isSelected ? 1.03 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-        .offset(isControlPressed || isRelationshipMode ? .zero : dragOffset)
-        .simultaneousGesture(
-            TapGesture()
-                .onEnded {
-                    if !topic.isEditing {
-                        onSelect()
-                        
-                        // Clear any active text fields when tapping on a topic
-                        if viewModel.isTextInputActive {
-                            viewModel.isTextInputActive = false
-                            // Return focus to the canvas
-                            NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+        ZStack {
+            TopicContent(
+                topic: topic,
+                isSelected: isSelected,
+                editingName: $editingName,
+                isFocused: _isFocused,
+                onNameChange: onNameChange,
+                onEditingChange: onEditingChange,
+                viewModel: viewModel
+            )
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .scaleEffect(isSelected ? 1.03 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            .offset(isControlPressed || isRelationshipMode ? .zero : dragOffset)
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded {
+                        if !topic.isEditing {
+                            onSelect()
+                            
+                            // Clear any active text fields when tapping on a topic
+                            if viewModel.isTextInputActive {
+                                viewModel.isTextInputActive = false
+                                // Return focus to the canvas
+                                NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                            }
                         }
                     }
+            )
+            .gesture(createDragGesture())
+            .overlay(alignment: .trailing) {
+                // Link button - show on right side edge of the topic
+                if shouldShowLinkButton {
+                    Button {
+                        // Add selected topic as child of this topic
+                        guard let selectedId = viewModel.selectedTopicId else { return }
+                        viewModel.addSelectedTopicAsChild(parentId: topic.id, childId: selectedId)
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 16))
+                            .foregroundColor(topic.foregroundColor.opacity(0.9))
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(topic.backgroundColor)
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(topic.foregroundColor.opacity(0.6), lineWidth: 1.5)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 1.5, x: 1, y: 1)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .offset(x: 14)  // Half of the button width to make it straddle the edge
                 }
-        )
-        .gesture(createDragGesture())
+            }
+        }
         .position(animatedPosition)
         .onChange(of: topic.isEditing) { oldValue, newValue in
             if newValue {
@@ -264,6 +308,7 @@ struct TopicsCanvasView: View {
             ConnectionLinesView(
                 topics: viewModel.topics,
                 onDeleteRelation: viewModel.removeRelation,
+                onDeleteParentChild: viewModel.removeParentChildRelation,
                 selectedId: viewModel.selectedTopicId
             )
             
