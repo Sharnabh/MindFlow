@@ -109,6 +109,9 @@ struct TopBarView: View {
                         // Note button - for adding/editing notes to the selected topic
                         Button(action: {
                             if let selectedId = viewModel.selectedTopicId {
+                                // Always open the editor near the topic, not in the top bar
+                                viewModel.showingNoteEditorForTopicId = selectedId
+                                
                                 // Check if topic has a note
                                 let hasNote = viewModel.selectedTopicId.flatMap { id in
                                     viewModel.getTopicById(id)
@@ -117,17 +120,18 @@ struct TopBarView: View {
                                 } ?? false
                                 
                                 if hasNote {
-                                    // If topic already has a note, open editor directly next to the topic
-                                    viewModel.showingNoteEditorForTopicId = selectedId
+                                    // If topic already has a note, load its content
                                     if let topic = viewModel.getTopicById(selectedId), let note = topic.note {
                                         viewModel.currentNoteContent = note.content
-                                        viewModel.isEditingNote = true
                                     }
                                 } else {
-                                    // For topics without notes, use the popover
+                                    // For topics without notes, create a new one
+                                    viewModel.currentNoteContent = ""
                                     viewModel.addNoteToSelectedTopic()
-                                    showingNoteEditor = true
                                 }
+                                
+                                // Set editing to true to show the editor
+                                viewModel.isEditingNote = true
                             }
                         }) {
                             HStack(spacing: 4) {
@@ -157,10 +161,6 @@ struct TopBarView: View {
                         .disabled(viewModel.selectedTopicId == nil)
                         .help("Add or edit a note for the selected topic")
                         .focusable(false)
-                        .popover(isPresented: $showingNoteEditor) {
-                            // Only show popover for new notes
-                            NoteEditorView(viewModel: viewModel, isPresented: $showingNoteEditor)
-                        }
                     }
                     
                     Spacer()
@@ -244,8 +244,8 @@ struct NoteEditorView: View {
                     }
                 )
                 .onChange(of: viewModel.currentNoteContent) { _, _ in
-                    // Autosave as content changes
-                    viewModel.saveNote()
+                    // Auto-save as content changes without closing the editor
+                    viewModel.autoSaveCurrentNote()
                 }
         }
         .onDisappear {

@@ -85,7 +85,7 @@ struct Topic: Identifiable, Equatable {
     var isSelected: Bool
     var isEditing: Bool
     var isCollapsed: Bool
-    var relations: [Topic]
+    var relations: [UUID] = []
     var shape: Shape
     var backgroundColor: Color
     var backgroundOpacity: Double
@@ -117,7 +117,7 @@ struct Topic: Identifiable, Equatable {
         isSelected: Bool = false,
         isEditing: Bool = false,
         isCollapsed: Bool = false,
-        relations: [Topic] = [],
+        relations: [UUID] = [],
         shape: Shape = .roundedRectangle,
         backgroundColor: Color = .blue,
         backgroundOpacity: Double = 1.0,
@@ -221,15 +221,15 @@ extension Topic {
         )
     }
     
-    mutating func addRelation(_ topic: Topic) {
+    mutating func addRelation(_ topicId: UUID) {
         // Don't add if it's already a relation or if it's self
-        if !relations.contains(where: { $0.id == topic.id }) && topic.id != self.id {
-            relations.append(topic)
+        if !relations.contains(topicId) && topicId != self.id {
+            relations.append(topicId)
         }
     }
     
     mutating func removeRelation(_ topicId: UUID) {
-        relations.removeAll(where: { $0.id == topicId })
+        relations.removeAll(where: { $0 == topicId })
     }
     
     /// Creates a deep copy of the Topic, including all of its subtopics

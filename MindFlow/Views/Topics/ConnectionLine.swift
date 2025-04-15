@@ -9,6 +9,7 @@ import SwiftUI
 
 // Helper view to recursively render connection lines
 struct ConnectionLinesView: View {
+    @ObservedObject var viewModel: CanvasViewModel
     let topics: [Topic]
     let onDeleteRelation: (UUID, UUID) -> Void
     let onDeleteParentChild: (UUID, UUID) -> Void
@@ -21,39 +22,46 @@ struct ConnectionLinesView: View {
                 // Draw lines to immediate subtopics only if not collapsed
                 if !topic.isCollapsed {
                     ForEach(topic.subtopics) { subtopic in
-                        ConnectionLine(
-                            from: topic,
-                            to: subtopic,
-                            color: subtopic.borderColor,
-                            forceCurved: false, // Not forcing curved, will use individual topic settings
-                            onDelete: { onDeleteParentChild(topic.id, subtopic.id) }, // Pass parent-child delete action
-                            isRelationship: false, // This is a parent-child relationship
-                            selectedId: selectedId
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.position)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: subtopic.position)
+                        // Look up the most recent subtopic state from the view model
+                        if let currentSubtopic = viewModel.findTopic(id: subtopic.id) {
+                            ConnectionLine(
+                                from: topic,
+                                to: currentSubtopic, // Use current state
+                                color: currentSubtopic.borderColor,
+                                forceCurved: false, // Not forcing curved, will use individual topic settings
+                                onDelete: { onDeleteParentChild(topic.id, currentSubtopic.id) }, // Pass parent-child delete action
+                                isRelationship: false, // This is a parent-child relationship
+                                selectedId: selectedId
+                            )
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.position)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentSubtopic.position)
+                        }
                     }
                 }
                 
                 // Draw relationship lines (only draw if we're the source topic)
-                ForEach(topic.relations) { relatedTopic in
-                    ConnectionLine(
-                        from: topic,
-                        to: relatedTopic,
-                        color: .purple,
-                        forceCurved: false, // Not forcing curved, will use individual topic settings
-                        onDelete: { onDeleteRelation(topic.id, relatedTopic.id) },
-                        isRelationship: true, // This is a relationship line
-                        selectedId: selectedId
-                    )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.position)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: relatedTopic.position)
+                ForEach(topic.relations, id: \.self) { relatedTopicId in // Iterate over IDs
+                    // Look up the related topic using the viewModel
+                    if let relatedTopic = viewModel.findTopic(id: relatedTopicId) {
+                        ConnectionLine(
+                            from: topic,
+                            to: relatedTopic, // Use current state of related topic
+                            color: .purple,
+                            forceCurved: false, // Not forcing curved, will use individual topic settings
+                            onDelete: { onDeleteRelation(topic.id, relatedTopic.id) },
+                            isRelationship: true, // This is a relationship line
+                            selectedId: selectedId
+                        )
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.position)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: relatedTopic.position)
+                    }
                 }
             }
             
             // Recursively draw lines for nested subtopics only if not collapsed
             if !topic.subtopics.isEmpty && !topic.isCollapsed {
                 ConnectionLinesView(
+                    viewModel: viewModel, // Pass viewModel down
                     topics: topic.subtopics,
                     onDeleteRelation: onDeleteRelation,
                     onDeleteParentChild: onDeleteParentChild,

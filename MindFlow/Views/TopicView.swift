@@ -306,9 +306,10 @@ struct TopicsCanvasView: View {
             
             // Draw all connection lines first (background layer)
             ConnectionLinesView(
+                viewModel: viewModel,
                 topics: viewModel.topics,
                 onDeleteRelation: viewModel.removeRelation,
-                onDeleteParentChild: { _, childId in 
+                onDeleteParentChild: { _, childId in
                     viewModel.removeParentChildRelation(childId: childId)
                 },
                 selectedId: viewModel.selectedTopicId
@@ -466,27 +467,24 @@ func findTopicAt(position: CGPoint, in topics: [Topic], tolerance: CGFloat = 40)
             return nil
         }
         searched.insert(topic.id)
-        
+
         // Check if the position is within this topic's box
         let box = getTopicBox(topic: topic)
-        if box.contains(position) {
+        // Check within bounds (with tolerance)
+        if box.insetBy(dx: -tolerance, dy: -tolerance).contains(position) {
             return topic
         }
-        
+
         // Search through subtopics
         for subtopic in topic.subtopics {
             if let found = searchThroughTopics(subtopic, searched: &searched) {
                 return found
             }
         }
-        
-        // Search through relations
-        for relatedTopic in topic.relations {
-            if let found = searchThroughTopics(relatedTopic, searched: &searched) {
-                return found
-            }
-        }
-        
+
+        // Don't search through relations for hit-testing
+        // This prevents infinite loops and is not the intended behavior for finding a topic *at* a point.
+
         return nil
     }
     

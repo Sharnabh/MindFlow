@@ -17,19 +17,7 @@ class AIService: ObservableObject {
     private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     private var isNetworkAvailable = true
     
-    private let apiKey: String
-    
     init() {
-        // Retrieve API key from environment
-        if let apiKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"] {
-            self.apiKey = apiKey
-        } else if let apiKey = Bundle.main.infoDictionary?["GEMINI_API_KEY"] as? String {
-            self.apiKey = apiKey
-        } else {
-            self.apiKey = ""
-            print("Warning: GEMINI_API_KEY not found")
-        }
-        
         // Setup network monitoring
         setupNetworkMonitoring()
     }
@@ -63,7 +51,10 @@ class AIService: ObservableObject {
     /// Tests connection to the Gemini API and returns a result
     /// - Returns: A result indicating success or failure
     func testAPIConnection() async -> Result<String, Error> {
-        guard !apiKey.isEmpty else {
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
             self.apiStatus = .missingAPIKey
             return .failure(APIError.missingAPIKey)
         }
@@ -280,7 +271,7 @@ class AIService: ObservableObject {
                 self.isLoading = false
             }
             
-            return result
+        return result
         } catch {
             DispatchQueue.main.async {
                 self.isLoading = false
@@ -415,7 +406,10 @@ class AIService: ObservableObject {
         with prompt: String,
         completion: @escaping (Result<String, Error>) -> Void
     ) {
-        guard !apiKey.isEmpty else {
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
             completion(.failure(APIError.missingAPIKey))
             return
         }
@@ -427,7 +421,7 @@ class AIService: ObservableObject {
         
         let model = GenerativeModel(
             name: "gemini-1.5-pro-latest",
-            apiKey: apiKey,
+            apiKey: currentApiKey,
             generationConfig: GenerationConfig(
                 temperature: 0.7,
                 topP: 0.95,
@@ -498,13 +492,57 @@ class AIService: ObservableObject {
     
     private func parseHierarchyResponse(_ response: String) throws -> TopicHierarchyResult {
         let topics = try parseTopicsResponse(response)
+        
+        // Filter out parent topics with generic names and clean children
+        var filteredTopics: [TopicWithReason] = []
+        
+        for var parentTopic in topics {
+            // Skip entire parent topic if it has a generic name
+            if isGenericTopicName(parentTopic.name) {
+                continue
+            }
+            
+            // Filter out children with generic names
+            parentTopic.children = parentTopic.children.filter { !isGenericTopicName($0.name) }
+            
+            // Add parent topic with filtered children
+            filteredTopics.append(parentTopic)
+        }
+        
         // Use the proper initializer with default empty string for mainIdea
-        return TopicHierarchyResult(parentTopics: topics, mainIdea: "")
+        return TopicHierarchyResult(parentTopics: filteredTopics, mainIdea: "")
+    }
+    
+    // Helper function to detect generic topic names
+    private func isGenericTopicName(_ name: String) -> Bool {
+        // Check if the name matches "Main Topic" followed by a number
+        let nameLower = name.lowercased()
+        let pattern = "main topic"
+        
+        // If it's only 11 characters or fewer, it's too short to be "Main Topic X"
+        if nameLower.count <= 11 {
+            return false
+        }
+        
+        // Must start with "main topic"
+        if !nameLower.hasPrefix(pattern) {
+            return false
+        }
+        
+        // Extract the part after "main topic"
+        let index = name.index(name.startIndex, offsetBy: 10)
+        let remainder = name[index...].trimmingCharacters(in: .whitespaces)
+        
+        // Check if the remainder is a number
+        return Int(remainder) != nil
     }
     
     /// Async wrapper for calling the Gemini API
     private func callGeminiAPIAsync(with prompt: String) async throws -> String {
-        guard !apiKey.isEmpty else {
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
             throw APIError.missingAPIKey
         }
         
@@ -514,7 +552,7 @@ class AIService: ObservableObject {
         
         let model = GenerativeModel(
             name: "gemini-1.5-pro-latest",
-            apiKey: apiKey,
+            apiKey: currentApiKey,
             generationConfig: GenerationConfig(
                 temperature: 0.7,
                 topP: 0.95,

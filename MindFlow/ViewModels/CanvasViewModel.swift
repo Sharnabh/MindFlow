@@ -10,6 +10,9 @@ class CanvasViewModel: ObservableObject {
     @Published var currentNoteContent: String = ""
     @Published var showingNoteEditorForTopicId: UUID? = nil
     
+    // State tracking
+    private var isDragging: Bool = false
+    
     // Service dependencies
     private let topicService: TopicService
     private let layoutService: LayoutServiceProtocol
@@ -253,7 +256,65 @@ class CanvasViewModel: ObservableObject {
     }
     
     func moveTopic(withId id: UUID, to position: CGPoint) {
-        topicService.moveTopic(withId: id, to: position)
+        guard let topic = topicService.getTopic(withId: id) else { return }
+        
+        // Calculate the position delta (how much the topic has moved)
+        let deltaX = position.x - topic.position.x
+        let deltaY = position.y - topic.position.y
+        
+        // First, move the parent topic
+        var updatedTopic = topic
+        updatedTopic.position = position
+        topicService.updateTopic(updatedTopic)
+        
+        // Then recursively move all its descendants by the same delta
+        moveDescendantTopics(of: updatedTopic, deltaX: deltaX, deltaY: deltaY)
+        
+        // Update any topics that have a relation to this topic
+        // This ensures relationship lines stay connected
+        updateRelationshipsToTopic(withId: id)
+    }
+    
+    // Helper method to recursively move all descendants of a topic
+    private func moveDescendantTopics(of parentTopic: Topic, deltaX: CGFloat, deltaY: CGFloat) {
+        for subtopic in parentTopic.subtopics {
+            // Calculate new position for this subtopic
+            let newPosition = CGPoint(
+                x: subtopic.position.x + deltaX,
+                y: subtopic.position.y + deltaY
+            )
+            
+            // Update the subtopic's position
+            var updatedSubtopic = subtopic
+            updatedSubtopic.position = newPosition
+            topicService.updateTopic(updatedSubtopic)
+            
+            // Recursively move this subtopic's children
+            moveDescendantTopics(of: updatedSubtopic, deltaX: deltaX, deltaY: deltaY)
+        }
+    }
+    
+    // Helper method to update any topics that have relationships to the moved topic
+    private func updateRelationshipsToTopic(withId id: UUID) {
+        // Get the moved topic
+        guard let movedTopic = topicService.getTopic(withId: id) else { return }
+        
+        // Check all topics for relationships to the moved topic
+        for topic in topics {
+            // Update topics that have a relation TO the moved topic
+            if topic.relations.contains(id) {
+                // This topic has a relation to the moved topic
+                // Update it to refresh the relationship line
+                topicService.updateTopic(topic)
+            }
+            
+            // Also update topics that the moved topic has a relation TO
+            if movedTopic.relations.contains(topic.id) {
+                // The moved topic has a relation to this topic
+                // Update the moved topic to refresh the relationship line
+                topicService.updateTopic(movedTopic)
+            }
+        }
     }
     
     // MARK: - Relations
@@ -504,6 +565,16 @@ class CanvasViewModel: ObservableObject {
         currentNoteContent = ""
     }
     
+    // New method for auto-saving without closing the editor
+    func autoSaveNote(for topicId: UUID, content: String) {
+        guard let topic = topicService.getTopic(withId: topicId) else { return }
+        
+        // Update the note without closing the editor
+        var updatedTopic = topic
+        updatedTopic.note = Note(content: content)
+        topicService.updateTopic(updatedTopic)
+    }
+    
     func cancelNoteEditing() {
         isEditingNote = false
         showingNoteEditorForTopicId = nil
@@ -513,6 +584,13 @@ class CanvasViewModel: ObservableObject {
     func saveNote() {
         if let topicId = showingNoteEditorForTopicId {
             saveNote(for: topicId, content: currentNoteContent)
+        }
+    }
+    
+    // New method for auto-saving the current note without closing the editor
+    func autoSaveCurrentNote() {
+        if let topicId = showingNoteEditorForTopicId {
+            autoSaveNote(for: topicId, content: currentNoteContent)
         }
     }
     
@@ -593,11 +671,22 @@ class CanvasViewModel: ObservableObject {
     }
     
     func updateDraggedTopicPosition(_ id: UUID, _ position: CGPoint) {
+        // Save state on first drag if we haven't already
+        if !isDragging {
+            historyService.saveState(topicService.topics)
+            isDragging = true
+        }
+        
+        // Update topic position
         moveTopic(withId: id, to: position)
     }
     
     func handleDragEnd(_ id: UUID) {
-        // No special handling needed for drag end in current implementation
+        // Save state after dragging for undo capability
+        historyService.saveState(topicService.topics)
+        
+        // Reset drag state
+        isDragging = false
     }
     
     func updateTopicName(_ id: UUID, _ name: String) {
@@ -625,6 +714,19 @@ class CanvasViewModel: ObservableObject {
     }
     
     func handleRelationDragEnded(_ fromId: UUID) {
+        // If we have a relation drag state
+        if let (sourceId, toPosition) = relationDragState {
+            // Find the target topic at the end position
+            if let targetTopic = findTopicAt(position: toPosition, in: topics) {
+                // Don't create relation to self
+                if sourceId != targetTopic.id {
+                    // Add the relationship
+                    addRelation(from: sourceId, to: targetTopic.id)
+                }
+            }
+        }
+        
+        // Clear the drag state
         endRelationDrag()
     }
     
@@ -703,8 +805,8 @@ class CanvasViewModel: ObservableObject {
             }
             
             // Process custom relationships
-            for relatedTopic in topic.relations {
-                if let relatedName = idToNameMap[relatedTopic.id] {
+            for relatedTopicId in topic.relations {
+                if let relatedName = idToNameMap[relatedTopicId] {
                     connections.append("\(topic.name) -> \(relatedName) (relation)")
                 }
             }

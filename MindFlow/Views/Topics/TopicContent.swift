@@ -117,22 +117,6 @@ struct TopicContent: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .offset(x: -8, y: -8)
-            } else if topic.isSelected {
-                // Show an "add note" button for selected topics without notes
-                Button(action: {
-                    // Create and open note editor for this topic
-                    viewModel.showingNoteEditorForTopicId = topic.id
-                    viewModel.currentNoteContent = ""
-                    viewModel.isEditingNote = true
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.blue)
-                        .padding(4)
-                        .background(Circle().fill(Color.white.opacity(0.7)))
-                }
-                .buttonStyle(PlainButtonStyle())
-                .offset(x: -8, y: -8)
             }
             
             // Note editor popover
@@ -471,8 +455,8 @@ struct NoteEditorPopover: View {
                     }
                 )
                 .onChange(of: viewModel.currentNoteContent) { _, _ in
-                    // Autosave as content changes
-                    viewModel.saveNote()
+                    // Auto-save as content changes without closing the editor
+                    viewModel.autoSaveCurrentNote()
                 }
         }
         .cornerRadius(8)

@@ -207,37 +207,47 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     func addRelation(from sourceId: UUID, to targetId: UUID) {
         // Prevent adding relation to self
         if sourceId == targetId { return }
-        
-        // Find source and target topics
+
+        // Ensure both topics exist
         guard let sourcePath = findTopicPath(id: sourceId),
-              let targetTopic = getTopic(withId: targetId) else { return }
-        
+              let _ = getTopic(withId: targetId) else { return }
+
         // Check if relation already exists
         var source = sourcePath.topic
-        if source.relations.contains(where: { $0.id == targetId }) {
+        if source.relations.contains(targetId) {
             return
         }
-        
-        // Add relation
-        source.relations.append(targetTopic)
+
+        // Add relation (using ID)
+        source.addRelation(targetId)
         updateTopicAtPath(source, path: sourcePath.path)
     }
-    
+
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
         guard let sourcePath = findTopicPath(id: sourceId) else { return }
-        
+
         var source = sourcePath.topic
-        source.relations.removeAll(where: { $0.id == targetId })
+        // Remove relation (using ID)
+        source.removeRelation(targetId)
         updateTopicAtPath(source, path: sourcePath.path)
     }
-    
+
     func removeAllRelationsToTopic(withId id: UUID) {
         // Remove relations in all main topics
         for i in 0..<topics.count {
             var topic = topics[i]
-            topic.relations.removeAll(where: { $0.id == id })
+            // Remove relation (using ID)
+            topic.removeRelation(id)
             removeRelationsToTopicInSubtopics(id, in: &topic)
             topics[i] = topic
+        }
+    }
+
+    // Helper to remove relations recursively from subtopics
+    private func removeRelationsToTopicInSubtopics(_ topicIdToRemove: UUID, in topic: inout Topic) {
+        topic.removeRelation(topicIdToRemove)
+        for i in 0..<topic.subtopics.count {
+            removeRelationsToTopicInSubtopics(topicIdToRemove, in: &topic.subtopics[i])
         }
     }
     
@@ -537,16 +547,6 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         }
         
         return false
-    }
-    
-    // Remove all relations to a specific topic in the subtree
-    private func removeRelationsToTopicInSubtopics(_ id: UUID, in topic: inout Topic) {
-        for i in 0..<topic.subtopics.count {
-            var subtopic = topic.subtopics[i]
-            subtopic.relations.removeAll(where: { $0.id == id })
-            removeRelationsToTopicInSubtopics(id, in: &subtopic)
-            topic.subtopics[i] = subtopic
-        }
     }
     
     // Calculate position for a new subtopic
