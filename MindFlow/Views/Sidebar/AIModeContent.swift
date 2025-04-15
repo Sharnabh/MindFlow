@@ -328,6 +328,26 @@ struct AIModeContent: View {
             .onSubmit {
                 handleSubmit()
             }
+            // Add a keyboard event handler when focused
+            .background {
+                if isTextFieldFocused {
+                    KeyEventHandler { event in
+                        // Check for specific key codes that should be intercepted
+                        if event.type == .keyDown {
+                            switch event.keyCode {
+                            case KeyCode.returnKey, KeyCode.tabKey, KeyCode.spaceKey:
+                                // Let the TextField handle these keys
+                                // And prevent them from affecting the canvas
+                                return true
+                            default:
+                                // Pass through other keystrokes
+                                return false
+                            }
+                        }
+                        return false
+                    }
+                }
+            }
     }
     
     // Get placeholder text based on selected mode
@@ -1360,4 +1380,53 @@ struct ScrollViewHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
-} 
+}
+
+// MARK: - KeyEventHandler
+
+/// Helper view to capture keyboard events
+struct KeyEventHandler: NSViewRepresentable {
+    class Coordinator: NSObject {
+        var handler: (NSEvent) -> Bool
+        
+        init(handler: @escaping (NSEvent) -> Bool) {
+            self.handler = handler
+        }
+        
+        @objc func handleEvent(_ event: NSEvent) -> Bool {
+            return handler(event)
+        }
+    }
+    
+    var handler: (NSEvent) -> Bool
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = KeyInterceptorView()
+        view.eventHandler = context.coordinator.handleEvent
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? KeyInterceptorView)?.eventHandler = context.coordinator.handleEvent
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(handler: handler)
+    }
+}
+
+/// Custom NSView that intercepts key events
+class KeyInterceptorView: NSView {
+    var eventHandler: ((NSEvent) -> Bool)?
+    
+    override var acceptsFirstResponder: Bool { true }
+    
+    override func keyDown(with event: NSEvent) {
+        if let handler = eventHandler, handler(event) {
+            // Event was handled by our handler, don't propagate
+            return
+        }
+        // Not handled by our handler, propagate to next responder
+        super.keyDown(with: event)
+    }
+}

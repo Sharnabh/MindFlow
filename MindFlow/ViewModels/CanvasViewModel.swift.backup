@@ -332,6 +332,9 @@ class CanvasViewModel: ObservableObject {
         
         // Add the relation
         topicService.addRelation(from: sourceId, to: targetId)
+        
+        // Force refresh the topics to ensure UI updates
+        objectWillChange.send()
     }
     
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
@@ -725,6 +728,9 @@ class CanvasViewModel: ObservableObject {
                 if sourceId != targetTopic.id {
                     // Add the relationship
                     addRelation(from: sourceId, to: targetTopic.id)
+                    
+                    // Explicitly refresh UI state
+                    objectWillChange.send()
                 }
             }
         }
@@ -904,6 +910,77 @@ class CanvasViewModel: ObservableObject {
         performAutoLayout()
     }
     
+    func addTopicHierarchyAsSubtopics(parentTopic: Topic, parentTopics: [TopicWithReason]) {
+        // Save state for undo
+        historyService.saveState(topicService.topics)
+        
+        // Get the parent topic path
+        guard let parentPath = topicService.findTopicPath(id: parentTopic.id) else { return }
+        var parent = parentPath.topic
+        
+        // Add each selected topic as a subtopic of the parent
+        var yOffset: CGFloat = 0
+        
+        for parentTopic in parentTopics.filter({ $0.isSelected }) {
+            // Create position with offset based on parent's position
+            let childPosition = CGPoint(
+                x: parent.position.x + 150,
+                y: parent.position.y + yOffset
+            )
+            yOffset += 60 // Space them out vertically
+            
+            // Create a new subtopic
+            let childCount = parent.subtopics.count + 1
+            var newSubtopic = parent.createSubtopic(at: childPosition, count: childCount)
+            newSubtopic.name = parentTopic.name
+            
+            // Add the subtopic to parent
+            parent.subtopics.append(newSubtopic)
+            
+            // Add nested children if any
+            if !parentTopic.children.isEmpty {
+                // Remember the new subtopic's ID
+                let newSubtopicId = newSubtopic.id
+                
+                // Update the parent first
+                topicService.updateTopic(parent)
+                
+                // Find the newly added subtopic to add its children
+                if let subtopicPath = topicService.findTopicPath(id: newSubtopicId) {
+                    var updatedSubtopic = subtopicPath.topic
+                    
+                    // Add children to this subtopic
+                    var subYOffset: CGFloat = 0
+                    for childTopic in parentTopic.children.filter({ $0.isSelected }) {
+                        // Create child position
+                        let subChildPosition = CGPoint(
+                            x: updatedSubtopic.position.x + 150,
+                            y: updatedSubtopic.position.y + subYOffset
+                        )
+                        subYOffset += 40 // Space them closer together
+                        
+                        let subChildCount = updatedSubtopic.subtopics.count + 1
+                        var newSubSubtopic = updatedSubtopic.createSubtopic(at: subChildPosition, count: subChildCount)
+                        newSubSubtopic.name = childTopic.name
+                        
+                        updatedSubtopic.subtopics.append(newSubSubtopic)
+                    }
+                    
+                    // Update the subtopic with its children
+                    topicService.updateTopic(updatedSubtopic)
+                }
+            }
+        }
+        
+        // If no children were added above, update the parent now
+        if parentTopics.allSatisfy({ $0.children.isEmpty }) {
+            topicService.updateTopic(parent)
+        }
+        
+        // Auto layout after adding all topics
+        performAutoLayout()
+    }
+    
     // MARK: - Text Formatting
     
     func updateTopicFont(_ id: UUID, font: String) {
@@ -1018,5 +1095,54 @@ class CanvasViewModel: ObservableObject {
             updateBranchStyleRecursively(topic: &subtopic, style: style)
             topic.subtopics[i] = subtopic
         }
+    }
+    
+    // Helper function to find a topic at a specific position
+    private func findTopicAt(position: CGPoint, in topics: [Topic], tolerance: CGFloat = 40) -> Topic? {
+        // Helper function to search through a topic and all its connected topics
+        func searchThroughTopics(_ topic: Topic, searched: inout Set<UUID>) -> Topic? {
+            // If we've already searched this topic, skip it
+            if searched.contains(topic.id) {
+                return nil
+            }
+            searched.insert(topic.id)
+            
+            // Check if the position is within this topic's box
+            // Calculate approximate bounds for the topic
+            let topicWidth: CGFloat = 200 // Approximate width
+            let topicHeight: CGFloat = 50 // Approximate height
+            let topicRect = CGRect(
+                x: topic.position.x - topicWidth/2,
+                y: topic.position.y - topicHeight/2,
+                width: topicWidth,
+                height: topicHeight
+            )
+            
+            // Check if the position is within this topic's bounds (with tolerance)
+            if topicRect.insetBy(dx: -tolerance, dy: -tolerance).contains(position) {
+                return topic
+            }
+            
+            // Search through subtopics
+            for subtopic in topic.subtopics {
+                if let found = searchThroughTopics(subtopic, searched: &searched) {
+                    return found
+                }
+            }
+            
+            return nil
+        }
+        
+        // Keep track of searched topics to avoid cycles
+        var searched = Set<UUID>()
+        
+        // Search through all root topics
+        for topic in topics {
+            if let found = searchThroughTopics(topic, searched: &searched) {
+                return found
+            }
+        }
+        
+        return nil
     }
 }

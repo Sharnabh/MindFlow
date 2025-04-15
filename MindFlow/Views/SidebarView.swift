@@ -195,42 +195,102 @@ extension CanvasViewModel {
             return
         }
         
-        // Get the current version of the parent topic using public API
-        guard let currentParentTopic = findTopic(id: parentTopic.id) else {
-            return
-        }
-        
-        // Create a mutable copy of the parent topic
-        var updatedParentTopic = currentParentTopic
-        
-        // Add all selected topics as subtopics
-        for parentTopicWithReason in selectedParentTopics {
-            // Create new subtopic based on selected parent topic
-            let subtopicCount = updatedParentTopic.subtopics.count
-            let subtopicPosition = calculateNewSubtopicPosition(for: updatedParentTopic, subtopicCount: subtopicCount)
+        // If parent is a main topic, handle it directly
+        if parentTopic.parentId == nil {
+            if let index = topics.firstIndex(where: { $0.id == parentTopic.id }) {
+                // Add all selected topics as subtopics
+                for parentTopicWithReason in selectedParentTopics {
+                    // Create new subtopic based on selected parent topic
+                    let subtopicCount = topics[index].subtopics.count
+                    let subtopicPosition = calculateNewSubtopicPosition(for: parentTopic, subtopicCount: subtopicCount)
+                    
+                    var newSubtopic = parentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+                    newSubtopic.name = parentTopicWithReason.name
+                    
+                    // Add all selected children under this new subtopic
+                    for childTopic in parentTopicWithReason.children where childTopic.isSelected {
+                        let childCount = newSubtopic.subtopics.count
+                        let childPosition = calculateNewSubtopicPosition(for: newSubtopic, subtopicCount: childCount)
+                        
+                        var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
+                        newChildTopic.name = childTopic.name
+                        newSubtopic.subtopics.append(newChildTopic)
+                    }
+                    
+                    topics[index].subtopics.append(newSubtopic)
+                }
+            }
+        } else {
+            // Handle nested subtopics using recursive method
+            var updatedTopics = topics
+            var anyTopicUpdated = false
             
-            var newSubtopic = updatedParentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
-            newSubtopic.name = parentTopicWithReason.name
-            
-            // Add all selected children under this new subtopic
-            for childTopic in parentTopicWithReason.children where childTopic.isSelected {
-                let childCount = newSubtopic.subtopics.count
-                let childPosition = calculateNewSubtopicPosition(for: newSubtopic, subtopicCount: childCount)
-                
-                var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
-                newChildTopic.name = childTopic.name
-                newSubtopic.subtopics.append(newChildTopic)
+            for i in 0..<updatedTopics.count {
+                var mainTopic = updatedTopics[i]
+                if addSubtopicsRecursively(
+                    parentId: parentTopic.id,
+                    newTopics: selectedParentTopics,
+                    in: &mainTopic
+                ) {
+                    updatedTopics[i] = mainTopic
+                    anyTopicUpdated = true
+                }
             }
             
-            // Add the new subtopic to our updated parent
-            updatedParentTopic.subtopics.append(newSubtopic)
+            if anyTopicUpdated {
+                topics = updatedTopics
+            }
         }
-        
-        // Update the parent topic through a public method instead of directly accessing topicService
-        updateTopic(updatedParentTopic)
         
         // Update the layout to reflect the new structure
         performAutoLayout()
+    }
+    
+    // Helper method to recursively add subtopics to any topic in the hierarchy
+    private func addSubtopicsRecursively(
+        parentId: UUID,
+        newTopics: [TopicWithReason],
+        in topic: inout Topic
+    ) -> Bool {
+        // If this is the target parent, add all the subtopics here
+        if topic.id == parentId {
+            for parentTopicWithReason in newTopics {
+                // Create new subtopic
+                let subtopicCount = topic.subtopics.count
+                let subtopicPosition = calculateNewSubtopicPosition(for: topic, subtopicCount: subtopicCount)
+                
+                var newSubtopic = topic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+                newSubtopic.name = parentTopicWithReason.name
+                
+                // Add all selected children under this new subtopic
+                for childTopic in parentTopicWithReason.children where childTopic.isSelected {
+                    let childCount = newSubtopic.subtopics.count
+                    let childPosition = calculateNewSubtopicPosition(for: newSubtopic, subtopicCount: childCount)
+                    
+                    var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
+                    newChildTopic.name = childTopic.name
+                    newSubtopic.subtopics.append(newChildTopic)
+                }
+                
+                topic.subtopics.append(newSubtopic)
+            }
+            return true
+        }
+        
+        // Otherwise, search through subtopics
+        for i in 0..<topic.subtopics.count {
+            var subtopic = topic.subtopics[i]
+            if addSubtopicsRecursively(
+                parentId: parentId,
+                newTopics: newTopics,
+                in: &subtopic
+            ) {
+                topic.subtopics[i] = subtopic
+                return true
+            }
+        }
+        
+        return false
     }
     
     private func calculateNewSubtopicPosition(for parentTopic: Topic, subtopicCount: Int) -> CGPoint {
