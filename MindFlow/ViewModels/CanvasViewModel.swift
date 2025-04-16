@@ -432,8 +432,18 @@ class CanvasViewModel: ObservableObject {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
-        // Apply theme color
-        topicService.applyThemeToTopic(withId: topicId, fillColor: color, borderColor: nil, textColor: nil)
+        // Apply theme color recursively to topic and all its descendants
+        updateBackgroundColorRecursively(topic: topic, color: color)
+    }
+    
+    private func updateBackgroundColorRecursively(topic: Topic, color: Color) {
+        // Apply color to current topic
+        topicService.applyThemeToTopic(withId: topic.id, fillColor: color, borderColor: nil, textColor: nil)
+        
+        // Recursively apply to all subtopics
+            for subtopic in topic.subtopics {
+            updateBackgroundColorRecursively(topic: subtopic, color: color)
+        }
     }
     
     func updateTopicBorderColor(_ topicId: UUID, color: Color) {
@@ -442,8 +452,18 @@ class CanvasViewModel: ObservableObject {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
-        // Apply theme color
-        topicService.applyThemeToTopic(withId: topicId, fillColor: nil, borderColor: color, textColor: nil)
+        // Apply theme color recursively to topic and all its descendants
+        updateBorderColorRecursively(topic: topic, color: color)
+    }
+    
+    private func updateBorderColorRecursively(topic: Topic, color: Color) {
+        // Apply color to current topic
+        topicService.applyThemeToTopic(withId: topic.id, fillColor: nil, borderColor: color, textColor: nil)
+        
+        // Recursively apply to all subtopics
+        for subtopic in topic.subtopics {
+            updateBorderColorRecursively(topic: subtopic, color: color)
+        }
     }
     
     func updateTopicForegroundColor(_ topicId: UUID, color: Color) {
@@ -533,7 +553,7 @@ class CanvasViewModel: ObservableObject {
             currentNoteContent = existingNote.content
             isEditingNote = true
             showingNoteEditorForTopicId = selectedId
-                } else {
+        } else {
             // Create a new note
             var updatedTopic = topic
             updatedTopic.note = Note()
@@ -873,6 +893,15 @@ class CanvasViewModel: ObservableObject {
             var newTopic = Topic.createMainTopic(at: position, count: topicService.getAllTopics().count + 1)
             newTopic.name = parentTopic.name
             
+            // Apply current theme colors if they exist
+            if let backgroundColor = Topic.themeColors.backgroundColor,
+               let borderColor = Topic.themeColors.borderColor,
+               let textColor = Topic.themeColors.foregroundColor {
+                newTopic.backgroundColor = backgroundColor
+                newTopic.borderColor = borderColor
+                newTopic.foregroundColor = textColor
+            }
+            
             // Add the topic to the canvas
             var addedTopicId = newTopic.id
             topicService.addTopic(newTopic)
@@ -889,6 +918,15 @@ class CanvasViewModel: ObservableObject {
                     let childCount = topic.subtopics.count + 1
                     var newSubtopic = topic.createSubtopic(at: childPosition, count: childCount)
                     newSubtopic.name = childTopic.name
+                    
+                    // Apply current theme colors if they exist
+                    if let backgroundColor = Topic.themeColors.backgroundColor,
+                       let borderColor = Topic.themeColors.borderColor,
+                       let textColor = Topic.themeColors.foregroundColor {
+                        newSubtopic.backgroundColor = backgroundColor
+                        newSubtopic.borderColor = borderColor
+                        newSubtopic.foregroundColor = textColor
+                    }
                     
                     // Add the subtopic
                     if let parentPath = topicService.findTopicPath(id: addedTopicId) {
@@ -1016,7 +1054,139 @@ class CanvasViewModel: ObservableObject {
         for i in 0..<topic.subtopics.count {
             var subtopic = topic.subtopics[i]
             updateBranchStyleRecursively(topic: &subtopic, style: style)
-            topic.subtopics[i] = subtopic
+                topic.subtopics[i] = subtopic
         }
+    }
+    
+    // MARK: - Add Topic Hierarchy as Subtopics
+    
+    func addTopicHierarchyAsSubtopics(parentTopic: Topic, parentTopics: [TopicWithReason]) {
+        // Save state for undo
+        historyService.saveState(topicService.topics)
+        
+        // Process all selected parent topics
+        let selectedParentTopics = parentTopics.filter { $0.isSelected }
+        
+        // If no topics are selected, there's nothing to do
+        if selectedParentTopics.isEmpty {
+            return
+        }
+        
+        // If parent is a main topic, handle it directly
+        if parentTopic.parentId == nil {
+            // Add all selected topics as subtopics
+            for parentTopicWithReason in selectedParentTopics {
+                // Create new subtopic
+                let subtopicCount = parentTopic.subtopics.count
+                let subtopicPosition = calculatePositionForNewSubtopic(parentTopic, subtopicCount)
+                
+                var newSubtopic = parentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+                newSubtopic.name = parentTopicWithReason.name
+                
+                // Inherit parent's colors directly
+                newSubtopic.backgroundColor = parentTopic.backgroundColor
+                newSubtopic.borderColor = parentTopic.borderColor
+                newSubtopic.foregroundColor = parentTopic.foregroundColor
+                newSubtopic.backgroundOpacity = parentTopic.backgroundOpacity
+                newSubtopic.borderOpacity = parentTopic.borderOpacity
+                
+                // Add children to the new subtopic
+                var childSubtopics: [Topic] = []
+                for childTopic in parentTopicWithReason.children where childTopic.isSelected {
+                    let childCount = childSubtopics.count
+                    let childPosition = CGPoint(x: subtopicPosition.x + 150, y: subtopicPosition.y + CGFloat(childCount) * 60)
+                    
+                    var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
+                    newChildTopic.name = childTopic.name
+                    
+                    // Child topics also inherit the parent's colors
+                    newChildTopic.backgroundColor = parentTopic.backgroundColor
+                    newChildTopic.borderColor = parentTopic.borderColor
+                    newChildTopic.foregroundColor = parentTopic.foregroundColor
+                    newChildTopic.backgroundOpacity = parentTopic.backgroundOpacity
+                    newChildTopic.borderOpacity = parentTopic.borderOpacity
+                    
+                    childSubtopics.append(newChildTopic)
+                }
+                
+                // Add the subtopic with its children to the parent
+                if let parentPath = topicService.findTopicPath(id: parentTopic.id) {
+                    var updatedParent = parentPath.topic
+                    newSubtopic.subtopics = childSubtopics
+                    updatedParent.subtopics.append(newSubtopic)
+                    topicService.updateTopic(updatedParent)
+                }
+            }
+        } else {
+            // For nested subtopics, find the parent and add to it
+            if let parentPath = topicService.findTopicPath(id: parentTopic.id) {
+                var updatedParent = parentPath.topic
+                
+                // Add all selected topics as subtopics
+                for parentTopicWithReason in selectedParentTopics {
+                    // Create new subtopic
+                    let subtopicCount = updatedParent.subtopics.count
+                    let subtopicPosition = calculatePositionForNewSubtopic(updatedParent, subtopicCount)
+                    
+                    var newSubtopic = updatedParent.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
+                    newSubtopic.name = parentTopicWithReason.name
+                    
+                    // Inherit parent's colors directly
+                    newSubtopic.backgroundColor = updatedParent.backgroundColor
+                    newSubtopic.borderColor = updatedParent.borderColor
+                    newSubtopic.foregroundColor = updatedParent.foregroundColor
+                    newSubtopic.backgroundOpacity = updatedParent.backgroundOpacity
+                    newSubtopic.borderOpacity = updatedParent.borderOpacity
+                    
+                    // Add children to the new subtopic
+                    var childSubtopics: [Topic] = []
+                    for childTopic in parentTopicWithReason.children where childTopic.isSelected {
+                        let childCount = childSubtopics.count
+                        let childPosition = CGPoint(x: subtopicPosition.x + 150, y: subtopicPosition.y + CGFloat(childCount) * 60)
+                        
+                        var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
+                        newChildTopic.name = childTopic.name
+                        
+                        // Child topics also inherit the parent's colors
+                        newChildTopic.backgroundColor = updatedParent.backgroundColor
+                        newChildTopic.borderColor = updatedParent.borderColor
+                        newChildTopic.foregroundColor = updatedParent.foregroundColor
+                        newChildTopic.backgroundOpacity = updatedParent.backgroundOpacity
+                        newChildTopic.borderOpacity = updatedParent.borderOpacity
+                        
+                        childSubtopics.append(newChildTopic)
+                    }
+                    
+                    newSubtopic.subtopics = childSubtopics
+                    updatedParent.subtopics.append(newSubtopic)
+                }
+                
+                topicService.updateTopic(updatedParent)
+            }
+        }
+        
+        // Auto layout after adding all topics
+        performAutoLayout()
+    }
+    
+    private func calculatePositionForNewSubtopic(_ parentTopic: Topic, _ subtopicCount: Int) -> CGPoint {
+        // Constants for spacing
+        let horizontalSpacing: CGFloat = 200 // Space between parent and child
+        let verticalSpacing: CGFloat = 60 // Space between siblings
+        
+        // Calculate the total height needed for all subtopics
+        let totalSubtopics = subtopicCount + 1 // Including the new subtopic
+        let totalHeight = verticalSpacing * CGFloat(totalSubtopics - 1)
+        
+        // Calculate the starting Y position (top-most subtopic)
+        let startY = parentTopic.position.y + totalHeight/2
+        
+        // Calculate this subtopic's Y position
+        let y = startY - (CGFloat(subtopicCount) * verticalSpacing)
+        
+        // Position the subtopic to the right of the parent
+        let x = parentTopic.position.x + horizontalSpacing
+        
+        return CGPoint(x: x, y: y)
     }
 }

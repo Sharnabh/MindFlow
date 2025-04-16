@@ -108,11 +108,11 @@ private struct ConnectionLine: View {
                 if shouldUseCurvedStyle {
                     // Draw curved path with animation
                     AnimatedCurvePath(start: animatedStartPoint, end: animatedEndPoint)
-                        .stroke(color.opacity((selectedId == from.id || selectedId == to.id) ? 1.0 : 0.5), lineWidth: 2)
+                        .stroke(color.opacity((selectedId == from.id || selectedId == to.id) ? 1.0 : 0.7), lineWidth: 2.5)
                 } else {
                     // Draw straight line with animation
                     AnimatedLinePath(start: animatedStartPoint, end: animatedEndPoint)
-                        .stroke(color.opacity((selectedId == from.id || selectedId == to.id) ? 1.0 : 0.5), lineWidth: 2)
+                        .stroke(color.opacity((selectedId == from.id || selectedId == to.id) ? 1.0 : 0.7), lineWidth: 2.5)
                 }
             }
             
@@ -121,10 +121,10 @@ private struct ConnectionLine: View {
                 Button(action: onDelete) {
                     ZStack {
                         Circle()
-                            .fill(color.opacity(0.1))
-                            .frame(width: 24, height: 24)
-                        Image(systemName: "link.badge.minus")
-                            .foregroundColor(color)
+                            .fill(Color.blue)
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "scissors")
+                            .foregroundColor(.white)
                             .font(.system(size: 16))
                     }
                 }
@@ -133,6 +133,7 @@ private struct ConnectionLine: View {
                     x: (animatedStartPoint.x + animatedEndPoint.x) / 2,
                     y: (animatedStartPoint.y + animatedEndPoint.y) / 2
                 )
+                .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
             }
             
             // Delete button for relationship lines
@@ -140,10 +141,10 @@ private struct ConnectionLine: View {
                 Button(action: onDelete) {
                     ZStack {
                         Circle()
-                            .fill(color.opacity(0.1))
-                            .frame(width: 24, height: 24)
+                            .fill(Color.purple)
+                            .frame(width: 32, height: 32)
                         Image(systemName: "xmark")
-                            .foregroundColor(color)
+                            .foregroundColor(.white)
                             .font(.system(size: 16))
                     }
                 }
@@ -152,6 +153,7 @@ private struct ConnectionLine: View {
                     x: (animatedStartPoint.x + animatedEndPoint.x) / 2,
                     y: (animatedStartPoint.y + animatedEndPoint.y) / 2
                 )
+                .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
             }
         }
         .onChange(of: points.start) { oldValue, newStart in
