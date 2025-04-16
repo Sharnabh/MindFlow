@@ -627,11 +627,11 @@ class ExportManager {
         // Now draw relationship lines
         func drawRelations(for topic: Topic) {
             // Draw relations for this topic
-            for relation in topic.relations {
+            for relationId in topic.relations {
                 guard let fromRect = topicRects[topic.id],
-                      let toRect = topicRects[relation.id],
+                      let toRect = topicRects[relationId],
                       let fromPos = topicPositions[topic.id],
-                      let toPos = topicPositions[relation.id] else {
+                      let toPos = topicPositions[relationId] else {
                     continue
                 }
                 

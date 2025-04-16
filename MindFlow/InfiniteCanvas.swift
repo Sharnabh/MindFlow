@@ -5,7 +5,9 @@ import CoreGraphics
 
 
 struct InfiniteCanvas: View {
-    @StateObject private var viewModel = CanvasViewModel()
+    // Use injected view model instead of creating one
+    @ObservedObject var viewModel: CanvasViewModel
+    
     @State private var offset: CGPoint = .zero
     @State private var scale: CGFloat = 1.0
     @State private var lastDragPosition: CGPoint?
@@ -27,6 +29,9 @@ struct InfiniteCanvas: View {
     // Reference to the NSViewRepresentable for exporting
     @State private var canvasViewRef: FocusableCanvasView?
     
+    // Access theme service for background settings
+    @ObservedObject private var themeService = DependencyContainer.shared.themeService as! ThemeService
+    
     // Constants for canvas
     private let minScale: CGFloat = 0.1
     private let maxScale: CGFloat = 5.0
@@ -35,6 +40,11 @@ struct InfiniteCanvas: View {
     private let minimapPadding: CGFloat = 16 // Padding from the edges
     private let topBarHeight: CGFloat = 40 // Height of the top bar
     private let sidebarWidth: CGFloat = 300 // Width of the sidebar
+    
+    // Init with DI
+    init(viewModel: CanvasViewModel) {
+        self.viewModel = viewModel
+    }
     
     // Convert screen coordinates to canvas coordinates
     private func screenToCanvasPosition(_ screenPosition: CGPoint) -> CGPoint {
@@ -379,12 +389,12 @@ struct InfiniteCanvas: View {
                 touchBarDelegate = InfiniteCanvasTouchBarDelegate(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
                 
                 // Add observer for undo command (Cmd+Z)
-                NotificationCenter.default.addObserver(forName: NSNotification.Name("UndoRequested"), object: nil, queue: .main) { _ in
+                NotificationCenter.default.addObserver(forName: .undoRequested, object: nil, queue: .main) { _ in
                     viewModel.undo()
                 }
                 
                 // Add observer for redo command (Cmd+Shift+Z)
-                NotificationCenter.default.addObserver(forName: NSNotification.Name("RedoRequested"), object: nil, queue: .main) { _ in
+                NotificationCenter.default.addObserver(forName: .redoRequested, object: nil, queue: .main) { _ in
                     viewModel.redo()
                 }
                 
@@ -414,7 +424,7 @@ struct InfiniteCanvas: View {
                 }
                 
                 // Add observer for returning focus to canvas after AI operations
-                NotificationCenter.default.addObserver(forName: NSNotification.Name("ReturnFocusToCanvas"), object: nil, queue: .main) { _ in
+                NotificationCenter.default.addObserver(forName: .returnFocusToCanvas, object: nil, queue: .main) { _ in
                     // Make the canvas the first responder to capture keyboard events
                     if let window = NSApp.keyWindow {
                         DispatchQueue.main.async {
@@ -427,9 +437,9 @@ struct InfiniteCanvas: View {
                 KeyboardMonitor.shared.stopMonitoring()
                 
                 // Remove observers
-                NotificationCenter.default.removeObserver(self, name: NSNotification.Name("UndoRequested"), object: nil)
-                NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RedoRequested"), object: nil)
-                NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                NotificationCenter.default.removeObserver(self, name: .undoRequested, object: nil)
+                NotificationCenter.default.removeObserver(self, name: .redoRequested, object: nil)
+                NotificationCenter.default.removeObserver(self, name: .returnFocusToCanvas, object: nil)
             }
         }
         .ignoresSafeArea()
@@ -631,5 +641,5 @@ extension InfiniteCanvas {
 }
 
 #Preview {
-    InfiniteCanvas()
+    InfiniteCanvas(viewModel: DependencyContainer.shared.makeCanvasViewModel())
 } 

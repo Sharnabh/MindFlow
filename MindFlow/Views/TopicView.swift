@@ -165,7 +165,7 @@ struct TopicView: View {
                             if viewModel.isTextInputActive {
                                 viewModel.isTextInputActive = false
                                 // Return focus to the canvas
-                                NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                                NotificationCenter.default.post(name: .returnFocusToCanvas, object: nil)
                             }
                         }
                     }
@@ -298,17 +298,20 @@ struct TopicsCanvasView: View {
                     if viewModel.isTextInputActive {
                         viewModel.isTextInputActive = false
                         // Return focus to the canvas
-                        NotificationCenter.default.post(name: NSNotification.Name("ReturnFocusToCanvas"), object: nil)
+                        NotificationCenter.default.post(name: .returnFocusToCanvas, object: nil)
                     }
                     // Deselect any selected topic when clicking empty area
-                    viewModel.selectTopic(id: nil)
+                    viewModel.selectTopic(withId: nil)
                 }
             
             // Draw all connection lines first (background layer)
             ConnectionLinesView(
+                viewModel: viewModel,
                 topics: viewModel.topics,
                 onDeleteRelation: viewModel.removeRelation,
-                onDeleteParentChild: viewModel.removeParentChildRelation,
+                onDeleteParentChild: { _, childId in
+                    viewModel.removeParentChildRelation(childId: childId)
+                },
                 selectedId: viewModel.selectedTopicId
             )
             
@@ -316,7 +319,7 @@ struct TopicsCanvasView: View {
             TopicsView(
                 topics: viewModel.topics,
                 selectedId: viewModel.selectedTopicId,
-                onSelect: viewModel.selectTopic,
+                onSelect: viewModel.selectTopic(withId:),
                 onDragChanged: viewModel.updateDraggedTopicPosition,
                 onDragEnded: viewModel.handleDragEnd,
                 onNameChange: viewModel.updateTopicName,
@@ -464,27 +467,24 @@ func findTopicAt(position: CGPoint, in topics: [Topic], tolerance: CGFloat = 40)
             return nil
         }
         searched.insert(topic.id)
-        
+
         // Check if the position is within this topic's box
         let box = getTopicBox(topic: topic)
-        if box.contains(position) {
+        // Check within bounds (with tolerance)
+        if box.insetBy(dx: -tolerance, dy: -tolerance).contains(position) {
             return topic
         }
-        
+
         // Search through subtopics
         for subtopic in topic.subtopics {
             if let found = searchThroughTopics(subtopic, searched: &searched) {
                 return found
             }
         }
-        
-        // Search through relations
-        for relatedTopic in topic.relations {
-            if let found = searchThroughTopics(relatedTopic, searched: &searched) {
-                return found
-            }
-        }
-        
+
+        // Don't search through relations for hit-testing
+        // This prevents infinite loops and is not the intended behavior for finding a topic *at* a point.
+
         return nil
     }
     

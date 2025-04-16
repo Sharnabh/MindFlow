@@ -14,13 +14,13 @@ class RelationViewModel: ObservableObject {
         guard let targetTopic = findTopic(id: targetId) else { return }
         
         // Check if the relation already exists
-        if sourceTopic.relations.contains(where: { $0.id == targetId }) {
+        if sourceTopic.relations.contains(targetId) {
             return
         }
         
         // Add the relation
         var updatedSourceTopic = sourceTopic
-        updatedSourceTopic.relations.append(targetTopic)
+        updatedSourceTopic.addRelation(targetId)
         
         // Update the topic in the hierarchy
         if let (index, path) = sourcePath {
@@ -40,7 +40,7 @@ class RelationViewModel: ObservableObject {
         
         // Remove the relation
         var updatedSourceTopic = sourceTopic
-        updatedSourceTopic.relations.removeAll(where: { $0.id == targetId })
+        updatedSourceTopic.removeRelation(targetId)
         
         // Update the topic in the hierarchy
         if let (index, path) = sourcePath {
@@ -58,7 +58,7 @@ class RelationViewModel: ObservableObject {
         // Remove relations to this topic from all main topics
         for i in 0..<topics.count {
             var topic = topics[i]
-            topic.relations.removeAll(where: { $0.id == targetId })
+            topic.removeRelation(targetId)
             removeRelationsToTopicInSubtopics(targetId, in: &topic)
             topics[i] = topic
         }
@@ -166,7 +166,7 @@ class RelationViewModel: ObservableObject {
         // Remove relations to this topic from all subtopics
         for i in 0..<topic.subtopics.count {
             var subtopic = topic.subtopics[i]
-            subtopic.relations.removeAll(where: { $0.id == id })
+            subtopic.removeRelation(id)
             removeRelationsToTopicInSubtopics(id, in: &subtopic)
             topic.subtopics[i] = subtopic
         }

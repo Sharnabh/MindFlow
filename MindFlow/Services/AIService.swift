@@ -1,501 +1,605 @@
-import Foundation
 import SwiftUI
+import GoogleGenerativeAI
+import Combine
 import Network
 
-class AIService {
+/// Service for AI-related functionalities
+class AIService: ObservableObject {
+    // Add shared singleton instance
     static let shared = AIService()
-    private let networkMonitor = NWPathMonitor()
-    private var isNetworkAvailable = true
-    private var currentSystemPrompt: String = ""
     
-    private init() {
-        // Set up network monitoring
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    @Published var apiStatus: APIStatus = .unknown
+    
+    private var cancellables = Set<AnyCancellable>()
+    private let networkMonitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
+    private var isNetworkAvailable = true
+    
+    init() {
+        // Setup network monitoring
+        setupNetworkMonitoring()
+    }
+    
+    private func setupNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
             self?.isNetworkAvailable = path.status == .satisfied
+                if !self!.isNetworkAvailable && self!.isLoading {
+                    self?.errorMessage = "Network connection lost. Please check your internet connection and try again."
+                    self?.isLoading = false
+                }
+            }
         }
-        let queue = DispatchQueue(label: "NetworkMonitor")
-        networkMonitor.start(queue: queue)
+        networkMonitor.start(queue: monitorQueue)
     }
     
     deinit {
         networkMonitor.cancel()
     }
     
-    // MARK: - AI Functions
+    // MARK: - Public Methods
     
-    /// Generates creative ideas for mind mapping based on the current topics
-    /// - Parameter topics: List of current topics in the mind map
-    /// - Returns: A list of suggested new topics or connections
-    func generateIdeas(from topics: [String]) async throws -> [String] {
-        return try await callGeminiAPI(
-            prompt: createIdeaGenerationPrompt(topics: topics),
-            parseResponse: parseIdeaResponse
-        )
+    /// Updates the system prompt for subsequent AI interactions
+    /// - Parameter systemPrompt: The new system prompt to use
+    func updateSystemPrompt(_ systemPrompt: String) {
+        // Store the system prompt for future API calls
+        self.systemPrompt = systemPrompt
     }
     
-    /// Suggests ways to organize existing topics into a more coherent structure
-    /// - Parameter topics: List of current topics and their relationships
-    /// - Returns: A suggested organization structure
-    func organizeTopics(topics: [String], connections: [String]) async throws -> [String] {
-        return try await callGeminiAPI(
-            prompt: createTopicOrganizationPrompt(topics: topics, connections: connections),
-            parseResponse: parseOrganizationResponse
-        )
-    }
-    
-    /// Analyzes the current mind map structure and provides insights
-    /// - Parameter topicStructure: Description of the current mind map structure
-    /// - Returns: Analysis insights about the mind map
-    func analyzeStructure(topicStructure: String) async throws -> [String] {
-        return try await callGeminiAPI(
-            prompt: createStructureAnalysisPrompt(topicStructure: topicStructure),
-            parseResponse: parseAnalysisResponse
-        )
-    }
-    
-    /// Generates hierarchical topic suggestions with parent-child relationships
-    /// - Parameters:
-    ///   - topic: Main topic or focus area for generating the hierarchy
-    ///   - existingTopics: List of existing topics to avoid duplication
-    /// - Returns: A structured list of parent and child topic suggestions with rationale
-    func generateTopicHierarchy(topic: String, existingTopics: [String]) async throws -> TopicHierarchyResult {
-        let result = try await callGeminiAPI(
-            prompt: createHierarchyGenerationPrompt(topic: topic, existingTopics: existingTopics),
-            parseResponse: parseHierarchyResponse
-        )
-        return result
-    }
-    
-    // MARK: - Prompt Creation
-    
-    private func createIdeaGenerationPrompt(topics: [String]) -> String {
-        let topicsText = topics.joined(separator: "\n- ")
-        
-        return """
-        You are a creative assistant helping a user with mind mapping. Based on the following topics already in their mind map, suggest 5 new creative and relevant topics or connections that could be added.
-
-        CURRENT TOPICS:
-        - \(topicsText)
-
-        Please provide exactly 5 new ideas formatted as follows:
-        IDEA: [Idea name]
-        DESCRIPTION: [Brief 1-2 sentence description]
-
-        Make each idea concise, creative, and directly relevant to the existing topics. Focus on connections and themes that might not be immediately obvious.
-        """
-    }
-    
-    private func createTopicOrganizationPrompt(topics: [String], connections: [String]) -> String {
-        let topicsText = topics.joined(separator: "\n- ")
-        let connectionsText = connections.joined(separator: "\n- ")
-        
-        return """
-        You are an organizational expert helping structure a mind map. Analyze these topics and their connections, then suggest a more coherent, logical organization.
-
-        CURRENT TOPICS:
-        - \(topicsText)
-
-        CURRENT CONNECTIONS:
-        - \(connectionsText)
-
-        Please provide suggestions for how to better organize these topics using the following format:
-        STRUCTURE: [Main organization principle]
-        GROUP 1: [Topic 1], [Topic 2], etc.
-        GROUP 2: [Topic 3], [Topic 4], etc.
-        CONNECTIONS: [Suggested new connections]
-        
-        Focus on creating logical groupings and a hierarchical structure that enhances understanding.
-        """
-    }
-    
-    private func createStructureAnalysisPrompt(topicStructure: String) -> String {
-        return """
-        You are a mind map analysis expert. Analyze the following mind map structure and provide meaningful insights about its organization, balance, and effectiveness.
-
-        MIND MAP STRUCTURE:
-        \(topicStructure)
-
-        Please provide analysis in the following format:
-        STRENGTHS: [List 2-3 strengths of the current structure]
-        IMPROVEMENTS: [List 2-3 potential improvements]
-        BALANCE: [Assessment of how balanced the mind map is]
-        FOCUS: [Identified central focus or theme]
-        
-        Provide practical, actionable feedback that will help improve the mind map's clarity and effectiveness.
-        """
-    }
-    
-    private func createHierarchyGenerationPrompt(topic: String, existingTopics: [String]) -> String {
-        let existingTopicsText = existingTopics.isEmpty ? 
-            "No existing topics yet." : 
-            existingTopics.joined(separator: "\n- ")
-        
-        return """
-        You are an expert in creating structured mind maps. I need you to generate a logical hierarchy of topics on "\(topic)" with clear parent-child relationships.
-
-        EXISTING TOPICS IN THE MIND MAP:
-        - \(existingTopicsText)
-
-        Please create 3-5 parent topics (main branches) with 2-4 child topics each. For each parent and child topic, provide a brief rationale explaining why it's important.
-
-        Format your response EXACTLY like this:
-        
-        PARENT: [Parent Topic 1]
-        REASON: [Brief explanation why this is an important main topic]
-        CHILD: [Child Topic 1.1]
-        REASON: [Why this subtopic matters]
-        CHILD: [Child Topic 1.2]
-        REASON: [Why this subtopic matters]
-        
-        PARENT: [Parent Topic 2]
-        REASON: [Brief explanation why this is an important main topic]
-        CHILD: [Child Topic 2.1]
-        REASON: [Why this subtopic matters]
-        CHILD: [Child Topic 2.2]
-        REASON: [Why this subtopic matters]
-        
-        Focus on creating meaningful, insightful topics that together provide comprehensive coverage of "\(topic)". Ensure all suggestions are factually accurate and provide valuable structure.
-        """
-    }
-    
-    // MARK: - Response Parsing
-    
-    private func parseIdeaResponse(_ response: String) -> [String] {
-        // Split response by IDEA: markers and process
-        var ideas = [String]()
-        let components = response.components(separatedBy: "IDEA:")
-        
-        for component in components.dropFirst() { // Skip the first element which is before any IDEA: marker
-            let lines = component.trimmingCharacters(in: .whitespacesAndNewlines)
-                .components(separatedBy: .newlines)
-            
-            if let firstLine = lines.first {
-                var ideaText = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                // Look for the description if available
-                if let descIndex = lines.firstIndex(where: { $0.contains("DESCRIPTION:") }) {
-                    let description = lines[descIndex].replacingOccurrences(of: "DESCRIPTION:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    ideaText += "\n- " + description
-                }
-                
-                ideas.append(ideaText)
-            }
-        }
-        
-        return ideas
-    }
-    
-    private func parseOrganizationResponse(_ response: String) -> [String] {
-        // Extract the organization suggestions
-        var results = [String]()
-        let lines = response.components(separatedBy: .newlines)
-        
-        for line in lines {
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmedLine.isEmpty {
-                results.append(trimmedLine)
-            }
-        }
-        
-        return results
-    }
-    
-    private func parseAnalysisResponse(_ response: String) -> [String] {
-        // Extract analysis insights
-        var insights = [String]()
-        let sections = ["STRENGTHS:", "IMPROVEMENTS:", "BALANCE:", "FOCUS:"]
-        
-        for section in sections {
-            if let range = response.range(of: section) {
-                let startIndex = range.upperBound
-                let endIndex: String.Index
-                
-                // Find the end of this section (start of next section or end of string)
-                if let nextSection = sections.first(where: { section != $0 && response[range.upperBound...].contains($0) }) {
-                    endIndex = response[startIndex...].range(of: nextSection)?.lowerBound ?? response.endIndex
-                } else {
-                    endIndex = response.endIndex
-                }
-                
-                let sectionContent = response[startIndex..<endIndex].trimmingCharacters(in: .whitespacesAndNewlines)
-                insights.append("\(section) \(sectionContent)")
-            }
-        }
-        
-        return insights
-    }
-    
-    private func parseHierarchyResponse(_ response: String) -> TopicHierarchyResult {
-        var result = TopicHierarchyResult()
-        var currentParent: TopicWithReason? = nil
-        
-        let lines = response.components(separatedBy: .newlines)
-        
-        for line in lines {
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedLine.isEmpty { continue }
-            
-            if trimmedLine.hasPrefix("PARENT:") {
-                // Start a new parent
-                if let parent = currentParent {
-                    result.parentTopics.append(parent)
-                }
-                
-                let content = trimmedLine.replacingOccurrences(of: "PARENT:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-                currentParent = TopicWithReason(name: content, reason: "")
-            } else if trimmedLine.hasPrefix("REASON:") && currentParent != nil {
-                let reason = trimmedLine.replacingOccurrences(of: "REASON:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if currentParent!.reason.isEmpty {
-                    // This is for the parent
-                    currentParent!.reason = reason
-                } else {
-                    // This is for the most recent child
-                    if var lastChild = currentParent?.children.popLast() {
-                        lastChild.reason = reason
-                        currentParent?.children.append(lastChild)
-                    }
-                }
-            } else if trimmedLine.hasPrefix("CHILD:") && currentParent != nil {
-                let childContent = trimmedLine.replacingOccurrences(of: "CHILD:", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-                currentParent!.children.append(TopicWithReason(name: childContent, reason: ""))
-            }
-        }
-        
-        // Add the last parent if it exists
-        if let parent = currentParent, !parent.name.isEmpty {
-            result.parentTopics.append(parent)
-        }
-        
-        return result
-    }
-    
-    // MARK: - Gemini API Integration
-    
-    /// Generic function to call Gemini API with a prompt and parse response
-    private func callGeminiAPI<T>(prompt: String, parseResponse: @escaping (String) -> T) async throws -> T {
-        // Check network connectivity first
-        guard isNetworkAvailable else {
-            throw NSError(
-                domain: "AIService",
-                code: -1009, // NSURLErrorNotConnectedToInternet
-                userInfo: [NSLocalizedDescriptionKey: "No internet connection. Please check your network settings and try again."]
-            )
-        }
-        
-        // Get API key from config - reusing the same API key setup
-        let apiKey = APIConfig.geminiAPIKey
-        
-        // Check if the API key is valid
-        guard !apiKey.contains("YOUR_") else {
-            throw NSError(domain: "AIService", code: 401, userInfo: [NSLocalizedDescriptionKey: "API key not configured. Please add your Gemini API key in settings."])
-        }
-        
-        // Gemini API endpoint - using the same model as in GenrePredictionService
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")!
-        
-        // Construct a URL with the API key as a query parameter
-        var urlComponents = URLComponents(url: endpoint, resolvingAgainstBaseURL: true)!
-        urlComponents.queryItems = [URLQueryItem(name: "key", value: apiKey)]
-        
-        guard let url = urlComponents.url else {
-            throw URLError(.badURL)
-        }
-        
-        // Create the request with timeout
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 20 // Increase timeout slightly
-        
-        // Create the request body according to the current API format
-        let requestBody: [String: Any] = [
-            "contents": [
-                [
-                    "role": "user",
-                    "parts": [
-                        ["text": currentSystemPrompt.isEmpty ? prompt : "\(currentSystemPrompt)\n\n\(prompt)"]
-                    ]
-                ]
-            ],
-            "generationConfig": [
-                "temperature": 0.7,
-                "maxOutputTokens": 800,
-                "topP": 0.95,
-                "topK": 40
-            ],
-            "safetySettings": [
-                [
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_NONE"
-                ],
-                [
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_NONE"
-                ],
-                [
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_NONE"
-                ],
-                [
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_NONE"
-                ]
-            ]
-        ]
-        
-        // Convert the request body to JSON data
-        let jsonData = try JSONSerialization.data(withJSONObject: requestBody)
-        request.httpBody = jsonData
-        
-        do {
-            // Use a custom URLSession with better timeout handling
-            let sessionConfig = URLSessionConfiguration.default
-            sessionConfig.timeoutIntervalForRequest = 20
-            sessionConfig.timeoutIntervalForResource = 40
-            sessionConfig.waitsForConnectivity = true
-            sessionConfig.requestCachePolicy = .reloadIgnoringLocalCacheData
-            let session = URLSession(configuration: sessionConfig)
-            
-            // Print full URL for debugging
-            print("Making request to: \(url.absoluteString)")
-            
-            // Send the request with explicit timeout handling
-            let (data, response) = try await session.data(for: request)
-            
-            // Print response for debugging
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("Gemini API response: \(responseString)")
-            }
-            
-            // Check for valid HTTP response
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
-            
-            // Check for successful response code
-            guard (200...299).contains(httpResponse.statusCode) else {
-                // Try to parse error message if available
-                let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let errorMessage = errorResponse?["error"] as? [String: Any]
-                let message = errorMessage?["message"] as? String ?? "Status code: \(httpResponse.statusCode)"
-                
-                throw NSError(
-                    domain: "AIService", 
-                    code: httpResponse.statusCode,
-                    userInfo: [NSLocalizedDescriptionKey: "API Error: \(message)"]
-                )
-            }
-            
-            // Parse the response using the current API structure
-            let responseObject = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            
-            // Extract the text response from the API format
-            if let candidates = responseObject?["candidates"] as? [[String: Any]],
-               let firstCandidate = candidates.first,
-               let content = firstCandidate["content"] as? [String: Any],
-               let parts = content["parts"] as? [[String: Any]],
-               let firstPart = parts.first,
-               let text = firstPart["text"] as? String {
-                
-                // Clean up the response
-                let cleanedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                // Parse the response using the provided parser
-                return parseResponse(cleanedText)
-            }
-            
-            // If we couldn't parse the response at all
-            throw NSError(domain: "AIService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to parse Gemini API response"])
-            
-        } catch let urlError as URLError {
-            var localizedError = "Unknown network error occurred"
-            var errorCode = urlError.code.rawValue
-            
-            switch urlError.code {
-            case .timedOut:
-                localizedError = "Request timed out. Please check your internet connection and try again."
-                errorCode = -1001
-            case .notConnectedToInternet:
-                localizedError = "No internet connection. Please check your network settings and try again."
-                errorCode = -1009
-            case .cannotFindHost, .dnsLookupFailed:
-                localizedError = "Unable to connect to Google's servers. Please check your internet connection and try again."
-                errorCode = -1003
-            case .cannotConnectToHost:
-                localizedError = "Cannot connect to Google's servers. Please try again later."
-                errorCode = -1004
-            case .secureConnectionFailed:
-                localizedError = "Secure connection to API failed. Please try again later."
-                errorCode = -1200
-            default:
-                localizedError = "Network error: \(urlError.localizedDescription)"
-            }
-            
-            print("Network error details: \(urlError)")
-            
-            throw NSError(
-                domain: "AIService",
-                code: errorCode,
-                userInfo: [NSLocalizedDescriptionKey: localizedError]
-            )
-        } catch let error as NSError {
-            print("Gemini API error: \(error)")
-            throw error
-        } catch {
-            print("Unexpected error: \(error)")
-            throw NSError(
-                domain: "AIService",
-                code: 500,
-                userInfo: [NSLocalizedDescriptionKey: "An unexpected error occurred: \(error.localizedDescription)"]
-            )
-        }
-    }
-    
-    // MARK: - Test API Connection
-    
-    /// Tests the API connection with the current key
+    /// Tests connection to the Gemini API and returns a result
+    /// - Returns: A result indicating success or failure
     func testAPIConnection() async -> Result<String, Error> {
-        // Simple test prompt
-        let testPrompt = "Respond with 'Connection successful' if you can read this message."
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
+            self.apiStatus = .missingAPIKey
+            return .failure(APIError.missingAPIKey)
+        }
+        
+        guard isNetworkAvailable else {
+            self.apiStatus = .noInternet
+            return .failure(APIError.noInternetConnection)
+        }
+        
+        let testPrompt = "Respond with 'OK' if you can receive this message."
         
         do {
-            // Make a simple request
-            let response = try await callGeminiAPI(prompt: testPrompt) { response in
-                return response
-            }
-            return .success("Connection successful: \(response.prefix(30))...")
+            let result = try await callGeminiAPIAsync(with: testPrompt)
+            self.apiStatus = .connected
+            return .success("Connection successful!")
         } catch {
+            self.apiStatus = .failed
             return .failure(error)
         }
     }
     
-    // Add updateSystemPrompt method
-    func updateSystemPrompt(_ prompt: String) {
-        currentSystemPrompt = prompt
+    /// Generates ideas related to a central topic
+    /// - Parameters:
+    ///   - centralTopic: The central topic to generate ideas for
+    ///   - existingTopics: Optional existing topics to consider
+    ///   - count: Number of ideas to generate (default: 5)
+    ///   - completion: Callback with generated topics or error
+    func generateIdeas(
+        for centralTopic: String,
+        existingTopics: [String] = [],
+        count: Int = 5,
+        completion: @escaping (Result<[TopicWithReason], Error>) -> Void
+    ) {
+        isLoading = true
+        errorMessage = nil
+        
+        let prompt = createIdeaGenerationPrompt(
+            centralTopic: centralTopic,
+            existingTopics: existingTopics,
+            count: count
+        )
+        
+        callGeminiAPI(with: prompt) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.isLoading = false
+                
+                switch result {
+                case .success(let response):
+                    do {
+                        let topics = try self?.parseTopicsResponse(response) ?? []
+                        completion(.success(topics))
+                    } catch {
+                        self?.errorMessage = "Failed to parse AI response: \(error.localizedDescription)"
+                        completion(.failure(error))
+                    }
+                    
+                case .failure(let error):
+                    self?.errorMessage = "AI request failed: \(error.localizedDescription)"
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+    
+    /// Generate ideas asynchronously 
+    /// - Parameter topics: Existing topics to base ideas on
+    /// - Returns: Array of idea strings
+    func generateIdeas(from topics: [String]) async throws -> [String] {
+        isLoading = true
+        errorMessage = nil
+        
+        let prompt = """
+        Based on these existing topics, generate 5-7 creative and insightful ideas:
+        \(topics.map { "- \($0)" }.joined(separator: "\n"))
+        
+        Format each idea as:
+        IDEA: [Short, catchy title]
+        DESCRIPTION: [1-2 sentence explanation]
+        """
+        
+        do {
+            let response = try await callGeminiAPIAsync(with: prompt)
+            
+            // Parse the response into separate ideas (each paragraph is an idea)
+            let ideas = response.components(separatedBy: "\n\n")
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            return ideas
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+    
+    /// Organizes a list of topics into meaningful groups with suggested connections
+    /// - Parameters:
+    ///   - topics: Array of topic names to organize
+    ///   - connections: Existing connections between topics
+    /// - Returns: Array of organization suggestions
+    func organizeTopics(topics: [String], connections: [String]) async throws -> [String] {
+        isLoading = true
+        errorMessage = nil
+        
+        let prompt = """
+        Organize these topics into meaningful groups and suggest connections:
+        
+        TOPICS:
+        \(topics.map { "- \($0)" }.joined(separator: "\n"))
+        
+        EXISTING CONNECTIONS:
+        \(connections.isEmpty ? "None" : connections.map { "- \($0)" }.joined(separator: "\n"))
+        
+        Provide your response in this format:
+        
+        STRUCTURE: [Brief overview of the structure]
+        
+        GROUP 1: [Topic1, Topic2, Topic3]
+        GROUP 2: [Topic4, Topic5]
+        
+        CONNECTIONS: [Suggested connections between topics]
+        """
+        
+        do {
+            let response = try await callGeminiAPIAsync(with: prompt)
+            
+            // Parse the response into sections
+            let sections = response.components(separatedBy: "\n\n")
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            return sections
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+    
+    /// Analyzes a mind map structure and suggests improvements
+    /// - Parameter topicStructure: Description of the mind map structure
+    /// - Returns: Array of analysis sections
+    func analyzeStructure(topicStructure: String) async throws -> [String] {
+        isLoading = true
+        errorMessage = nil
+        
+        let prompt = """
+        Analyze this mind map structure and provide feedback:
+        
+        \(topicStructure)
+        
+        Provide your analysis in this format:
+        
+        STRENGTHS: [Comma-separated list of strengths]
+        
+        IMPROVEMENTS: [Comma-separated list of potential improvements]
+        
+        BALANCE: [Assessment of balance and distribution]
+        
+        FOCUS: [Assessment of central focus and coherence]
+        """
+        
+        do {
+            let response = try await callGeminiAPIAsync(with: prompt)
+            
+            // Parse the response into sections
+            let sections = response.components(separatedBy: "\n\n")
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            return sections
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+    
+    /// Generates a hierarchical topic structure asynchronously
+    /// - Parameters:
+    ///   - topic: The central topic
+    ///   - existingTopics: Existing topics to consider
+    /// - Returns: The resulting topic hierarchy
+    func generateTopicHierarchy(topic: String, existingTopics: [String]) async throws -> TopicHierarchyResult {
+        isLoading = true
+        errorMessage = nil
+        
+        let prompt = createHierarchyGenerationPrompt(
+            centralTopic: topic,
+            topics: existingTopics.isEmpty ? [] : existingTopics
+        )
+        
+        do {
+            let response = try await callGeminiAPIAsync(with: prompt)
+            let result = try parseHierarchyResponse(response)
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+        return result
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    private func createIdeaGenerationPrompt(
+        centralTopic: String,
+        existingTopics: [String],
+        count: Int
+    ) -> String {
+        var prompt = """
+        Generate \(count) creative and relevant subtopics or ideas related to the central topic: "\(centralTopic)".
+        
+        For each idea:
+        1. Provide a concise, clear name (3-5 words maximum)
+        2. Include a brief explanation of why this subtopic is relevant or important (1-2 sentences)
+        
+        """
+        
+        if !existingTopics.isEmpty {
+            prompt += "\nExisting subtopics (avoid duplicating these):\n"
+            existingTopics.forEach { prompt += "- \($0)\n" }
+        }
+        
+        prompt += """
+        
+        Format your response as a JSON array with objects containing "name" and "reason" fields.
+        Example:
+        [
+          {
+            "name": "Subtopic Name",
+            "reason": "Brief explanation of relevance"
+          }
+        ]
+        """
+        
+        return prompt
+    }
+    
+    private func createOrganizeTopicsPrompt(
+        topics: [String],
+        groupCount: Int
+    ) -> String {
+        """
+        Organize the following \(topics.count) topics into \(groupCount) meaningful groups or categories:
+        
+        \(topics.map { "- \($0)" }.joined(separator: "\n"))
+        
+        For each group:
+        1. Create a descriptive name that captures the common theme (3-5 words maximum)
+        2. Include a brief explanation of the grouping rationale (1-2 sentences)
+        3. List which original topics belong in this group
+        
+        Format your response as a JSON array where each group is an object with "name", "reason", and "children" fields.
+        Example:
+        [
+          {
+            "name": "Group Name",
+            "reason": "Why these topics are related",
+            "children": ["Topic 1", "Topic 2"]
+          }
+        ]
+        
+        Ensure every original topic is assigned to exactly one group.
+        """
+    }
+    
+    private func createStructureAnalysisPrompt(
+        centralTopic: String,
+        topics: [String]
+    ) -> String {
+        """
+        Analyze the structure of this mind map with central topic: "\(centralTopic)"
+        
+        Current subtopics:
+        \(topics.map { "- \($0)" }.joined(separator: "\n"))
+        
+        Please provide:
+        1. A brief analysis of the current structure
+        2. Suggestions for improvement
+        3. Any missing important areas or topics
+        4. Tips for better organization
+        
+        Format your response in clear paragraphs. Be specific and practical in your advice.
+        """
+    }
+    
+    private func createHierarchyGenerationPrompt(
+        centralTopic: String,
+        topics: [String]
+    ) -> String {
+        """
+        Organize the following topics into a hierarchical structure for a mind map with central topic: "\(centralTopic)"
+        
+        Topics to organize:
+        \(topics.map { "- \($0)" }.joined(separator: "\n"))
+        
+        Create a meaningful hierarchy by:
+        1. Identifying main categories as first-level topics
+        2. Organizing remaining topics as subtopics under these categories
+        3. Providing a brief explanation of why each grouping makes sense
+        
+        Format your response as a JSON array of objects with "name", "reason", and "children" fields.
+        Children should contain nested objects with the same structure.
+        
+        Example:
+        [
+          {
+            "name": "Main Category 1",
+            "reason": "Why this is a main category",
+            "children": [
+              {
+                "name": "Subtopic 1",
+                "reason": "Why this belongs here",
+                "children": []
+              }
+            ]
+          }
+        ]
+        
+        Ensure all original topics are included somewhere in the hierarchy.
+        """
+    }
+    
+    private func callGeminiAPI(
+        with prompt: String,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
+            completion(.failure(APIError.missingAPIKey))
+            return
+        }
+        
+        guard isNetworkAvailable else {
+            completion(.failure(APIError.noInternetConnection))
+            return
+        }
+        
+        let model = GenerativeModel(
+            name: "gemini-1.5-pro-latest",
+            apiKey: currentApiKey,
+            generationConfig: GenerationConfig(
+                temperature: 0.7,
+                topP: 0.95,
+                topK: 40,
+                maxOutputTokens: 2048
+            )
+        )
+        
+        Task {
+            do {
+                let response = try await model.generateContent(prompt)
+                
+                if let text = response.text {
+                    completion(.success(text))
+                } else {
+                    completion(.failure(APIError.emptyResponse))
+                }
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    private func parseTopicsResponse(_ response: String) throws -> [TopicWithReason] {
+        // Try to extract JSON if it's wrapped in markdown code blocks
+        let jsonString: String
+        if response.contains("```json") && response.contains("```") {
+            let components = response.components(separatedBy: "```")
+            if components.count >= 3 {
+                // Find the component that starts with "json" and trim it
+                for component in components {
+                    if component.trimmingCharacters(in: .whitespacesAndNewlines).starts(with: "json") {
+                        jsonString = component.replacingOccurrences(of: "json", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                        return try parseJSONTopics(jsonString)
+                    }
+                }
+                // If we didn't find a component starting with "json", use the second component
+                jsonString = components[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                throw APIError.invalidResponseFormat
+            }
+        } else {
+            // Assume the entire response is JSON
+            jsonString = response
+        }
+        
+        return try parseJSONTopics(jsonString)
+    }
+    
+    private func parseJSONTopics(_ jsonString: String) throws -> [TopicWithReason] {
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            throw APIError.invalidResponseFormat
+        }
+        
+        let decoder = JSONDecoder()
+        
+        // Try to parse as array of TopicWithReason directly
+        do {
+            return try decoder.decode([TopicWithReason].self, from: jsonData)
+        } catch {
+            // If that fails, try to parse the JSON for debugging
+            if let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) {
+                print("Failed to parse JSON into TopicWithReason. Raw JSON: \(jsonObject)")
+            }
+            throw APIError.invalidResponseFormat
+        }
+    }
+    
+    private func parseHierarchyResponse(_ response: String) throws -> TopicHierarchyResult {
+        let topics = try parseTopicsResponse(response)
+        
+        // Filter out parent topics with generic names and clean children
+        var filteredTopics: [TopicWithReason] = []
+        
+        for var parentTopic in topics {
+            // Skip entire parent topic if it has a generic name
+            if isGenericTopicName(parentTopic.name) {
+                continue
+            }
+            
+            // Filter out children with generic names
+            parentTopic.children = parentTopic.children.filter { !isGenericTopicName($0.name) }
+            
+            // Add parent topic with filtered children
+            filteredTopics.append(parentTopic)
+        }
+        
+        // Use the proper initializer with default empty string for mainIdea
+        return TopicHierarchyResult(parentTopics: filteredTopics, mainIdea: "")
+    }
+    
+    // Helper function to detect generic topic names
+    private func isGenericTopicName(_ name: String) -> Bool {
+        // Check if the name matches "Main Topic" followed by a number
+        let nameLower = name.lowercased()
+        let pattern = "main topic"
+        
+        // If it's only 11 characters or fewer, it's too short to be "Main Topic X"
+        if nameLower.count <= 11 {
+            return false
+        }
+        
+        // Must start with "main topic"
+        if !nameLower.hasPrefix(pattern) {
+            return false
+        }
+        
+        // Extract the part after "main topic"
+        let index = name.index(name.startIndex, offsetBy: 10)
+        let remainder = name[index...].trimmingCharacters(in: .whitespaces)
+        
+        // Check if the remainder is a number
+        return Int(remainder) != nil
+    }
+    
+    /// Async wrapper for calling the Gemini API
+    private func callGeminiAPIAsync(with prompt: String) async throws -> String {
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
+            throw APIError.missingAPIKey
+        }
+        
+        guard isNetworkAvailable else {
+            throw APIError.noInternetConnection
+        }
+        
+        let model = GenerativeModel(
+            name: "gemini-1.5-pro-latest",
+            apiKey: currentApiKey,
+            generationConfig: GenerationConfig(
+                temperature: 0.7,
+                topP: 0.95,
+                topK: 40,
+                maxOutputTokens: 2048
+            )
+        )
+        
+        let response = try await model.generateContent(prompt)
+        
+        if let text = response.text {
+            return text
+        } else {
+            throw APIError.emptyResponse
+        }
+    }
+    
+    // Private property to store the system prompt
+    private var systemPrompt: String = "You are an AI assistant helping with mind mapping."
+}
+
+// MARK: - Supporting Types
+
+enum APIError: Error, LocalizedError {
+    case missingAPIKey
+    case noInternetConnection
+    case emptyResponse
+    case invalidResponseFormat
+    
+    var errorDescription: String? {
+        switch self {
+        case .missingAPIKey:
+            return "API key not found. Please set a valid GEMINI_API_KEY in the environment."
+        case .noInternetConnection:
+            return "No internet connection available. Please check your network settings and try again."
+        case .emptyResponse:
+            return "Empty response received from the API."
+        case .invalidResponseFormat:
+            return "The API response format was invalid or couldn't be processed."
+        }
     }
 }
 
-// MARK: - Topic Hierarchy Models
-
-/// Model for topic suggestions with reasoning
-struct TopicWithReason: Identifiable, Hashable {
-    let id = UUID()
-    var name: String
-    var reason: String
-    var children: [TopicWithReason] = []
-    var isSelected: Bool = false
-    
-    // Conformance to Hashable
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    static func == (lhs: TopicWithReason, rhs: TopicWithReason) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-/// Result structure for topic hierarchy generation
-struct TopicHierarchyResult {
-    var parentTopics: [TopicWithReason] = []
+enum APIStatus {
+    case unknown
+    case connected
+    case failed
+    case noInternet
+    case missingAPIKey
 } 

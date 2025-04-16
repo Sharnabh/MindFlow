@@ -8,13 +8,14 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var viewModel: CanvasViewModel
+    
     var body: some View {
-        InfiniteCanvas()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.windowBackgroundColor))
+        InfiniteCanvas(viewModel: viewModel)
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(DependencyContainer.shared.makeCanvasViewModel())
 }

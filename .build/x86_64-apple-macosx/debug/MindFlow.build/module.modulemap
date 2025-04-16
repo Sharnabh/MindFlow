@@ -1,0 +1,4 @@
+module MindFlow {
+    header "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/MindFlow.build/MindFlow-Swift.h"
+    requires objc
+}
