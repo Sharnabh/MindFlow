@@ -129,19 +129,40 @@ class LayoutService: LayoutServiceProtocol {
             return actualTopicHeight
         }
         
-        // Calculate total height needed for subtopics including spacing
-        var totalHeight: CGFloat = 0
-        for (index, subtopic) in topic.subtopics.enumerated() {
-            let subtreeHeight = calculateSubtreeHeight(for: subtopic)
-            totalHeight += subtreeHeight
+        // For Tree template, subtopics are arranged horizontally, not vertically
+        if topic.templateType == .tree {
+            // Find the tallest subtree in the tree layout
+            var maxSubtreeHeight: CGFloat = 0
+            var totalWidth: CGFloat = 0
             
-            // Add spacing after each subtopic except the last one
-            if index < topic.subtopics.count - 1 {
-                totalHeight += verticalSpacing
+            for subtopic in topic.subtopics {
+                let subtreeHeight = calculateSubtreeHeight(for: subtopic)
+                maxSubtreeHeight = max(maxSubtreeHeight, subtreeHeight)
+                totalWidth += getTopicSize(for: subtopic).width
             }
+            
+            // Add spacing between topics
+            if topic.subtopics.count > 1 {
+                totalWidth += verticalSpacing * CGFloat(topic.subtopics.count - 1)
+            }
+            
+            // Return the height of the parent + spacing + height of tallest child
+            return actualTopicHeight + horizontalSpacing + maxSubtreeHeight
+        } else {
+            // Default Mind Map behavior - calculate vertical stacking height
+            var totalHeight: CGFloat = 0
+            for (index, subtopic) in topic.subtopics.enumerated() {
+                let subtreeHeight = calculateSubtreeHeight(for: subtopic)
+                totalHeight += subtreeHeight
+                
+                // Add spacing after each subtopic except the last one
+                if index < topic.subtopics.count - 1 {
+                    totalHeight += verticalSpacing
+                }
+            }
+            
+            return max(actualTopicHeight, totalHeight)
         }
-        
-        return max(actualTopicHeight, totalHeight)
     }
     
     // MARK: - Branch Style Management
@@ -166,53 +187,146 @@ class LayoutService: LayoutServiceProtocol {
         let numSubtopics = topic.subtopics.count
         if numSubtopics == 0 { return }
         
-        // Calculate subtree heights for each subtopic
-        var subtreeHeights: [CGFloat] = []
-        var totalHeight: CGFloat = 0
+        // Get the template type to determine layout direction
+        let templateType = topic.templateType
         
-        for subtopic in topic.subtopics {
-            let height = calculateSubtreeHeight(for: subtopic)
-            subtreeHeights.append(height)
-            totalHeight += height
-        }
-        
-        // Add spacing between subtopics
-        totalHeight += verticalSpacing * CGFloat(numSubtopics - 1)
-        
-        // Calculate the starting Y position
-        let startY = topic.position.y + totalHeight / 2
-        var currentY = startY
-        
-        // Position each subtopic
-        for i in 0..<numSubtopics {
-            var subtopic = topic.subtopics[i]
-            let subtreeHeight = subtreeHeights[i]
+        if templateType == .tree {
+            // TREE TEMPLATE: Position subtopics in a horizontal row below the parent
             
-            // Position relative to the parent
-            currentY -= subtreeHeight / 2
-            subtopic.position = CGPoint(
-                x: topic.position.x + horizontalSpacing,
-                y: currentY
-            )
-            currentY -= subtreeHeight / 2
+            // First, calculate the total width needed for all subtopics at this level
+            var totalWidth: CGFloat = 0
+            var subtopicWidths: [CGFloat] = []
             
-            // Recursively layout this subtopic's subtopics
-            if !subtopic.subtopics.isEmpty {
-                layoutSubtopicTreeImproved(in: &subtopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+            // First pass: calculate subtopic's required width considering their own subtrees
+            for i in 0..<numSubtopics {
+                var subtopic = topic.subtopics[i]
+                
+                if subtopic.subtopics.isEmpty {
+                    // Simple case: just the topic's own width
+                    let topicWidth = getTopicSize(for: subtopic).width
+                    subtopicWidths.append(topicWidth)
+                    totalWidth += topicWidth
+                } else {
+                    // Complex case: need to calculate width required for subtree
+                    // Temporarily layout the subtree to calculate its width requirements
+                    layoutSubtopicTreeImproved(in: &subtopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                    
+                    // Calculate width needed for this subtopic's subtree
+                    let subtreeWidth = calculateSubtreeWidth(for: subtopic)
+                    subtopicWidths.append(max(getTopicSize(for: subtopic).width, subtreeWidth))
+                    totalWidth += max(getTopicSize(for: subtopic).width, subtreeWidth)
+                    
+                    // Save the updated subtopic (we'll position it again later)
+                    topic.subtopics[i] = subtopic
+                }
             }
             
-            // Save the updated subtopic
-            topic.subtopics[i] = subtopic
+            // Add spacing between subtopics
+            totalWidth += verticalSpacing * CGFloat(numSubtopics - 1)
             
-            // Add spacing for the next subtopic
-            if i < numSubtopics - 1 {
-                currentY -= verticalSpacing
+            // Calculate the starting X position (centered under parent)
+            let startX = topic.position.x - totalWidth / 2
+            var currentX = startX
+            
+            // Second pass: position each subtopic with enough space for its subtree
+            for i in 0..<numSubtopics {
+                var subtopic = topic.subtopics[i]
+                let allocatedWidth = subtopicWidths[i]
+                
+                // Position below the parent, centered within its allocated width
+                let subtopicCenterX = currentX + allocatedWidth / 2
+                subtopic.position = CGPoint(
+                    x: subtopicCenterX,
+                    y: topic.position.y + horizontalSpacing
+                )
+                
+                // Recursively layout this subtopic's subtopics again to ensure they're properly centered
+                if !subtopic.subtopics.isEmpty {
+                    layoutSubtopicTreeImproved(in: &subtopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                }
+                
+                // Save the updated subtopic
+                topic.subtopics[i] = subtopic
+                
+                // Move to the next position
+                currentX += allocatedWidth + verticalSpacing
+            }
+        } else {
+            // MIND MAP TEMPLATE (DEFAULT): Position subtopics in a vertical column to the right
+            
+            // Calculate subtree heights for each subtopic
+            var subtreeHeights: [CGFloat] = []
+            var totalHeight: CGFloat = 0
+            
+            for subtopic in topic.subtopics {
+                let height = calculateSubtreeHeight(for: subtopic)
+                subtreeHeights.append(height)
+                totalHeight += height
+            }
+            
+            // Add spacing between subtopics
+            totalHeight += verticalSpacing * CGFloat(numSubtopics - 1)
+            
+            // Calculate the starting Y position
+            let startY = topic.position.y + totalHeight / 2
+            var currentY = startY
+            
+            // Position each subtopic
+            for i in 0..<numSubtopics {
+                var subtopic = topic.subtopics[i]
+                let subtreeHeight = subtreeHeights[i]
+                
+                // Position relative to the parent
+                currentY -= subtreeHeight / 2
+                subtopic.position = CGPoint(
+                    x: topic.position.x + horizontalSpacing,
+                    y: currentY
+                )
+                currentY -= subtreeHeight / 2
+                
+                // Recursively layout this subtopic's subtopics
+                if !subtopic.subtopics.isEmpty {
+                    layoutSubtopicTreeImproved(in: &subtopic, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                }
+                
+                // Save the updated subtopic
+                topic.subtopics[i] = subtopic
+                
+                // Add spacing for the next subtopic
+                if i < numSubtopics - 1 {
+                    currentY -= verticalSpacing
+                }
             }
         }
     }
     
+    // Calculate the width required for a topic's subtree in tree template
+    private func calculateSubtreeWidth(for topic: Topic) -> CGFloat {
+        if topic.subtopics.isEmpty {
+            return getTopicSize(for: topic).width
+        }
+        
+        var totalWidth: CGFloat = 0
+        
+        // Sum the widths of all subtopics
+        for subtopic in topic.subtopics {
+            // For each subtopic, use its own width or its subtree width, whichever is larger
+            let subtopicWidth = getTopicSize(for: subtopic).width
+            let subtreeWidth = calculateSubtreeWidth(for: subtopic)
+            totalWidth += max(subtopicWidth, subtreeWidth)
+        }
+        
+        // Add spacing between subtopics
+        if topic.subtopics.count > 1 {
+            totalWidth += verticalSpacing * CGFloat(topic.subtopics.count - 1)
+        }
+        
+        return totalWidth
+    }
+    
     // Update the branch style for a topic and all its subtopics
     private func updateBranchStyleRecursively(in topic: inout Topic, to style: Topic.BranchStyle) {
+        // Update branch style but preserve template type
         topic.branchStyle = style
         
         for i in 0..<topic.subtopics.count {

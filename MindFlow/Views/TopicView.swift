@@ -510,48 +510,17 @@ func calculateTopicIntersection(from: Topic, to: Topic) -> (start: CGPoint, end:
     let fromCenter = from.position
     let toCenter = to.position
     
-    // Constants for automatic arrangement - we'll leave these in as comments for reference
-    // Horizontal space between parent and child
-    // Minimum vertical space between siblings
-    
-    // Function to find the best side intersection point
-    func findBestSideIntersection(box: CGRect, from: CGPoint, towards: CGPoint, isParentChild: Bool = false) -> CGPoint {
-        // For parent-child relationships, always use right side of parent and left side of child
-        if isParentChild {
-            if box == fromBox {
-                return CGPoint(x: box.maxX, y: box.midY) // Right side for parent
-            } else {
-                return CGPoint(x: box.minX, y: box.midY) // Left side for child
-            }
-        }
-        
-        // For other relationships (like manually created ones), use the original angle-based logic
-        let leftCenter = CGPoint(x: box.minX, y: box.midY)
-        let rightCenter = CGPoint(x: box.maxX, y: box.midY)
-        let topCenter = CGPoint(x: box.midX, y: box.minY)
-        let bottomCenter = CGPoint(x: box.midX, y: box.maxY)
-        
-        let angle = atan2(towards.y - from.y, towards.x - from.x)
-        let normalizedAngle = (angle + .pi * 2).truncatingRemainder(dividingBy: .pi * 2)
-        
-        if normalizedAngle >= .pi * 7/4 || normalizedAngle < .pi * 1/4 {
-            return rightCenter
-        } else if normalizedAngle >= .pi * 1/4 && normalizedAngle < .pi * 3/4 {
-            return bottomCenter
-        } else if normalizedAngle >= .pi * 3/4 && normalizedAngle < .pi * 5/4 {
-            return leftCenter
-        } else {
-            return topCenter
-        }
-    }
-    
     // Check if this is a parent-child relationship by looking at the subtopics
     let isParentChild = from.subtopics.contains(where: { $0.id == to.id })
     
-    let fromIntersect = findBestSideIntersection(box: fromBox, from: fromCenter, towards: toCenter, isParentChild: isParentChild)
-    let toIntersect = findBestSideIntersection(box: toBox, from: toCenter, towards: fromCenter, isParentChild: isParentChild)
-    
-    return (fromIntersect, toIntersect)
+    // Use the parent's template type to determine connection points
+    return from.templateType.calculateConnectionPoints(
+        fromBox: fromBox,
+        toBox: toBox,
+        fromCenter: fromCenter,
+        toCenter: toCenter,
+        isParentChild: isParentChild
+    )
 }
 
 // Helper function to calculate intersection with a point

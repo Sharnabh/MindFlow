@@ -108,6 +108,12 @@ struct Topic: Identifiable, Equatable {
     // Add a static property to Topic to store theme colors
     static var themeColors: (backgroundColor: Color?, borderColor: Color?, foregroundColor: Color?) = (nil, nil, nil)
     
+    // Additional metadata for the topic
+    var metadata: [String: Any]? = nil
+    
+    // Template type for this topic and its descendants
+    var templateType: TemplateType = .mindMap
+    
     init(
         id: UUID = UUID(),
         name: String,
@@ -133,7 +139,9 @@ struct Topic: Identifiable, Equatable {
         textStyles: Set<TextStyle> = [],
         textCase: TextCase = .none,
         textAlignment: TextAlignment = .center,
-        note: Note? = nil
+        note: Note? = nil,
+        metadata: [String: Any]? = nil,
+        templateType: TemplateType = .mindMap
     ) {
         self.id = id
         self.name = name
@@ -160,6 +168,8 @@ struct Topic: Identifiable, Equatable {
         self.textCase = textCase
         self.textAlignment = textAlignment
         self.note = note
+        self.metadata = metadata
+        self.templateType = templateType
     }
     
     // Implement Equatable
@@ -188,15 +198,20 @@ struct Topic: Identifiable, Equatable {
         lhs.textStyles == rhs.textStyles &&
         lhs.textCase == rhs.textCase &&
         lhs.textAlignment == rhs.textAlignment &&
-        lhs.note == rhs.note
+        lhs.note == rhs.note &&
+        // Compare metadata by checking if both are nil or both have the same count
+        ((lhs.metadata == nil && rhs.metadata == nil) || 
+         (lhs.metadata?.count == rhs.metadata?.count)) &&
+        lhs.templateType == rhs.templateType
     }
 }
 
 extension Topic {
-    static func createMainTopic(at position: CGPoint, count: Int) -> Topic {
+    static func createMainTopic(at position: CGPoint, count: Int, templateType: TemplateType = .mindMap) -> Topic {
         Topic(
             name: "Main Topic \(count)",
-            position: position
+            position: position,
+            templateType: templateType
         )
     }
     
@@ -217,7 +232,8 @@ extension Topic {
             borderWidth: self.borderWidth,
             branchStyle: self.branchStyle,
             foregroundColor: foregroundColor,
-            foregroundOpacity: self.foregroundOpacity
+            foregroundOpacity: self.foregroundOpacity,
+            templateType: self.templateType // Inherit template type from parent
         )
     }
     
@@ -259,7 +275,9 @@ extension Topic {
             textStyles: self.textStyles,
             textCase: self.textCase,
             textAlignment: self.textAlignment,
-            note: self.note
+            note: self.note,
+            metadata: self.metadata,
+            templateType: self.templateType
         )
         
         // Recursively copy subtopics

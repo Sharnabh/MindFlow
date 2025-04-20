@@ -51,6 +51,13 @@ struct MindFlowApp: App {
                     NotificationCenter.default.post(name: NSNotification.Name("OpenMindMap"), object: nil)
                 }
                 .keyboardShortcut("o")
+                
+                Divider()
+                
+                Button("Home") {
+                    NotificationCenter.default.post(name: NSNotification.Name("ShowStartupScreen"), object: nil)
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
             }
             
             CommandGroup(replacing: .saveItem) {
@@ -104,11 +111,8 @@ struct MindFlowApp: App {
     }
     
     private func handleNewMindMap() {
-        // Create a new empty mind map
-        MindFlowFileManager.shared.newFile()
-        
-        // Notify the canvas to clear the current topics and create a new mind map
-        NotificationCenter.default.post(name: NSNotification.Name("ClearCanvas"), object: nil)
+        // Show the template selection popup
+        NotificationCenter.default.post(name: NSNotification.Name("ShowTemplateSelection"), object: nil)
     }
 }
 
@@ -130,6 +134,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Handle files opened through Finder
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else { return }
+        
+        // Add to recent files
+        let newRecentFile = StartupScreenView.RecentFile(
+            name: url.lastPathComponent,
+            date: Date(),
+            url: url
+        )
+        UserDefaults.standard.addToRecentFiles(newRecentFile)
         
         // Load the file
         MindFlowFileManager.shared.loadFile(from: url) { loadedTopics, errorMessage in

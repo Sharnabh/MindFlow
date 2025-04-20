@@ -33,8 +33,12 @@ class FileService: FileServiceProtocol, ObservableObject {
     // MARK: - File Operations
     
     func saveCurrentFile(topics: [Topic], completion: @escaping (Bool, String?) -> Void) {
-        // If we have a current file, save to it
-        if let fileURL = currentFileURL {
+        // Check both our currentFileURL and the shared MindFlowFileManager's URL
+        if let fileURL = currentFileURL ?? MindFlowFileManager.shared.currentURL {
+            // Make sure both URL references are synced
+            currentFileURL = fileURL
+            MindFlowFileManager.shared.currentURL = fileURL
+            
             saveFile(topics: topics, to: fileURL, completion: completion)
         } else {
             // Otherwise, prompt for a location
@@ -57,9 +61,10 @@ class FileService: FileServiceProtocol, ObservableObject {
             if result == .OK, let url = savePanel.url {
                 self.saveFile(topics: topics, to: url) { success, error in
                     if success {
-                        // Update current file information
+                        // Update current file information in both places
                         DispatchQueue.main.async {
                             self.currentFileURL = url
+                            MindFlowFileManager.shared.currentURL = url
                             self.currentFileName = url.lastPathComponent
                             self.hasUnsavedChanges = false
                         }
@@ -87,9 +92,10 @@ class FileService: FileServiceProtocol, ObservableObject {
             if result == .OK, let url = openPanel.url {
                 self.loadFile(from: url) { topics, error in
                     if let topics = topics {
-                        // Update current file information
+                        // Update current file information in both places
                         DispatchQueue.main.async {
                             self.currentFileURL = url
+                            MindFlowFileManager.shared.currentURL = url
                             self.currentFileName = url.lastPathComponent
                             self.hasUnsavedChanges = false
                         }
@@ -155,8 +161,11 @@ class FileService: FileServiceProtocol, ObservableObject {
             // Write to file
             try data.write(to: url)
             
-            // Update state
+            // Update state and sync with MindFlowFileManager
             DispatchQueue.main.async {
+                self.currentFileURL = url
+                MindFlowFileManager.shared.currentURL = url
+                self.currentFileName = url.lastPathComponent
                 self.hasUnsavedChanges = false
             }
             
@@ -174,6 +183,14 @@ class FileService: FileServiceProtocol, ObservableObject {
             // Decode topics
             let decoder = JSONDecoder()
             let topics = try decoder.decode([Topic].self, from: data)
+            
+            // Sync URL with MindFlowFileManager
+            DispatchQueue.main.async {
+                self.currentFileURL = url
+                MindFlowFileManager.shared.currentURL = url
+                self.currentFileName = url.lastPathComponent
+                self.hasUnsavedChanges = false
+            }
             
             completion(topics, nil)
         } catch {

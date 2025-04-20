@@ -14,7 +14,7 @@ class CanvasViewModel: ObservableObject {
     private var isDragging: Bool = false
     
     // Service dependencies
-    private let topicService: TopicService
+    private(set) var topicService: TopicService  // Made accessible but not changeable
     private let layoutService: LayoutServiceProtocol
     private let historyService: HistoryServiceProtocol
     private var fileService: FileServiceProtocol
@@ -1170,23 +1170,12 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func calculatePositionForNewSubtopic(_ parentTopic: Topic, _ subtopicCount: Int) -> CGPoint {
-        // Constants for spacing
-        let horizontalSpacing: CGFloat = 200 // Space between parent and child
-        let verticalSpacing: CGFloat = 60 // Space between siblings
-        
-        // Calculate the total height needed for all subtopics
+        // Calculate position based on the parent's template type
         let totalSubtopics = subtopicCount + 1 // Including the new subtopic
-        let totalHeight = verticalSpacing * CGFloat(totalSubtopics - 1)
-        
-        // Calculate the starting Y position (top-most subtopic)
-        let startY = parentTopic.position.y + totalHeight/2
-        
-        // Calculate this subtopic's Y position
-        let y = startY - (CGFloat(subtopicCount) * verticalSpacing)
-        
-        // Position the subtopic to the right of the parent
-        let x = parentTopic.position.x + horizontalSpacing
-        
-        return CGPoint(x: x, y: y)
+        return parentTopic.templateType.calculateSubtopicPosition(
+            parentTopic: parentTopic,
+            subtopicIndex: subtopicCount,
+            totalSubtopics: totalSubtopics
+        )
     }
 }

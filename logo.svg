@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2B5876"/>
+      <stop offset="100%" stop-color="#4E4376"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="20"/>
+      <feOffset dx="0" dy="10" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge> 
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/> 
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="62" y="62" width="900" height="900" rx="200" ry="200" fill="url(#bg)"/>
+  
+  <!-- Main central node -->
+  <circle cx="512" cy="512" r="120" fill="#ffffff" filter="url(#shadow)"/>
+  
+  <!-- Connected nodes -->
+  <circle cx="300" cy="320" r="80" fill="#64B5F6" filter="url(#shadow)"/>
+  <circle cx="720" cy="350" r="90" fill="#81C784" filter="url(#shadow)"/>
+  <circle cx="310" cy="680" r="85" fill="#FFD54F" filter="url(#shadow)"/>
+  <circle cx="730" cy="670" r="75" fill="#E57373" filter="url(#shadow)"/>
+  
+  <!-- Connection lines -->
+  <line x1="512" y1="512" x2="300" y2="320" stroke="#ffffff" stroke-width="12" stroke-opacity="0.8"/>
+  <line x1="512" y1="512" x2="720" y2="350" stroke="#ffffff" stroke-width="12" stroke-opacity="0.8"/>
+  <line x1="512" y1="512" x2="310" y2="680" stroke="#ffffff" stroke-width="12" stroke-opacity="0.8"/>
+  <line x1="512" y1="512" x2="730" y2="670" stroke="#ffffff" stroke-width="12" stroke-opacity="0.8"/>
+  
+  <!-- Smaller nodes on connection lines -->
+  <circle cx="406" cy="416" r="25" fill="#B39DDB"/>
+  <circle cx="616" cy="431" r="25" fill="#4DB6AC"/>
+  <circle cx="411" cy="596" r="25" fill="#FFF176"/>
+  <circle cx="621" cy="591" r="25" fill="#F48FB1"/>
+  
+  <!-- Brain/"M" shape in the central node -->
+  <path d="M462,482 C462,462 472,452 492,452 C512,452 522,462 522,482 
+           L522,542 L542,512 L562,542 L562,482 
+           C562,462 572,452 592,452 C612,452 622,462 622,482 
+           L622,542 L562,572 L512,542 L462,572 L402,542 L402,482 
+           C402,462 412,452 432,452 C452,452 462,462 462,482 Z" 
+        fill="#4E4376" stroke="#ffffff" stroke-width="4"/>
+</svg> 

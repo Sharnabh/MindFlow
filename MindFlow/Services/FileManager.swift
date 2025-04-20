@@ -5,13 +5,17 @@ import UniformTypeIdentifiers
 class MindFlowFileManager {
     static let shared = MindFlowFileManager()
     
-    private var currentURL: URL?
+    private var _currentURL: URL?
+    var currentURL: URL? {
+        get { return _currentURL }
+        set { _currentURL = newValue }
+    }
     
     private init() {}
     
     func saveCurrentFile(topics: [Topic], completion: @escaping (Bool, String?) -> Void) {
         // If we have a current file URL, save to it
-        if let fileURL = currentURL {
+        if let fileURL = _currentURL {
             saveFile(topics: topics, to: fileURL, completion: completion)
         } else {
             // Otherwise, prompt for a save location
@@ -29,15 +33,23 @@ class MindFlowFileManager {
         
         savePanel.begin { result in
             if result == .OK, let url = savePanel.url {
-                self.currentURL = url
+                self._currentURL = url
                 self.saveFile(topics: topics, to: url, completion: completion)
+                
+                // Add to recent files
+                let newRecentFile = StartupScreenView.RecentFile(
+                    name: url.lastPathComponent,
+                    date: Date(),
+                    url: url
+                )
+                UserDefaults.standard.addToRecentFiles(newRecentFile)
             } else {
                 completion(false, "Save operation cancelled")
             }
         }
     }
     
-    private func saveFile(topics: [Topic], to url: URL, completion: @escaping (Bool, String?) -> Void) {
+    func saveFile(topics: [Topic], to url: URL, completion: @escaping (Bool, String?) -> Void) {
         do {
             // Create the file content with our custom format
             print("Attempting to encode \(topics.count) topics")
@@ -60,7 +72,7 @@ class MindFlowFileManager {
             try fileData.write(to: url)
             
             // Update the current URL
-            self.currentURL = url
+            self._currentURL = url
             
             // Call the completion handler
             completion(true, nil)
@@ -96,7 +108,7 @@ class MindFlowFileManager {
             let topics = try decodeTopics(from: fileData)
             
             // Update the current URL
-            self.currentURL = url
+            self._currentURL = url
             
             // Call the completion handler
             completion(topics, nil)
@@ -107,7 +119,7 @@ class MindFlowFileManager {
     
     func newFile() {
         // Clear the current URL so the next save will prompt for location
-        currentURL = nil
+        _currentURL = nil
     }
     
     // MARK: - Data Encoding/Decoding

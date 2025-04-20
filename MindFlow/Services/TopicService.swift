@@ -112,7 +112,15 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     func addMainTopic(at position: CGPoint) -> Topic {
         mainTopicCount += 1
         
-        var topic = Topic.createMainTopic(at: position, count: mainTopicCount)
+        // Determine the template type to use
+        // Use the template type of the first topic if available, otherwise default to mindMap
+        let templateType: TemplateType = topics.first?.templateType ?? .mindMap
+        
+        var topic = Topic.createMainTopic(
+            at: position, 
+            count: mainTopicCount, 
+            templateType: templateType
+        )
         
         // Apply theme colors if available
         if let fillColor = Topic.themeColors.backgroundColor,
