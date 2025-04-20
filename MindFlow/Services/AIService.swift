@@ -4,7 +4,7 @@ import Combine
 import Network
 
 /// Service for AI-related functionalities
-class AIService: ObservableObject {
+class AIService: ObservableObject, @unchecked Sendable {
     // Add shared singleton instance
     static let shared = AIService()
     
@@ -67,7 +67,7 @@ class AIService: ObservableObject {
         let testPrompt = "Respond with 'OK' if you can receive this message."
         
         do {
-            let result = try await callGeminiAPIAsync(with: testPrompt)
+            _ = try await callGeminiAPIAsync(with: testPrompt)
             self.apiStatus = .connected
             return .success("Connection successful!")
         } catch {

@@ -61,14 +61,18 @@ class CanvasViewModel: ObservableObject {
         // Subscribe to topic changes
         topicService.$topics
             .sink { [weak self] topics in
-                self?.topics = topics
+                DispatchQueue.main.async {
+                    self?.topics = topics
+                }
             }
             .store(in: &cancellables)
         
         // Subscribe to selection changes
         topicService.$selectedTopicId
             .sink { [weak self] selectedId in
-                self?.selectedTopicId = selectedId
+                DispatchQueue.main.async {
+                    self?.selectedTopicId = selectedId
+                }
             }
             .store(in: &cancellables)
             
@@ -76,7 +80,10 @@ class CanvasViewModel: ObservableObject {
         topicService.$topics
             .dropFirst() // Skip initial value
             .sink { [weak self] _ in
-                self?.fileService.hasUnsavedChanges = true
+                // Use DispatchQueue.main.async to avoid "Publishing changes from within view updates" error
+                DispatchQueue.main.async {
+                    self?.fileService.hasUnsavedChanges = true
+                }
             }
             .store(in: &cancellables)
     }
@@ -191,7 +198,7 @@ class CanvasViewModel: ObservableObject {
             topicCopy.isEditing = false
             
             // Remove subtopics as we'll add them separately
-            let subtopics = topicCopy.subtopics
+            _ = topicCopy.subtopics
             topicCopy.subtopics = []
             
             // Add the main topic
@@ -467,7 +474,7 @@ class CanvasViewModel: ObservableObject {
     }
     
     func updateTopicForegroundColor(_ topicId: UUID, color: Color) {
-        guard let topic = topicService.getTopic(withId: topicId) else { return }
+        guard topicService.getTopic(withId: topicId) != nil else { return }
         
         // Save state for undo
         historyService.saveState(topicService.topics)
@@ -903,7 +910,7 @@ class CanvasViewModel: ObservableObject {
             }
             
             // Add the topic to the canvas
-            var addedTopicId = newTopic.id
+            let addedTopicId = newTopic.id
             topicService.addTopic(newTopic)
             
             // Add children

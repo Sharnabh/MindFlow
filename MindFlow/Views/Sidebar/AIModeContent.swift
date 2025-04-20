@@ -280,7 +280,7 @@ struct AIModeContent: View {
             // Add Selected button - right aligned
             Button("Add Selected") {
                 // Find the correct message and extract its topics
-                if let messageIndex = messageIndex,
+                if let _ = messageIndex,
                    let suggestions = suggestions {
                     applyHierarchy(suggestions)
                     addChatMessage("Topics added to mind map", isUser: false)
@@ -321,7 +321,7 @@ struct AIModeContent: View {
             .background(Color(.textBackgroundColor))
             .cornerRadius(8)
             .focused($isTextFieldFocused)
-            .onChange(of: isTextFieldFocused) { isFocused in
+            .onChange(of: isTextFieldFocused) { _, isFocused in
                 // Update canvas text input state
                 viewModel.isTextInputActive = isFocused
             }
@@ -428,7 +428,7 @@ struct AIModeContent: View {
         let buttonText = isSubtopicSelected 
             ? "Add Under '\(selectedParentTopic!.name)'"
             : "New Topic"
-        let buttonColor = isSubtopicSelected ? Color.blue : Color(.darkGray)
+        _ = isSubtopicSelected ? Color.blue : Color(.darkGray)
         let iconName = isSubtopicSelected ? "arrow.down.to.line" : "plus"
             
         return Button(action: {

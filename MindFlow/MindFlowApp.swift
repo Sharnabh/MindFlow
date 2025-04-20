@@ -106,8 +106,8 @@ struct MindFlowApp: App {
     }
     
     private func handleOpenMindMap() {
-        // Post a notification that will be caught by the InfiniteCanvas to load a file
-        NotificationCenter.default.post(name: NSNotification.Name("LoadMindMap"), object: nil)
+        // Post a notification that will be caught by the ContentView to show file picker
+        NotificationCenter.default.post(name: NSNotification.Name("OpenMindMap"), object: nil)
     }
     
     private func handleNewMindMap() {

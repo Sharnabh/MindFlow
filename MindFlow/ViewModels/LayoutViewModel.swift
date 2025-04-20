@@ -52,7 +52,7 @@ class LayoutViewModel: ObservableObject {
     
     func handleDragMove(to position: CGPoint) {
         switch dragState {
-        case .dragging(let topicId):
+        case .dragging(_):
             guard let startPos = dragStartPosition,
                   let startTopicPos = dragStartTopicPosition,
                   let topic = dragStartTopic else { return }

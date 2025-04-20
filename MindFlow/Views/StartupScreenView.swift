@@ -412,7 +412,8 @@ func openFilePicker() {
     openPanel.canChooseFiles = true
     openPanel.canChooseDirectories = false
     openPanel.allowsMultipleSelection = false
-    openPanel.allowedFileTypes = ["mindflow"]
+//    openPanel.allowedFileTypes = ["mindflow"]
+    openPanel.allowedContentTypes = [UTType(filenameExtension: "mindflow")!]
     
     openPanel.begin { response in
         if response == .OK, let url = openPanel.url {

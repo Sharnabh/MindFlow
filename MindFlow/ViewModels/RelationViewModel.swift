@@ -11,7 +11,7 @@ class RelationViewModel: ObservableObject {
         guard let (sourceTopic, sourcePath) = findTopicAndPath(sourceId) else { return }
         
         // Find the target topic
-        guard let targetTopic = findTopic(id: targetId) else { return }
+        guard findTopic(id: targetId) != nil else { return }
         
         // Check if the relation already exists
         if sourceTopic.relations.contains(targetId) {

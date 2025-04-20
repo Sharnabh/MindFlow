@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 // Protocol defining file operations
 protocol FileServiceProtocol {
@@ -53,7 +54,7 @@ class FileService: FileServiceProtocol, ObservableObject {
         savePanel.showsTagField = false
         savePanel.nameFieldStringValue = currentFileName ?? "Untitled"
         savePanel.title = "Save Mind Map"
-        savePanel.allowedFileTypes = [fileExtension]
+        savePanel.allowedContentTypes = [UTType(filenameExtension: fileExtension)!]
         savePanel.message = "Choose a location to save your mind map"
         
         // Show save panel
@@ -84,14 +85,14 @@ class FileService: FileServiceProtocol, ObservableObject {
         openPanel.canChooseFiles = true
         openPanel.allowsMultipleSelection = false
         openPanel.title = "Open Mind Map"
-        openPanel.allowedFileTypes = [fileExtension]
+        openPanel.allowedContentTypes = [UTType(filenameExtension: fileExtension)!]
         openPanel.message = "Choose a mind map file to open"
         
         // Show open panel
         openPanel.beginSheetModal(for: NSApp.mainWindow!) { result in
             if result == .OK, let url = openPanel.url {
                 self.loadFile(from: url) { topics, error in
-                    if let topics = topics {
+                    if topics != nil {
                         // Update current file information in both places
                         DispatchQueue.main.async {
                             self.currentFileURL = url
@@ -117,7 +118,7 @@ class FileService: FileServiceProtocol, ObservableObject {
         savePanel.showsTagField = false
         savePanel.nameFieldStringValue = (currentFileName ?? "MindMap").replacingOccurrences(of: ".\(fileExtension)", with: "")
         savePanel.title = "Export Mind Map as PNG"
-        savePanel.allowedFileTypes = ["png"]
+        savePanel.allowedContentTypes = [UTType.png]
         savePanel.message = "Choose a location to export your mind map"
         
         // Show save panel
@@ -135,7 +136,7 @@ class FileService: FileServiceProtocol, ObservableObject {
         savePanel.showsTagField = false
         savePanel.nameFieldStringValue = (currentFileName ?? "MindMap").replacingOccurrences(of: ".\(fileExtension)", with: "")
         savePanel.title = "Export Mind Map as PDF"
-        savePanel.allowedFileTypes = ["pdf"]
+        savePanel.allowedContentTypes = [UTType.pdf]
         savePanel.message = "Choose a location to export your mind map"
         
         // Show save panel

@@ -46,6 +46,19 @@ struct InfiniteCanvas: View {
         self.viewModel = viewModel
     }
     
+    // Add this method to save topics to the active document
+    private func saveTopicsToActiveDocument() {
+        // Get all topics from the topic service
+        let allTopics = viewModel.topicService.getAllTopics()
+        
+        // Post notification to save topics to document
+        NotificationCenter.default.post(
+            name: NSNotification.Name("SaveTopicsToDocument"),
+            object: nil,
+            userInfo: ["topics": allTopics]
+        )
+    }
+    
     // Convert screen coordinates to canvas coordinates
     private func screenToCanvasPosition(_ screenPosition: CGPoint) -> CGPoint {
         let x = (screenPosition.x - offset.x) / scale
@@ -261,14 +274,20 @@ struct InfiniteCanvas: View {
                 )
                 
                 // Minimap overlay with conditional position
+                let visibleRectX = -offset.x / scale
+                let visibleRectY = -offset.y / scale
+                let visibleRectWidth = geometry.size.width / scale
+                let visibleRectHeight = geometry.size.height / scale
+                let visibleRect = CGRect(
+                    x: visibleRectX,
+                    y: visibleRectY,
+                    width: visibleRectWidth,
+                    height: visibleRectHeight
+                )
+                
                 MinimapView(
                     topics: viewModel.topics,
-                    visibleRect: CGRect(
-                        x: -offset.x / scale,
-                        y: -offset.y / scale,
-                        width: geometry.size.width / scale,
-                        height: geometry.size.height / scale
-                    ),
+                    visibleRect: visibleRect,
                     topicsBounds: topicsBounds,
                     size: CGSize(width: minimapSize, height: minimapSize),
                     onTapLocation: { minimapPoint in
@@ -321,34 +340,10 @@ struct InfiniteCanvas: View {
             }
             .gesture(
                 SimultaneousGesture(
-                    MagnificationGesture()
-                        .onChanged { value in
-                            // Add dampening factor to reduce zoom sensitivity
-                            let dampening: CGFloat = 0.5
-                            let zoomDelta = (value - 1) * dampening
-                            let newScale = scale * (1 + zoomDelta)
-                            scale = min(maxScale, max(minScale, newScale))
-                        },
+                    MagnificationGesture().onChanged(handleZoom),
                     DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let currentPosition = value.location
-                            
-                            if let lastPosition = lastDragPosition {
-                                let delta = CGPoint(
-                                    x: currentPosition.x - lastPosition.x,
-                                    y: currentPosition.y - lastPosition.y
-                                )
-                                offset = CGPoint(
-                                    x: offset.x + delta.x,
-                                    y: offset.y + delta.y
-                                )
-                            }
-                            
-                            lastDragPosition = currentPosition
-                        }
-                        .onEnded { _ in
-                            lastDragPosition = nil
-                        }
+                        .onChanged(handleDrag)
+                        .onEnded(handleDragEnd)
                 )
             )
             .onChange(of: viewModel.topics) { oldValue, newValue in
@@ -363,86 +358,186 @@ struct InfiniteCanvas: View {
                 touchBarDelegate?.updateTouchBar()
             }
             .onAppear {
-                KeyboardMonitor.shared.keyHandler = { event in
-                    if let window = NSApp.keyWindow {
-                        let mouseLocation = NSEvent.mouseLocation
-                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
-                        if let view = window.contentView {
-                            let viewPoint = view.convert(windowPoint, from: nil)
-                            cursorPosition = viewPoint
-                            let canvasPosition = screenToCanvasPosition(cursorPosition)
-                            viewModel.handleKeyPress(event, at: canvasPosition)
-                        }
-                    }
-                }
-                KeyboardMonitor.shared.startMonitoring()
-                
-                // Give focus to the canvas view immediately to prevent buttons from getting initial focus
-                DispatchQueue.main.async {
-                    if let window = NSApp.keyWindow {
-                        // Set the first responder to the window's content view, not any specific button
-                        window.makeFirstResponder(window.contentView)
-                    }
-                }
-                
-                // Initialize Touch Bar Delegate
-                touchBarDelegate = InfiniteCanvasTouchBarDelegate(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
-                
-                // Add observer for undo command (Cmd+Z)
-                NotificationCenter.default.addObserver(forName: .undoRequested, object: nil, queue: .main) { _ in
-                    viewModel.undo()
-                }
-                
-                // Add observer for redo command (Cmd+Shift+Z)
-                NotificationCenter.default.addObserver(forName: .redoRequested, object: nil, queue: .main) { _ in
-                    viewModel.redo()
-                }
-                
-                // Add observer for theme application
-                NotificationCenter.default.addObserver(forName: NSNotification.Name("ApplyThemeToCanvas"), object: nil, queue: .main) { notification in
-                    if let userInfo = notification.userInfo,
-                       let backgroundColor = userInfo["backgroundColor"] as? Color,
-                       let backgroundStyle = userInfo["backgroundStyle"] as? BackgroundStyle {
-                        self.backgroundColor = backgroundColor
-                        self.backgroundStyle = backgroundStyle
-                    }
-                }
-                
-                // Set up touch bar delegate
-                touchBarDelegate = InfiniteCanvasTouchBarDelegate(
-                    viewModel: viewModel,
-                    isRelationshipMode: $isRelationshipMode
-                )
-                
-                // Register for export notification
-                NotificationCenter.default.addObserver(forName: NSNotification.Name("ExportMindMap"), object: nil, queue: .main) { _ in
-                    self.handleExportRequest()
-                }
-                
-                NotificationCenter.default.addObserver(forName: NSNotification.Name("PrepareCanvasForExport"), object: nil, queue: .main) { _ in
-                    self.prepareCanvasForExport()
-                }
-                
-                // Add observer for returning focus to canvas after AI operations
-                NotificationCenter.default.addObserver(forName: .returnFocusToCanvas, object: nil, queue: .main) { _ in
-                    // Make the canvas the first responder to capture keyboard events
-                    if let window = NSApp.keyWindow {
-                        DispatchQueue.main.async {
-                            window.makeFirstResponder(window.contentView)
-                        }
-                    }
-                }
+                setupKeyboardMonitoring()
+                setupFocus()
+                setupTouchBar()
+                registerNotificationObservers()
             }
             .onDisappear {
-                KeyboardMonitor.shared.stopMonitoring()
-                
-                // Remove observers
-                NotificationCenter.default.removeObserver(self, name: .undoRequested, object: nil)
-                NotificationCenter.default.removeObserver(self, name: .redoRequested, object: nil)
-                NotificationCenter.default.removeObserver(self, name: .returnFocusToCanvas, object: nil)
+                cleanupResources()
             }
         }
         .ignoresSafeArea()
+    }
+    
+    // MARK: - Setup Methods
+    
+    private func setupKeyboardMonitoring() {
+        KeyboardMonitor.shared.keyHandler = { event in
+            if let window = NSApp.keyWindow {
+                let mouseLocation = NSEvent.mouseLocation
+                let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+                if let view = window.contentView {
+                    let viewPoint = view.convert(windowPoint, from: nil)
+                    cursorPosition = viewPoint
+                    let canvasPosition = screenToCanvasPosition(cursorPosition)
+                    viewModel.handleKeyPress(event, at: canvasPosition)
+                }
+            }
+        }
+        KeyboardMonitor.shared.startMonitoring()
+    }
+    
+    private func setupFocus() {
+        // Give focus to the canvas view immediately to prevent buttons from getting initial focus
+        DispatchQueue.main.async {
+            if let window = NSApp.keyWindow {
+                // Set the first responder to the window's content view, not any specific button
+                window.makeFirstResponder(window.contentView)
+            }
+        }
+    }
+    
+    private func setupTouchBar() {
+        // Initialize Touch Bar Delegate
+        touchBarDelegate = InfiniteCanvasTouchBarDelegate(
+            viewModel: viewModel,
+            isRelationshipMode: $isRelationshipMode
+        )
+    }
+    
+    private func registerNotificationObservers() {
+        // Add observer for undo/redo commands
+        NotificationCenter.default.addObserver(
+            forName: .undoRequested,
+            object: nil,
+            queue: .main
+        ) { _ in
+            viewModel.undo()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: .redoRequested,
+            object: nil,
+            queue: .main
+        ) { _ in
+            viewModel.redo()
+        }
+        
+        // Theme application observer
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ApplyThemeToCanvas"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let userInfo = notification.userInfo,
+               let backgroundColor = userInfo["backgroundColor"] as? Color,
+               let backgroundStyle = userInfo["backgroundStyle"] as? BackgroundStyle {
+                self.backgroundColor = backgroundColor
+                self.backgroundStyle = backgroundStyle
+            }
+        }
+        
+        // Export notifications
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ExportMindMap"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.handleExportRequest()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("PrepareCanvasForExport"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.prepareCanvasForExport()
+        }
+        
+        // Document operation observers
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("RequestTopicsForSave"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.saveTopicsToActiveDocument()
+            NotificationCenter.default.post(name: NSNotification.Name("SaveActiveDocument"), object: nil)
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("RequestTopicsForSaveAs"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.saveTopicsToActiveDocument()
+            NotificationCenter.default.post(name: NSNotification.Name("SaveAsActiveDocument"), object: nil)
+        }
+        
+        // Set up callback for topic changes to save to active document
+        viewModel.topicService.onTopicsChanged = {
+            self.saveTopicsToActiveDocument()
+        }
+        
+        // Focus return observer for AI operations
+        NotificationCenter.default.addObserver(
+            forName: .returnFocusToCanvas,
+            object: nil,
+            queue: .main
+        ) { _ in
+            if let window = NSApp.keyWindow {
+                DispatchQueue.main.async {
+                    window.makeFirstResponder(window.contentView)
+                }
+            }
+        }
+    }
+    
+    private func cleanupResources() {
+        KeyboardMonitor.shared.stopMonitoring()
+        
+        // Remove observers
+        NotificationCenter.default.removeObserver(self, name: .undoRequested, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .redoRequested, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .returnFocusToCanvas, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ApplyThemeToCanvas"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ExportMindMap"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("PrepareCanvasForExport"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RequestTopicsForSave"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RequestTopicsForSaveAs"), object: nil)
+    }
+    
+    // MARK: - Gesture Handlers
+    
+    // Handle zoom gesture
+    private func handleZoom(_ value: MagnificationGesture.Value) {
+        // Add dampening factor to reduce zoom sensitivity
+        let dampening: CGFloat = 0.5
+        let zoomDelta = (value - 1) * dampening
+        let newScale = scale * (1 + zoomDelta)
+        scale = min(maxScale, max(minScale, newScale))
+    }
+    
+    // Handle drag gesture
+    private func handleDrag(_ value: DragGesture.Value) {
+        let currentPosition = value.location
+        
+        if let lastPosition = lastDragPosition {
+            let deltaX = currentPosition.x - lastPosition.x
+            let deltaY = currentPosition.y - lastPosition.y
+            
+            offset = CGPoint(
+                x: offset.x + deltaX,
+                y: offset.y + deltaY
+            )
+        }
+        
+        lastDragPosition = currentPosition
+    }
+    
+    // Handle drag gesture end
+    private func handleDragEnd(_ value: DragGesture.Value) {
+        lastDragPosition = nil
     }
     
     // MARK: - Export Functionality

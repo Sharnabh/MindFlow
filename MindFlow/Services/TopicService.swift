@@ -64,6 +64,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     private var copiedTopic: Topic?
     private var mainTopicCount = 0
     
+    // Callback when topics are changed
+    var onTopicsChanged: (() -> Void)? = nil
+    
     // MARK: - Topic Retrieval
     
     func getTopic(withId id: UUID) -> Topic? {
@@ -107,6 +110,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     
     func addTopic(_ topic: Topic) {
         topics.append(topic)
+        onTopicsChanged?()
     }
     
     func addMainTopic(at position: CGPoint) -> Topic {
@@ -141,6 +145,8 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Select the new topic
         selectedTopicId = topic.id
         
+        onTopicsChanged?()
+        
         return topic
     }
     
@@ -152,7 +158,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Create the subtopic
         let count = parentTopic.subtopics.count + 1
-        var subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: count)
+        let subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: count)
         
         // Add to parent
         if let parentPath = findTopicPath(id: parentId) {
@@ -170,6 +176,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     func updateTopic(_ topic: Topic) {
         guard let path = findTopicPath(id: topic.id)?.path else { return }
         updateTopicAtPath(topic, path: path)
+        onTopicsChanged?()
     }
     
     func deleteTopic(withId id: UUID) {
@@ -190,6 +197,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
                 selectedTopicId = topics.isEmpty ? nil : topics[0].id
             }
             
+            onTopicsChanged?()
             return
         }
         
@@ -198,6 +206,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             var topic = topics[i]
             if removeSubtopicRecursively(id: id, from: &topic) {
                 topics[i] = topic
+                onTopicsChanged?()
                 return
             }
         }
@@ -208,6 +217,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         var topic = path.topic
         topic.position = position
         updateTopicAtPath(topic, path: path.path)
+        onTopicsChanged?()
     }
     
     // MARK: - Relations
@@ -307,7 +317,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     func hasParentChildCycle(parentId: UUID, childId: UUID) -> Bool {
-        guard let parentTopic = getTopic(withId: parentId) else { return false }
+        guard getTopic(withId: parentId) != nil else { return false }
         
         // Check if the potential child is an ancestor of the parent
         return isAncestor(potentialAncestorId: childId, ofTopicId: parentId)
@@ -336,7 +346,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             }
         } else {
             // It's a subtopic, remove from its current parent
-            removeSubtopicRecursively(id: childId, from: &topics[childPath.path.mainTopicIndex])
+            let _ = removeSubtopicRecursively(id: childId, from: &topics[childPath.path.mainTopicIndex])
         }
         
         // Update child's parent reference and position
@@ -363,7 +373,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         var childTopic = childPath.topic
         
         // Remove child from its current location
-        removeSubtopicRecursively(id: childId, from: &topics[childPath.path.mainTopicIndex])
+        let _ = removeSubtopicRecursively(id: childId, from: &topics[childPath.path.mainTopicIndex])
         
         // Reset parent reference
         childTopic.parentId = nil
@@ -449,6 +459,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     func updateAllTopics(_ newTopics: [Topic]) {
         // Replace all topics with the new array
         topics = newTopics
+        onTopicsChanged?()
     }
     
     // MARK: - Helper Methods
