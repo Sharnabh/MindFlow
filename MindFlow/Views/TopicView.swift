@@ -1,8 +1,89 @@
 import SwiftUI
 
+// MARK: - CGPoint Extensions
+extension CGPoint: @retroactive AdditiveArithmetic {}
+extension CGPoint: @retroactive VectorArithmetic {
+    public static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
+        return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
+    }
+    
+    public static func + (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
+        return CGPoint(x: lhs.x + rhs.x, y: lhs.y + rhs.y)
+    }
+    
+    public static func * (lhs: CGPoint, rhs: CGFloat) -> CGPoint {
+        return CGPoint(x: lhs.x * rhs, y: lhs.y * rhs)
+    }
+    
+    public mutating func scale(by rhs: Double) {
+        x *= CGFloat(rhs)
+        y *= CGFloat(rhs)
+    }
+    
+    public var magnitudeSquared: Double {
+        return Double(x*x + y*y)
+    }
+    
+    public static var zero: CGPoint {
+        return CGPoint(x: 0, y: 0)
+    }
+}
+
+// Add AnimatableData protocol conformance to CGPoint
+extension CGPoint {
+    public var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(x, y) }
+        set { (x, y) = (newValue.first, newValue.second) }
+    }
+}
+
+// MARK: - View Extensions
+extension View {
+    @ViewBuilder func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+    
+    @ViewBuilder func selectionGlow(isSelected: Bool, color: Color) -> some View {
+        self
+            .shadow(color: isSelected ? color.opacity(0.9) : .clear, radius: 4, x: 0, y: 0)
+            .overlay(
+                ZStack {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(color.opacity(0.6), lineWidth: 2)
+                            .scaleEffect(1.05)
+                            .blur(radius: 1.5)
+                            .opacity(1)
+                            .animation(
+                                Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                                value: isSelected
+                            )
+                    }
+                }
+            )
+            .shadow(color: isSelected ? color.opacity(0.6) : .clear, radius: 6, x: 0, y: 0)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+// MARK: - TopicView
 struct TopicView: View {
-    let topic: Topic
+    var topic: Topic
     let isSelected: Bool
+    
+    // State for editing
+    @State private var editingName: String = ""
+    @FocusState private var isFocused: Bool
+    @State private var animatedPosition: CGPoint
+    @State private var isDragging: Bool = false
+    @State private var isControlPressed: Bool = false
+    @GestureState private var dragOffset: CGSize = .zero
+    
+    // Callbacks
     let onSelect: () -> Void
     let onDragChanged: (CGPoint) -> Void
     let onDragEnded: () -> Void
@@ -10,40 +91,132 @@ struct TopicView: View {
     let onEditingChange: (Bool) -> Void
     let onRelationDragChanged: ((CGPoint) -> Void)?
     let onRelationDragEnded: (() -> Void)?
+    let isRelationshipMode: Bool
     
-    @GestureState private var dragOffset: CGSize = .zero
-    @State private var editingName: String = ""
-    @FocusState private var isFocused: Bool
-    @State private var isControlPressed: Bool = false
+    // Get access to the view model
+    @ObservedObject var viewModel: CanvasViewModel
+    
+    init(topic: Topic, 
+         isSelected: Bool, 
+         onSelect: @escaping () -> Void, 
+         onDragChanged: @escaping (CGPoint) -> Void, 
+         onDragEnded: @escaping () -> Void, 
+         onNameChange: @escaping (String) -> Void, 
+         onEditingChange: @escaping (Bool) -> Void, 
+         onRelationDragChanged: ((CGPoint) -> Void)? = nil, 
+         onRelationDragEnded: (() -> Void)? = nil,
+         isRelationshipMode: Bool = false,
+         viewModel: CanvasViewModel) {
+        
+        self.topic = topic
+        self.isSelected = isSelected
+        self.onSelect = onSelect
+        self.onDragChanged = onDragChanged
+        self.onDragEnded = onDragEnded
+        self.onNameChange = onNameChange
+        self.onEditingChange = onEditingChange
+        self.onRelationDragChanged = onRelationDragChanged
+        self.onRelationDragEnded = onRelationDragEnded
+        self.isRelationshipMode = isRelationshipMode
+        self.viewModel = viewModel
+        
+        // Initialize position state
+        self._animatedPosition = State(initialValue: topic.position)
+    }
+    
+    // Check if a link button should be shown
+    private var shouldShowLinkButton: Bool {
+        guard let selectedId = viewModel.selectedTopicId, 
+              selectedId != topic.id, 
+              let selectedTopic = viewModel.findTopic(id: selectedId) else {
+            return false
+        }
+        
+        // Show link button if selected topic is an orphan (no parent)
+        let isOrphan = viewModel.isOrphanTopic(selectedTopic)
+        let isNotAlreadyChild = !topic.subtopics.contains(where: { $0.id == selectedId })
+        let wouldNotCreateCycle = !viewModel.hasParentChildCycle(parentId: topic.id, childId: selectedId)
+        
+        return isOrphan && isNotAlreadyChild && wouldNotCreateCycle
+    }
     
     var body: some View {
-        TopicContent(
-            topic: topic,
-            isSelected: isSelected,
-            editingName: $editingName,
-            isFocused: _isFocused,
-            onNameChange: onNameChange,
-            onEditingChange: onEditingChange
-        )
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-        .offset(dragOffset)
-        .simultaneousGesture(
-            TapGesture()
-                .onEnded {
-                    if !topic.isEditing {
-                        onSelect()
+        ZStack {
+            TopicContent(
+                topic: topic,
+                isSelected: isSelected,
+                editingName: $editingName,
+                isFocused: _isFocused,
+                onNameChange: onNameChange,
+                onEditingChange: onEditingChange,
+                viewModel: viewModel
+            )
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .scaleEffect(isSelected ? 1.03 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            .offset(isControlPressed || isRelationshipMode ? .zero : dragOffset)
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded {
+                        if !topic.isEditing {
+                            onSelect()
+                            
+                            // Clear any active text fields when tapping on a topic
+                            if viewModel.isTextInputActive {
+                                viewModel.isTextInputActive = false
+                                // Return focus to the canvas
+                                NotificationCenter.default.post(name: .returnFocusToCanvas, object: nil)
+                            }
+                        }
                     }
+            )
+            .gesture(createDragGesture())
+            .overlay(alignment: .trailing) {
+                // Link button - show on right side edge of the topic
+                if shouldShowLinkButton {
+                    Button {
+                        // Add selected topic as child of this topic
+                        guard let selectedId = viewModel.selectedTopicId else { return }
+                        viewModel.addSelectedTopicAsChild(parentId: topic.id, childId: selectedId)
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 16))
+                            .foregroundColor(topic.foregroundColor.opacity(0.9))
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(topic.backgroundColor)
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(topic.foregroundColor.opacity(0.6), lineWidth: 1.5)
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 1.5, x: 1, y: 1)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .offset(x: 14)  // Half of the button width to make it straddle the edge
                 }
-        )
-        .gesture(createDragGesture())
-        .position(topic.position)
-        .onChange(of: topic.isEditing) { isEditing in
-            if isEditing {
+            }
+        }
+        .position(animatedPosition)
+        .onChange(of: topic.isEditing) { oldValue, newValue in
+            if newValue {
                 editingName = topic.name
                 isFocused = true
             }
         }
+        .onChange(of: topic.position) { oldValue, newPosition in
+            if isDragging {
+                animatedPosition = newPosition
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    animatedPosition = newPosition
+                }
+            }
+        }
         .onAppear {
+            animatedPosition = topic.position
+            
             NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
                 isControlPressed = event.modifierFlags.contains(.control)
                 return event
@@ -52,10 +225,10 @@ struct TopicView: View {
     }
     
     private func createDragGesture() -> some Gesture {
-        DragGesture(minimumDistance: 5)  // Add a small minimum distance to differentiate from taps
+        DragGesture(minimumDistance: 5)
             .updating($dragOffset) { value, state, _ in
                 if !topic.isEditing {
-                    if isControlPressed {
+                    if isControlPressed || isRelationshipMode {
                         if let onRelationDragChanged = onRelationDragChanged {
                             onRelationDragChanged(CGPoint(
                                 x: topic.position.x + value.translation.width,
@@ -64,514 +237,219 @@ struct TopicView: View {
                         }
                     } else {
                         state = value.translation
-                        onDragChanged(CGPoint(
+                        
+                        let newPosition = CGPoint(
                             x: topic.position.x + value.translation.width,
                             y: topic.position.y + value.translation.height
-                        ))
+                        )
+                        
+                        DispatchQueue.main.async {
+                            animatedPosition = newPosition
+                        }
+                        
+                        onDragChanged(newPosition)
+                    }
+                }
+            }
+            .onChanged { _ in
+                if !isDragging && !topic.isEditing && !isControlPressed && !isRelationshipMode {
+                    DispatchQueue.main.async {
+                        isDragging = true
                     }
                 }
             }
             .onEnded { value in
                 if !topic.isEditing {
-                    if isControlPressed {
+                    if isControlPressed || isRelationshipMode {
                         onRelationDragEnded?()
                     } else {
+                        let finalPosition = CGPoint(
+                            x: topic.position.x + value.translation.width,
+                            y: topic.position.y + value.translation.height
+                        )
+                        
+                        withAnimation(.spring(response: 0.2, dampingFraction: 1.0)) {
+                            animatedPosition = finalPosition
+                        }
+                        
                         onDragEnded()
+                        isDragging = false
                     }
                 }
             }
     }
 }
 
-private struct TopicContent: View {
-    var topic: Topic
-    let isSelected: Bool
-    @Binding var editingName: String
-    @FocusState var isFocused: Bool
-    let onNameChange: (String) -> Void
-    let onEditingChange: (Bool) -> Void
+// MARK: - TopicsCanvasView
+struct TopicsCanvasView: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    @Binding var isRelationshipMode: Bool
     
-    private func calculateSize() -> (width: CGFloat, height: CGFloat) {
-        let text = topic.isEditing ? editingName : topic.name
-        let width = max(120, CGFloat(text.count * 10))
-        let height: CGFloat = 40
-        return (width, height)
-    }
+    @State private var animatedTemporaryLineStart: CGPoint = .zero
+    @State private var animatedTemporaryLineEnd: CGPoint = .zero
     
     var body: some View {
-        Group {
-            if topic.isEditing {
-                createTextField()
-            } else {
-                createTextDisplay()
-            }
-        }
-    }
-    
-    private func createTextField() -> some View {
-        let size = calculateSize()
-        return TextField("", text: $editingName)
-            .textFieldStyle(.plain)
-            .foregroundColor(.black)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(minWidth: size.width, maxWidth: size.width)
-            .background(
-                createBackground()
-                    .frame(width: size.width + 32, height: size.height)
-            )
-            .overlay(
-                createBorder()
-                    .frame(width: size.width + 32, height: size.height)
-            )
-            .focused($isFocused)
-            .onChange(of: editingName) { newValue in
-                onNameChange(newValue)
-            }
-            .onSubmit {
-                onNameChange(editingName)
-                isFocused = false
-                onEditingChange(false)
-            }
-            .onExitCommand {
-                isFocused = false
-                onEditingChange(false)
-            }
-            .multilineTextAlignment(.center)
-            .onKeyPress(.tab) {
-                isFocused = true
-                return .handled
-            }
-            .submitLabel(.return)
-    }
-    
-    private func createTextDisplay() -> some View {
-        let size = calculateSize()
-        return Text(topic.name)
-            .foregroundColor(.black)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(width: size.width)
-            .background(
-                createBackground()
-                    .frame(width: size.width + 32, height: size.height)
-            )
-            .overlay(
-                createBorder()
-                    .frame(width: size.width + 32, height: size.height)
-            )
-    }
-    
-    private func createBackground() -> some View {
-        Group {
-            switch topic.shape {
-            case .rectangle:
-                Rectangle()
-                    .fill(Color.blue.opacity(0.1))
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.1))
-            case .circle:
-                Capsule()
-                    .fill(Color.blue.opacity(0.1))
-            case .roundedSquare:
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
-            case .line:
-                Rectangle()
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(height: 2)
-            case .diamond:
-                Diamond()
-                    .fill(Color.blue.opacity(0.1))
-            case .hexagon:
-                RegularPolygon(sides: 6)
-                    .fill(Color.blue.opacity(0.1))
-            case .octagon:
-                RegularPolygon(sides: 8)
-                    .fill(Color.blue.opacity(0.1))
-            case .parallelogram:
-                Parallelogram()
-                    .fill(Color.blue.opacity(0.1))
-            case .cloud:
-                Cloud()
-                    .fill(Color.blue.opacity(0.1))
-            case .heart:
-                Heart()
-                    .fill(Color.blue.opacity(0.1))
-            case .shield:
-                Shield()
-                    .fill(Color.blue.opacity(0.1))
-            case .star:
-                Star()
-                    .fill(Color.blue.opacity(0.1))
-            case .document:
-                Document()
-                    .fill(Color.blue.opacity(0.1))
-            case .doubleRectangle:
-                DoubleRectangle()
-                    .fill(Color.blue.opacity(0.1))
-            case .flag:
-                Flag()
-                    .fill(Color.blue.opacity(0.1))
-            case .leftArrow:
-                Arrow(pointing: .left)
-                    .fill(Color.blue.opacity(0.1))
-            case .rightArrow:
-                Arrow(pointing: .right)
-                    .fill(Color.blue.opacity(0.1))
-            }
-        }
-    }
-    
-    private func createBorder() -> some View {
-        Group {
-            switch topic.shape {
-            case .rectangle:
-                Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .circle:
-                Capsule()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .roundedSquare:
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .line:
-                Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-                    .frame(height: 2)
-            case .diamond:
-                Diamond()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .hexagon:
-                RegularPolygon(sides: 6)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .octagon:
-                RegularPolygon(sides: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .parallelogram:
-                Parallelogram()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .cloud:
-                Cloud()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .heart:
-                Heart()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .shield:
-                Shield()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .star:
-                Star()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .document:
-                Document()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .doubleRectangle:
-                DoubleRectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .flag:
-                Flag()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .leftArrow:
-                Arrow(pointing: .left)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .rightArrow:
-                Arrow(pointing: .right)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            }
-        }
-    }
-}
-
-// Custom shape views
-private struct Diamond: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct RegularPolygon: Shape {
-    let sides: Int
-    
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        var path = Path()
-        
-        for i in 0..<sides {
-            let angle = (2.0 * .pi * Double(i)) / Double(sides) - (.pi / 2)
-            let point = CGPoint(
-                x: center.x + radius * cos(angle),
-                y: center.y + radius * sin(angle)
+        ZStack {
+            // Background detection area - must be first in ZStack to be behind everything
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Clear focus only when tapping empty canvas area
+                    if viewModel.isTextInputActive {
+                        viewModel.isTextInputActive = false
+                        // Return focus to the canvas
+                        NotificationCenter.default.post(name: .returnFocusToCanvas, object: nil)
+                    }
+                    // Deselect any selected topic when clicking empty area
+                    viewModel.selectTopic(withId: nil)
+                }
+            
+            // Draw all connection lines first (background layer)
+            ConnectionLinesView(
+                viewModel: viewModel,
+                topics: viewModel.topics,
+                onDeleteRelation: viewModel.removeRelation,
+                onDeleteParentChild: { _, childId in
+                    viewModel.removeParentChildRelation(childId: childId)
+                },
+                selectedId: viewModel.selectedTopicId
             )
             
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Parallelogram: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let offset: CGFloat = rect.width * 0.2
-        path.move(to: CGPoint(x: rect.minX + offset, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - offset, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Cloud: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let centerY = height * 0.5
-        
-        path.move(to: CGPoint(x: width * 0.2, y: centerY))
-        path.addCurve(
-            to: CGPoint(x: width * 0.8, y: centerY),
-            control1: CGPoint(x: width * 0.2, y: height * 0.2),
-            control2: CGPoint(x: width * 0.8, y: height * 0.2)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.2, y: centerY),
-            control1: CGPoint(x: width * 0.8, y: height * 0.8),
-            control2: CGPoint(x: width * 0.2, y: height * 0.8)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Heart: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        
-        path.move(to: CGPoint(x: width * 0.5, y: height * 0.75))
-        path.addCurve(
-            to: CGPoint(x: width * 0.1, y: height * 0.35),
-            control1: CGPoint(x: width * 0.5, y: height * 0.7),
-            control2: CGPoint(x: width * 0.1, y: height * 0.5)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.5, y: height * 0.25),
-            control1: CGPoint(x: width * 0.1, y: height * 0.2),
-            control2: CGPoint(x: width * 0.5, y: height * 0.25)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.9, y: height * 0.35),
-            control1: CGPoint(x: width * 0.5, y: height * 0.25),
-            control2: CGPoint(x: width * 0.9, y: height * 0.2)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.5, y: height * 0.75),
-            control1: CGPoint(x: width * 0.9, y: height * 0.5),
-            control2: CGPoint(x: width * 0.5, y: height * 0.7)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Shield: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        
-        path.move(to: CGPoint(x: width * 0.5, y: height))
-        path.addCurve(
-            to: CGPoint(x: 0, y: height * 0.4),
-            control1: CGPoint(x: width * 0.2, y: height * 0.9),
-            control2: CGPoint(x: 0, y: height * 0.7)
-        )
-        path.addLine(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: width, y: 0))
-        path.addLine(to: CGPoint(x: width, y: height * 0.4))
-        path.addCurve(
-            to: CGPoint(x: width * 0.5, y: height),
-            control1: CGPoint(x: width, y: height * 0.7),
-            control2: CGPoint(x: width * 0.8, y: height * 0.9)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Star: Shape {
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        let innerRadius = radius * 0.4
-        let points = 5
-        var path = Path()
-        
-        for i in 0..<points * 2 {
-            let angle = (2.0 * .pi * Double(i)) / Double(points * 2) - (.pi / 2)
-            let r = i % 2 == 0 ? radius : innerRadius
-            let point = CGPoint(
-                x: center.x + r * cos(angle),
-                y: center.y + r * sin(angle)
+            // Draw all topics
+            TopicsView(
+                topics: viewModel.topics,
+                selectedId: viewModel.selectedTopicId,
+                onSelect: viewModel.selectTopic(withId:),
+                onDragChanged: viewModel.updateDraggedTopicPosition,
+                onDragEnded: viewModel.handleDragEnd,
+                onNameChange: viewModel.updateTopicName,
+                onEditingChange: viewModel.setTopicEditing,
+                onRelationDragChanged: viewModel.handleRelationDragChanged,
+                onRelationDragEnded: viewModel.handleRelationDragEnded,
+                isRelationshipMode: isRelationshipMode,
+                viewModel: viewModel
             )
             
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
+            // Draw temporary relation line if dragging
+            if let (fromId, toPosition) = viewModel.relationDragState,
+               let fromTopic = viewModel.findTopic(id: fromId) {
+                let points = calculateIntersection(from: fromTopic, toPosition: toPosition, topics: viewModel.topics)
+                let shouldUseCurvedStyle = fromTopic.branchStyle == .curved
+                
+                Group {
+                    if shouldUseCurvedStyle {
+                        AnimatedCurvePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
+                            .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                    } else {
+                        AnimatedLinePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
+                            .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                    }
+                }
+                .onChange(of: points.start) { oldValue, newStart in
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        animatedTemporaryLineStart = newStart
+                    }
+                }
+                .onChange(of: points.end) { oldValue, newEnd in
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        animatedTemporaryLineEnd = newEnd
+                    }
+                }
+                .onAppear {
+                    animatedTemporaryLineStart = points.start
+                    animatedTemporaryLineEnd = points.end
+                }
             }
         }
-        path.closeSubpath()
-        return path
     }
 }
 
-private struct Document: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let cornerRadius: CGFloat = 8
-        let foldSize: CGFloat = min(width, height) * 0.2
-        
-        path.move(to: CGPoint(x: 0, y: height))
-        path.addLine(to: CGPoint(x: 0, y: cornerRadius))
-        path.addArc(
-            center: CGPoint(x: cornerRadius, y: cornerRadius),
-            radius: cornerRadius,
-            startAngle: .degrees(180),
-            endAngle: .degrees(270),
-            clockwise: false
-        )
-        path.addLine(to: CGPoint(x: width - foldSize, y: 0))
-        path.addLine(to: CGPoint(x: width, y: foldSize))
-        path.addLine(to: CGPoint(x: width, y: height))
-        path.closeSubpath()
-        
-        // Add fold line
-        path.move(to: CGPoint(x: width - foldSize, y: 0))
-        path.addLine(to: CGPoint(x: width - foldSize, y: foldSize))
-        path.addLine(to: CGPoint(x: width, y: foldSize))
-        
-        return path
-    }
-}
-
-private struct DoubleRectangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let offset: CGFloat = 4
-        
-        // Back rectangle
-        path.addRect(CGRect(
-            x: offset,
-            y: offset,
-            width: rect.width - offset,
-            height: rect.height - offset
-        ))
-        
-        // Front rectangle
-        path.addRect(CGRect(
-            x: 0,
-            y: 0,
-            width: rect.width - offset,
-            height: rect.height - offset
-        ))
-        
-        return path
-    }
-}
-
-private struct Flag: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let poleWidth: CGFloat = width * 0.1
-        
-        // Pole
-        path.addRect(CGRect(
-            x: 0,
-            y: 0,
-            width: poleWidth,
-            height: height
-        ))
-        
-        // Flag part
-        path.move(to: CGPoint(x: poleWidth, y: height * 0.2))
-        path.addLine(to: CGPoint(x: width, y: height * 0.2))
-        path.addLine(to: CGPoint(x: width * 0.8, y: height * 0.5))
-        path.addLine(to: CGPoint(x: width, y: height * 0.8))
-        path.addLine(to: CGPoint(x: poleWidth, y: height * 0.8))
-        path.closeSubpath()
-        
-        return path
-    }
-}
-
-private struct Arrow: Shape {
-    enum Direction {
-        case left
-        case right
-    }
+// MARK: - TopicsView
+private struct TopicsView: View {
+    let topics: [Topic]
+    let selectedId: UUID?
+    let onSelect: (UUID?) -> Void
+    let onDragChanged: (UUID, CGPoint) -> Void
+    let onDragEnded: (UUID) -> Void
+    let onNameChange: (UUID, String) -> Void
+    let onEditingChange: (UUID, Bool) -> Void
+    let onRelationDragChanged: ((UUID, CGPoint) -> Void)?
+    let onRelationDragEnded: ((UUID) -> Void)?
+    let isRelationshipMode: Bool
+    @ObservedObject var viewModel: CanvasViewModel
     
-    let pointing: Direction
-    
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let arrowWidth = width * 0.3
-        
-        switch pointing {
-        case .left:
-            path.move(to: CGPoint(x: 0, y: height * 0.5))
-            path.addLine(to: CGPoint(x: arrowWidth, y: 0))
-            path.addLine(to: CGPoint(x: arrowWidth, y: height * 0.3))
-            path.addLine(to: CGPoint(x: width, y: height * 0.3))
-            path.addLine(to: CGPoint(x: width, y: height * 0.7))
-            path.addLine(to: CGPoint(x: arrowWidth, y: height * 0.7))
-            path.addLine(to: CGPoint(x: arrowWidth, y: height))
-            path.closeSubpath()
-        case .right:
-            path.move(to: CGPoint(x: width, y: height * 0.5))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: 0))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: height * 0.3))
-            path.addLine(to: CGPoint(x: 0, y: height * 0.3))
-            path.addLine(to: CGPoint(x: 0, y: height * 0.7))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: height * 0.7))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: height))
-            path.closeSubpath()
+    var body: some View {
+        ZStack {
+            ForEach(topics) { topic in
+                TopicView(
+                    topic: topic,
+                    isSelected: topic.id == selectedId,
+                    onSelect: { onSelect(topic.id) },
+                    onDragChanged: { newPosition in
+                        onDragChanged(topic.id, newPosition)
+                    },
+                    onDragEnded: {
+                        onDragEnded(topic.id)
+                    },
+                    onNameChange: { name in
+                        onNameChange(topic.id, name)
+                    },
+                    onEditingChange: { isEditing in
+                        onEditingChange(topic.id, isEditing)
+                    },
+                    onRelationDragChanged: onRelationDragChanged.map { handler in
+                        { position in
+                            handler(topic.id, position)
+                        }
+                    },
+                    onRelationDragEnded: onRelationDragEnded.map { handler in
+                        { handler(topic.id) }
+                    },
+                    isRelationshipMode: isRelationshipMode,
+                    viewModel: viewModel
+                )
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+                .zIndex(topic.id == selectedId ? 1 : 0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: topic.id == selectedId)
+                
+                if !topic.subtopics.isEmpty && !topic.isCollapsed {
+                    TopicsView(
+                        topics: topic.subtopics,
+                        selectedId: selectedId,
+                        onSelect: onSelect,
+                        onDragChanged: onDragChanged,
+                        onDragEnded: onDragEnded,
+                        onNameChange: onNameChange,
+                        onEditingChange: onEditingChange,
+                        onRelationDragChanged: onRelationDragChanged,
+                        onRelationDragEnded: onRelationDragEnded,
+                        isRelationshipMode: isRelationshipMode,
+                        viewModel: viewModel
+                    )
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: !topic.isCollapsed)
+                }
+            }
         }
-        
-        return path
     }
 }
 
 // Helper function to get a topic's bounding box
 func getTopicBox(topic: Topic) -> CGRect {
-    let width = max(120, CGFloat(topic.name.count * 10))
-    let height: CGFloat = 40 // Total height including vertical padding
+    // Calculate width based on the longest line
+    let lines = topic.name.components(separatedBy: "\n")
+    let maxLineLength = lines.map { $0.count }.max() ?? 0
+    
+    // Scale width based on font size - larger fonts need more width per character
+    let fontSizeScaleFactor = max(1.0, topic.fontSize / 14.0)
+    let width = max(120, CGFloat(maxLineLength * 10) * fontSizeScaleFactor) + 32 // Add padding for shape
+    
+    // Calculate height based on number of lines
+    let lineCount = lines.count
+    // Scale line height based on font size
+    let lineHeight = max(24, topic.fontSize * 1.5)
+    let height = max(40, CGFloat(lineCount) * lineHeight) + 16 // Add vertical padding
+    
     return CGRect(
         x: topic.position.x - width/2,
         y: topic.position.y - height/2,
@@ -589,27 +467,24 @@ func findTopicAt(position: CGPoint, in topics: [Topic], tolerance: CGFloat = 40)
             return nil
         }
         searched.insert(topic.id)
-        
+
         // Check if the position is within this topic's box
         let box = getTopicBox(topic: topic)
-        if box.contains(position) {
+        // Check within bounds (with tolerance)
+        if box.insetBy(dx: -tolerance, dy: -tolerance).contains(position) {
             return topic
         }
-        
+
         // Search through subtopics
         for subtopic in topic.subtopics {
             if let found = searchThroughTopics(subtopic, searched: &searched) {
                 return found
             }
         }
-        
-        // Search through relations
-        for relatedTopic in topic.relations {
-            if let found = searchThroughTopics(relatedTopic, searched: &searched) {
-                return found
-            }
-        }
-        
+
+        // Don't search through relations for hit-testing
+        // This prevents infinite loops and is not the intended behavior for finding a topic *at* a point.
+
         return nil
     }
     
@@ -635,53 +510,17 @@ func calculateTopicIntersection(from: Topic, to: Topic) -> (start: CGPoint, end:
     let fromCenter = from.position
     let toCenter = to.position
     
-    // Function to find intersection with a box
-    func findBoxIntersection(box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
-        let dx = towards.x - from.x
-        let dy = towards.y - from.y
-        
-        // Handle zero direction vector
-        if abs(dx) < 0.001 && abs(dy) < 0.001 {
-            return from
-        }
-        
-        // Calculate intersections with all edges
-        var intersections: [CGPoint] = []
-        
-        // Check left and right edges
-        for x in [box.minX, box.maxX] {
-            if abs(dx) > 0.001 {  // Avoid division by zero
-                let t = (x - from.x) / dx
-                let y = from.y + t * dy
-                if y >= box.minY && y <= box.maxY {
-                    intersections.append(CGPoint(x: x, y: y))
-                }
-            }
-        }
-        
-        // Check top and bottom edges
-        for y in [box.minY, box.maxY] {
-            if abs(dy) > 0.001 {  // Avoid division by zero
-                let t = (y - from.y) / dy
-                let x = from.x + t * dx
-                if x >= box.minX && x <= box.maxX {
-                    intersections.append(CGPoint(x: x, y: y))
-                }
-            }
-        }
-        
-        // Find the intersection point closest to the target point
-        return intersections.min(by: { p1, p2 in
-            let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
-            let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
-            return d1 < d2
-        }) ?? from
-    }
+    // Check if this is a parent-child relationship by looking at the subtopics
+    let isParentChild = from.subtopics.contains(where: { $0.id == to.id })
     
-    let fromIntersect = findBoxIntersection(box: fromBox, from: fromCenter, towards: toCenter)
-    let toIntersect = findBoxIntersection(box: toBox, from: toCenter, towards: fromCenter)
-    
-    return (fromIntersect, toIntersect)
+    // Use the parent's template type to determine connection points
+    return from.templateType.calculateConnectionPoints(
+        fromBox: fromBox,
+        toBox: toBox,
+        fromCenter: fromCenter,
+        toCenter: toCenter,
+        isParentChild: isParentChild
+    )
 }
 
 // Helper function to calculate intersection with a point
@@ -692,200 +531,37 @@ func calculateIntersection(from topic: Topic, toPosition: CGPoint, topics: [Topi
     let fromCenter = topic.position
     let toCenter = toPosition
     
-    // Function to find intersection with a box
-    func findBoxIntersection(box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
-        let dx = towards.x - from.x
-        let dy = towards.y - from.y
+    // Function to find the best side intersection point
+    func findBestSideIntersection(box: CGRect, from: CGPoint, towards: CGPoint) -> CGPoint {
+        // For dragging new connections, use the same angle-based logic
+        let leftCenter = CGPoint(x: box.minX, y: box.midY)
+        let rightCenter = CGPoint(x: box.maxX, y: box.midY)
+        let topCenter = CGPoint(x: box.midX, y: box.minY)
+        let bottomCenter = CGPoint(x: box.midX, y: box.maxY)
         
-        // Handle zero direction vector
-        if abs(dx) < 0.001 && abs(dy) < 0.001 {
-            return from
+        let angle = atan2(towards.y - from.y, towards.x - from.x)
+        let normalizedAngle = (angle + .pi * 2).truncatingRemainder(dividingBy: .pi * 2)
+        
+        if normalizedAngle >= .pi * 7/4 || normalizedAngle < .pi * 1/4 {
+            return rightCenter
+        } else if normalizedAngle >= .pi * 1/4 && normalizedAngle < .pi * 3/4 {
+            return bottomCenter
+        } else if normalizedAngle >= .pi * 3/4 && normalizedAngle < .pi * 5/4 {
+            return leftCenter
+        } else {
+            return topCenter
         }
-        
-        // Calculate intersections with all edges
-        var intersections: [CGPoint] = []
-        
-        // Check left and right edges
-        for x in [box.minX, box.maxX] {
-            if abs(dx) > 0.001 {  // Avoid division by zero
-                let t = (x - from.x) / dx
-                let y = from.y + t * dy
-                if y >= box.minY && y <= box.maxY {
-                    intersections.append(CGPoint(x: x, y: y))
-                }
-            }
-        }
-        
-        // Check top and bottom edges
-        for y in [box.minY, box.maxY] {
-            if abs(dy) > 0.001 {  // Avoid division by zero
-                let t = (y - from.y) / dy
-                let x = from.x + t * dx
-                if x >= box.minX && x <= box.maxX {
-                    intersections.append(CGPoint(x: x, y: y))
-                }
-            }
-        }
-        
-        // Find the intersection point closest to the target point
-        return intersections.min(by: { p1, p2 in
-            let d1 = pow(p1.x - towards.x, 2) + pow(p1.y - towards.y, 2)
-            let d2 = pow(p2.x - towards.x, 2) + pow(p2.y - towards.y, 2)
-            return d1 < d2
-        }) ?? from
     }
     
     // Find target topic at position
     if let targetTopic = findTopicAt(position: toPosition, in: topics) {
         let toBox = getTopicBox(topic: targetTopic)
-        let fromIntersect = findBoxIntersection(box: fromBox, from: fromCenter, towards: targetTopic.position)
-        let toIntersect = findBoxIntersection(box: toBox, from: targetTopic.position, towards: fromCenter)
+        let fromIntersect = findBestSideIntersection(box: fromBox, from: fromCenter, towards: targetTopic.position)
+        let toIntersect = findBestSideIntersection(box: toBox, from: targetTopic.position, towards: fromCenter)
         return (fromIntersect, toIntersect)
     }
     
     // If no target topic found, just connect to the cursor position
-    let fromIntersect = findBoxIntersection(box: fromBox, from: fromCenter, towards: toCenter)
+    let fromIntersect = findBestSideIntersection(box: fromBox, from: fromCenter, towards: toCenter)
     return (fromIntersect, toCenter)
 }
-
-struct TopicsCanvasView: View {
-    @ObservedObject var viewModel: CanvasViewModel
-    
-    var body: some View {
-        ZStack {
-            // Draw all connection lines first (background layer)
-            ConnectionLinesView(topics: viewModel.topics)
-            
-            // Draw all topics
-            TopicsView(
-                topics: viewModel.topics,
-                selectedId: viewModel.selectedTopicId,
-                onSelect: viewModel.selectTopic,
-                onDragChanged: viewModel.updateDraggedTopicPosition,
-                onDragEnded: viewModel.handleDragEnd,
-                onNameChange: viewModel.updateTopicName,
-                onEditingChange: viewModel.setTopicEditing,
-                onRelationDragChanged: viewModel.handleRelationDragChanged,
-                onRelationDragEnded: viewModel.handleRelationDragEnded
-            )
-            
-            // Draw temporary relation line if dragging
-            if let (fromId, toPosition) = viewModel.relationDragState,
-               let fromTopic = viewModel.findTopic(id: fromId) {
-                // Always show the line while dragging, but calculate endpoints based on target
-                let points = calculateIntersection(from: fromTopic, toPosition: toPosition, topics: viewModel.topics)
-                Path { path in
-                    path.move(to: points.start)
-                    path.addLine(to: points.end)
-                }
-                .stroke(Color.purple.opacity(0.5), lineWidth: 2)
-            }
-        }
-    }
-}
-
-// Helper view to recursively render connection lines
-private struct ConnectionLinesView: View {
-    let topics: [Topic]
-    
-    var body: some View {
-        // Draw all lines in a single layer
-        ForEach(topics) { topic in
-            Group {
-                // Draw lines to immediate subtopics
-                ForEach(topic.subtopics) { subtopic in
-                    ConnectionLine(from: topic, to: subtopic, color: .blue)
-                }
-                
-                // Draw relationship lines (only draw if we're the source topic)
-                ForEach(topic.relations) { relatedTopic in
-                    if topic.id < relatedTopic.id {  // Only draw once for each relationship
-                        ConnectionLine(from: topic, to: relatedTopic, color: .purple)
-                    }
-                }
-            }
-            
-            // Recursively draw lines for nested subtopics
-            if !topic.subtopics.isEmpty {
-                ConnectionLinesView(topics: topic.subtopics)
-            }
-        }
-    }
-}
-
-// Helper view for drawing a single connection line
-private struct ConnectionLine: View {
-    let from: Topic
-    let to: Topic
-    let color: Color
-    
-    var body: some View {
-        let points = calculateTopicIntersection(from: from, to: to)
-        Path { path in
-            path.move(to: points.start)
-            path.addLine(to: points.end)
-        }
-        .stroke(color.opacity(0.3), lineWidth: 1)
-    }
-}
-
-// Helper view to recursively render topics
-private struct TopicsView: View {
-    let topics: [Topic]
-    let selectedId: UUID?
-    let onSelect: (UUID?) -> Void
-    let onDragChanged: (UUID, CGPoint) -> Void
-    let onDragEnded: (UUID) -> Void
-    let onNameChange: (UUID, String) -> Void
-    let onEditingChange: (UUID, Bool) -> Void
-    let onRelationDragChanged: ((UUID, CGPoint) -> Void)?
-    let onRelationDragEnded: ((UUID) -> Void)?
-    
-    var body: some View {
-        ZStack {
-            // Draw all topics in order, ensuring proper z-index
-            ForEach(topics) { topic in
-                // Draw the topic
-                TopicView(
-                    topic: topic,
-                    isSelected: topic.id == selectedId,
-                    onSelect: { onSelect(topic.id) },
-                    onDragChanged: { newPosition in
-                        onDragChanged(topic.id, newPosition)
-                    },
-                    onDragEnded: {
-                        onDragEnded(topic.id)
-                    },
-                    onNameChange: { newName in
-                        onNameChange(topic.id, newName)
-                    },
-                    onEditingChange: { isEditing in
-                        onEditingChange(topic.id, isEditing)
-                    },
-                    onRelationDragChanged: onRelationDragChanged.map { handler in
-                        { newPosition in handler(topic.id, newPosition) }
-                    },
-                    onRelationDragEnded: onRelationDragEnded.map { handler in
-                        { handler(topic.id) }
-                    }
-                )
-                .zIndex(topic.id == selectedId ? 1 : 0)
-                
-                // Draw subtopics for this topic
-                if !topic.subtopics.isEmpty {
-                    TopicsView(
-                        topics: topic.subtopics,
-                        selectedId: selectedId,
-                        onSelect: onSelect,
-                        onDragChanged: onDragChanged,
-                        onDragEnded: onDragEnded,
-                        onNameChange: onNameChange,
-                        onEditingChange: onEditingChange,
-                        onRelationDragChanged: onRelationDragChanged,
-                        onRelationDragEnded: onRelationDragEnded
-                    )
-                }
-            }
-        }
-    }
-} 

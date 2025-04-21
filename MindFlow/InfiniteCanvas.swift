@@ -1,8 +1,13 @@
 import SwiftUI
 import AppKit
+import Combine
+import CoreGraphics
+
 
 struct InfiniteCanvas: View {
-    @StateObject private var viewModel = CanvasViewModel()
+    // Use injected view model instead of creating one
+    @ObservedObject var viewModel: CanvasViewModel
+    
     @State private var offset: CGPoint = .zero
     @State private var scale: CGFloat = 1.0
     @State private var lastDragPosition: CGPoint?
@@ -10,6 +15,22 @@ struct InfiniteCanvas: View {
     @State private var cursorPosition: CGPoint = .zero
     @State private var topicsBounds: CGRect = .zero // Track bounds of all topics
     @State private var isSidebarOpen: Bool = false // Track sidebar state
+    @State private var isShowingColorPicker: Bool = false // Track color picker state
+    @State private var isShowingBorderColorPicker: Bool = false // Track border color picker state
+    @State private var isShowingForegroundColorPicker: Bool = false // Track foreground color picker state
+    @State private var isShowingBackgroundColorPicker: Bool = false // Track background color picker state
+    @State private var backgroundStyle: BackgroundStyle = .grid // Track background style
+    @State private var backgroundColor: Color = Color(.windowBackgroundColor) // Track background color
+    @State private var backgroundOpacity: Double = 1.0 // Track background opacity
+    @State private var sidebarMode: SidebarMode = .style
+    @State private var isRelationshipMode: Bool = false // Track relationship mode
+    @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
+    
+    // Reference to the NSViewRepresentable for exporting
+    @State private var canvasViewRef: FocusableCanvasView?
+    
+    // Access theme service for background settings
+    @ObservedObject private var themeService = DependencyContainer.shared.themeService as! ThemeService
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -19,6 +40,24 @@ struct InfiniteCanvas: View {
     private let minimapPadding: CGFloat = 16 // Padding from the edges
     private let topBarHeight: CGFloat = 40 // Height of the top bar
     private let sidebarWidth: CGFloat = 300 // Width of the sidebar
+    
+    // Init with DI
+    init(viewModel: CanvasViewModel) {
+        self.viewModel = viewModel
+    }
+    
+    // Add this method to save topics to the active document
+    private func saveTopicsToActiveDocument() {
+        // Get all topics from the topic service
+        let allTopics = viewModel.topicService.getAllTopics()
+        
+        // Post notification to save topics to document
+        NotificationCenter.default.post(
+            name: NSNotification.Name("SaveTopicsToDocument"),
+            object: nil,
+            userInfo: ["topics": allTopics]
+        )
+    }
     
     // Convert screen coordinates to canvas coordinates
     private func screenToCanvasPosition(_ screenPosition: CGPoint) -> CGPoint {
@@ -90,17 +129,30 @@ struct InfiniteCanvas: View {
         )
     }
     
+    // Add these variables to the state variables at the top of InfiniteCanvas struct
+
+    @State private var currentTheme: ThemeSettings? = nil
+
+    // Define a ThemeSettings struct to hold theme information
+    struct ThemeSettings {
+        let name: String
+        let backgroundColor: Color
+        let backgroundStyle: BackgroundStyle
+        let topicFillColor: Color
+        let topicBorderColor: Color
+        let topicTextColor: Color
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                // Background layer with grid and topics
+                // Background layer with focusable container
                 ZStack {
-                    // Background layer
+                    // Draw background
                     Canvas { context, size in
-                        // Draw background
                         context.fill(
                             Path(CGRect(origin: .zero, size: size)),
-                            with: .color(Color(nsColor: .windowBackgroundColor))
+                            with: .color(backgroundColor.opacity(backgroundOpacity))
                         )
                         
                         // Calculate visible area in canvas coordinates
@@ -115,88 +167,127 @@ struct InfiniteCanvas: View {
                         let padding = max(size.width, size.height) / scale
                         let gridBounds = visibleArea.insetBy(dx: -padding, dy: -padding)
                         
-                        // Calculate grid line ranges
-                        let startX = floor(gridBounds.minX / gridSize) * gridSize
-                        let endX = ceil(gridBounds.maxX / gridSize) * gridSize
-                        let startY = floor(gridBounds.minY / gridSize) * gridSize
-                        let endY = ceil(gridBounds.maxY / gridSize) * gridSize
-                        
                         // Apply canvas transformations
                         context.translateBy(x: offset.x, y: offset.y)
                         context.scaleBy(x: scale, y: scale)
                         
-                        // Draw vertical grid lines
-                        for x in stride(from: startX, through: endX, by: gridSize) {
-                            context.stroke(
-                                Path { path in
-                                    path.move(to: CGPoint(x: x, y: startY))
-                                    path.addLine(to: CGPoint(x: x, y: endY))
-                                },
-                                with: .color(.gray.opacity(0.2)),
-                                lineWidth: 0.5 / scale
-                            )
-                        }
-                        
-                        // Draw horizontal grid lines
-                        for y in stride(from: startY, through: endY, by: gridSize) {
-                            context.stroke(
-                                Path { path in
-                                    path.move(to: CGPoint(x: startX, y: y))
-                                    path.addLine(to: CGPoint(x: endX, y: y))
-                                },
-                                with: .color(.gray.opacity(0.2)),
-                                lineWidth: 0.5 / scale
-                            )
+                        // Draw the selected background style
+                        switch backgroundStyle {
+                        case .none:
+                            // No grid or pattern
+                            break
+                            
+                        case .grid:
+                            // Calculate grid line ranges
+                            let startX = floor(gridBounds.minX / gridSize) * gridSize
+                            let endX = ceil(gridBounds.maxX / gridSize) * gridSize
+                            let startY = floor(gridBounds.minY / gridSize) * gridSize
+                            let endY = ceil(gridBounds.maxY / gridSize) * gridSize
+                            
+                            // Draw vertical grid lines
+                            for x in stride(from: startX, through: endX, by: gridSize) {
+                                context.stroke(
+                                    Path { path in
+                                        path.move(to: CGPoint(x: x, y: startY))
+                                        path.addLine(to: CGPoint(x: x, y: endY))
+                                    },
+                                    with: .color(.gray.opacity(0.2)),
+                                    lineWidth: 0.5 / scale
+                                )
+                            }
+                            
+                            // Draw horizontal grid lines
+                            for y in stride(from: startY, through: endY, by: gridSize) {
+                                context.stroke(
+                                    Path { path in
+                                        path.move(to: CGPoint(x: startX, y: y))
+                                        path.addLine(to: CGPoint(x: endX, y: y))
+                                    },
+                                    with: .color(.gray.opacity(0.2)),
+                                    lineWidth: 0.5 / scale
+                                )
+                            }
+                            
+                        case .dots:
+                            // Calculate dot positions
+                            let dotSize: CGFloat = 2.0 / scale
+                            let startX = floor(gridBounds.minX / gridSize) * gridSize
+                            let endX = ceil(gridBounds.maxX / gridSize) * gridSize
+                            let startY = floor(gridBounds.minY / gridSize) * gridSize
+                            let endY = ceil(gridBounds.maxY / gridSize) * gridSize
+                            
+                            // Draw dots at grid intersections
+                            for x in stride(from: startX, through: endX, by: gridSize) {
+                                for y in stride(from: startY, through: endY, by: gridSize) {
+                                    let dotRect = CGRect(
+                                        x: x - (dotSize / 2),
+                                        y: y - (dotSize / 2),
+                                        width: dotSize,
+                                        height: dotSize
+                                    )
+                                    context.fill(
+                                        Path(ellipseIn: dotRect),
+                                        with: .color(.gray.opacity(0.3))
+                                    )
+                                }
+                            }
                         }
                     }
+                    .background(
+                        // Add a custom NSView representable that can become first responder
+                        FocusableCanvasView(onViewCreated: { view in
+                            // Store reference to the canvas view for focus
+                            self.canvasViewRef = view
+                            
+                            // Set this view as first responder when created
+                            DispatchQueue.main.async {
+                                if let window = NSApp.keyWindow {
+                                    window.makeFirstResponder(view.nsView)
+                                }
+                            }
+                        })
+                    )
                     
                     // Topics layer
-                    TopicsCanvasView(viewModel: viewModel)
+                    TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
                         .scaleEffect(scale)
                         .offset(x: offset.x, y: offset.y)
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
-                
-                // Top bar
-                Rectangle()
-                    .fill(Color(.windowBackgroundColor))
-                    .frame(height: topBarHeight)
-                    .overlay(
-                        HStack(spacing: 0) {
-                            Text("MindFlow")
-                                .foregroundColor(.primary)
-                                .padding(.horizontal)
-                            Spacer()
-                            
-                            // Sidebar toggle button container
-                            Button(action: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    isSidebarOpen.toggle()
-                                }
-                            }) {
-                                Image(systemName: isSidebarOpen ? "sidebar.right" : "sidebar.right")
-                                    .foregroundColor(.primary)
-                                    .font(.system(size: 14, weight: .regular))
-                                    .frame(width: 28, height: topBarHeight)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color(.windowBackgroundColor))
-                            .focusable(false) // Prevent the button from receiving focus
+                .onContinuousHover { phase in
+                    if let window = NSApp.keyWindow {
+                        let mouseLocation = NSEvent.mouseLocation
+                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+                        if let view = window.contentView {
+                            let viewPoint = view.convert(windowPoint, from: nil)
+                            cursorPosition = viewPoint
                         }
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                    .zIndex(1) // Ensure top bar stays above other content
+                    }
+                }
+                
+                // Top bar - using the TopBarView component
+                TopBarView(
+                    viewModel: viewModel,
+                    isSidebarOpen: $isSidebarOpen,
+                    isRelationshipMode: $isRelationshipMode,
+                    topBarHeight: topBarHeight
+                )
                 
                 // Minimap overlay with conditional position
+                let visibleRectX = -offset.x / scale
+                let visibleRectY = -offset.y / scale
+                let visibleRectWidth = geometry.size.width / scale
+                let visibleRectHeight = geometry.size.height / scale
+                let visibleRect = CGRect(
+                    x: visibleRectX,
+                    y: visibleRectY,
+                    width: visibleRectWidth,
+                    height: visibleRectHeight
+                )
+                
                 MinimapView(
                     topics: viewModel.topics,
-                    visibleRect: CGRect(
-                        x: -offset.x / scale,
-                        y: -offset.y / scale,
-                        width: geometry.size.width / scale,
-                        height: geometry.size.height / scale
-                    ),
+                    visibleRect: visibleRect,
                     topicsBounds: topicsBounds,
                     size: CGSize(width: minimapSize, height: minimapSize),
                     onTapLocation: { minimapPoint in
@@ -205,12 +296,27 @@ struct InfiniteCanvas: View {
                     }
                 )
                 .frame(width: minimapSize, height: minimapSize)
-                .background(Color(.windowBackgroundColor).opacity(0.9))
+                .background(
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(backgroundColor.opacity(backgroundOpacity))
+                            .blur(radius: 1)
+                        
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(backgroundColor.opacity(backgroundOpacity * 0.8))
+                        
+                        // Subtle inner glow
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            .padding(1)
+                    }
+                )
                 .cornerRadius(8)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        .stroke(Color.gray.opacity(0.6), lineWidth: 2.5)
                 )
+                .shadow(color: Color.black.opacity(0.35), radius: 6, x: 0, y: 3)
                 .padding(minimapPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, topBarHeight + minimapPadding) // Add padding to position below top bar
@@ -218,832 +324,417 @@ struct InfiniteCanvas: View {
                 
                 // Sidebar
                 if isSidebarOpen {
-                    HStack(spacing: 0) {
-                        Spacer()
-                        VStack(spacing: 0) {
-                            // Sidebar content
-                            Rectangle()
-                                .fill(Color(.windowBackgroundColor))
-                                .frame(width: sidebarWidth)
-                                .overlay(
-                                    VStack(spacing: 16) {
-                                        // Sidebar header
-                                        Rectangle()
-                                            .fill(Color(.windowBackgroundColor))
-                                            .frame(height: topBarHeight)
-                                            .overlay(
-                                                Text("Properties")
-                                                    .foregroundColor(.primary)
-                                                    .font(.headline)
-                                                    .padding(.leading)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                            )
-                                        
-                                        Divider()
-                                        
-                                        // Shape selector
-                                        if let selectedTopic = viewModel.getSelectedTopic() {
-                                            ShapeSelector(
-                                                selectedShape: selectedTopic.shape,
-                                                onShapeSelected: { shape in
-                                                    viewModel.updateTopicShape(selectedTopic.id, shape: shape)
-                                                }
-                                            )
-                                            .padding(.horizontal)
-                                        } else {
-                                            Text("Select a topic to edit its properties")
-                                                .foregroundColor(.secondary)
-                                                .padding()
-                                        }
-                                        
-                                        Spacer()
-                                    }
-                                )
-                        }
-                    }
+                    SidebarView(
+                        viewModel: viewModel,
+                        isSidebarOpen: $isSidebarOpen,
+                        sidebarMode: $sidebarMode,
+                        backgroundStyle: $backgroundStyle,
+                        backgroundColor: $backgroundColor,
+                        backgroundOpacity: $backgroundOpacity,
+                        isShowingColorPicker: $isShowingColorPicker,
+                        isShowingBorderColorPicker: $isShowingBorderColorPicker,
+                        isShowingForegroundColorPicker: $isShowingForegroundColorPicker,
+                        isShowingBackgroundColorPicker: $isShowingBackgroundColorPicker
+                    )
                 }
             }
             .gesture(
                 SimultaneousGesture(
-                    MagnificationGesture()
-                        .onChanged { value in
-                            // Add dampening factor to reduce zoom sensitivity
-                            let dampening: CGFloat = 0.5
-                            let zoomDelta = (value - 1) * dampening
-                            let newScale = scale * (1 + zoomDelta)
-                            scale = min(maxScale, max(minScale, newScale))
-                        },
+                    MagnificationGesture().onChanged(handleZoom),
                     DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let currentPosition = value.location
-                            
-                            if let lastPosition = lastDragPosition {
-                                let delta = CGPoint(
-                                    x: currentPosition.x - lastPosition.x,
-                                    y: currentPosition.y - lastPosition.y
-                                )
-                                offset = CGPoint(
-                                    x: offset.x + delta.x,
-                                    y: offset.y + delta.y
-                                )
-                            }
-                            
-                            lastDragPosition = currentPosition
-                        }
-                        .onEnded { _ in
-                            lastDragPosition = nil
-                        }
+                        .onChanged(handleDrag)
+                        .onEnded(handleDragEnd)
                 )
             )
-            .onChange(of: viewModel.topics) { _ in
+            .onChange(of: viewModel.topics) { oldValue, newValue in
                 topicsBounds = calculateTopicsBounds()
             }
+            .onChange(of: viewModel.selectedTopicId) { oldValue, newValue in
+                // Update the touch bar when selection changes
+                touchBarDelegate?.updateTouchBar()
+            }
+            .onChange(of: isRelationshipMode) { oldValue, newValue in
+                // Update the touch bar when relationship mode changes
+                touchBarDelegate?.updateTouchBar()
+            }
             .onAppear {
-                KeyboardMonitor.shared.keyHandler = { event in
-                    if let window = NSApp.keyWindow {
-                        let mouseLocation = NSEvent.mouseLocation
-                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
-                        if let view = window.contentView {
-                            let viewPoint = view.convert(windowPoint, from: nil)
-                            cursorPosition = viewPoint
-                            let canvasPosition = screenToCanvasPosition(cursorPosition)
-                            viewModel.handleKeyPress(event, at: canvasPosition)
-                        }
-                    }
-                }
-                KeyboardMonitor.shared.startMonitoring()
+                setupKeyboardMonitoring()
+                setupFocus()
+                setupTouchBar()
+                registerNotificationObservers()
             }
             .onDisappear {
-                KeyboardMonitor.shared.stopMonitoring()
+                cleanupResources()
             }
         }
         .ignoresSafeArea()
     }
+    
+    // MARK: - Setup Methods
+    
+    private func setupKeyboardMonitoring() {
+        KeyboardMonitor.shared.keyHandler = { event in
+            if let window = NSApp.keyWindow {
+                let mouseLocation = NSEvent.mouseLocation
+                let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+                if let view = window.contentView {
+                    let viewPoint = view.convert(windowPoint, from: nil)
+                    cursorPosition = viewPoint
+                    let canvasPosition = screenToCanvasPosition(cursorPosition)
+                    viewModel.handleKeyPress(event, at: canvasPosition)
+                }
+            }
+        }
+        KeyboardMonitor.shared.startMonitoring()
+    }
+    
+    private func setupFocus() {
+        // Give focus to the canvas view immediately to prevent buttons from getting initial focus
+        DispatchQueue.main.async {
+            if let window = NSApp.keyWindow {
+                // Set the first responder to the window's content view, not any specific button
+                window.makeFirstResponder(window.contentView)
+            }
+        }
+    }
+    
+    private func setupTouchBar() {
+        // Initialize Touch Bar Delegate
+        touchBarDelegate = InfiniteCanvasTouchBarDelegate(
+            viewModel: viewModel,
+            isRelationshipMode: $isRelationshipMode
+        )
+    }
+    
+    private func registerNotificationObservers() {
+        // Add observer for undo/redo commands
+        NotificationCenter.default.addObserver(
+            forName: .undoRequested,
+            object: nil,
+            queue: .main
+        ) { _ in
+            viewModel.undo()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: .redoRequested,
+            object: nil,
+            queue: .main
+        ) { _ in
+            viewModel.redo()
+        }
+        
+        // Theme application observer
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ApplyThemeToCanvas"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let userInfo = notification.userInfo,
+               let backgroundColor = userInfo["backgroundColor"] as? Color,
+               let backgroundStyle = userInfo["backgroundStyle"] as? BackgroundStyle {
+                self.backgroundColor = backgroundColor
+                self.backgroundStyle = backgroundStyle
+            }
+        }
+        
+        // Export notifications
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ExportMindMap"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.handleExportRequest()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("PrepareCanvasForExport"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.prepareCanvasForExport()
+        }
+        
+        // Document operation observers
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("RequestTopicsForSave"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.saveTopicsToActiveDocument()
+            NotificationCenter.default.post(name: NSNotification.Name("SaveActiveDocument"), object: nil)
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("RequestTopicsForSaveAs"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.saveTopicsToActiveDocument()
+            NotificationCenter.default.post(name: NSNotification.Name("SaveAsActiveDocument"), object: nil)
+        }
+        
+        // Set up callback for topic changes to save to active document
+        viewModel.topicService.onTopicsChanged = {
+            self.saveTopicsToActiveDocument()
+        }
+        
+        // Focus return observer for AI operations
+        NotificationCenter.default.addObserver(
+            forName: .returnFocusToCanvas,
+            object: nil,
+            queue: .main
+        ) { _ in
+            if let window = NSApp.keyWindow {
+                DispatchQueue.main.async {
+                    window.makeFirstResponder(window.contentView)
+                }
+            }
+        }
+    }
+    
+    private func cleanupResources() {
+        KeyboardMonitor.shared.stopMonitoring()
+        
+        // Remove observers
+        NotificationCenter.default.removeObserver(self, name: .undoRequested, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .redoRequested, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .returnFocusToCanvas, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ApplyThemeToCanvas"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ExportMindMap"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("PrepareCanvasForExport"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RequestTopicsForSave"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("RequestTopicsForSaveAs"), object: nil)
+    }
+    
+    // MARK: - Gesture Handlers
+    
+    // Handle zoom gesture
+    private func handleZoom(_ value: MagnificationGesture.Value) {
+        // Add dampening factor to reduce zoom sensitivity
+        let dampening: CGFloat = 0.5
+        let zoomDelta = (value - 1) * dampening
+        let newScale = scale * (1 + zoomDelta)
+        scale = min(maxScale, max(minScale, newScale))
+    }
+    
+    // Handle drag gesture
+    private func handleDrag(_ value: DragGesture.Value) {
+        let currentPosition = value.location
+        
+        if let lastPosition = lastDragPosition {
+            let deltaX = currentPosition.x - lastPosition.x
+            let deltaY = currentPosition.y - lastPosition.y
+            
+            offset = CGPoint(
+                x: offset.x + deltaX,
+                y: offset.y + deltaY
+            )
+        }
+        
+        lastDragPosition = currentPosition
+    }
+    
+    // Handle drag gesture end
+    private func handleDragEnd(_ value: DragGesture.Value) {
+        lastDragPosition = nil
+    }
+    
+    // MARK: - Export Functionality
+    
+    private func handleExportRequest() {
+        // Notify that we want to export the mind map
+        NotificationCenter.default.post(name: NSNotification.Name("RequestTopicsForExport"), object: nil)
+    }
+    
+    private func prepareCanvasForExport() {
+        // Instead of directly using the NSView reference which doesn't capture the canvas content,
+        // we'll pass all the necessary data to render a complete representation of the mind map
+        guard let mainWindow = NSApp.mainWindow else {
+            showExportError(message: "Could not access the application window")
+            return
+        }
+        
+        // Pass all the necessary data to render a complete representation
+        ExportManager.shared.exportCanvas(
+            mainWindow: mainWindow,
+            canvasFrame: mainWindow.contentView?.frame ?? .zero,
+            topics: viewModel.topics,
+            scale: scale,
+            offset: offset,
+            backgroundColor: backgroundColor,
+            backgroundStyle: backgroundStyle,
+            selectedTopicId: viewModel.selectedTopicId
+        )
+    }
+    
+    private func showExportError(message: String) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Export Failed"
+            alert.informativeText = message
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
 }
 
-// Minimap view that shows a scaled-down version of all topics
-struct MinimapView: View {
-    let topics: [Topic]
-    let visibleRect: CGRect
-    let topicsBounds: CGRect
-    let size: CGSize
-    let onTapLocation: (CGPoint) -> Void
+// NSViewRepresentable to get access to the underlying NSView for export
+struct CanvasViewRepresentable: NSViewRepresentable {
+    var onViewCreated: (CanvasViewRepresentable) -> Void
+    var nsView: NSView?
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        
+        // Create a mutable copy with the view set
+        var mutableSelf = self
+        mutableSelf.nsView = view
+        
+        // Call back with the reference to this representable
+        DispatchQueue.main.async {
+            onViewCreated(mutableSelf)
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Nothing to update
+    }
+}
+
+// Focusable canvas view that can become first responder
+struct FocusableCanvasView: NSViewRepresentable {
+    var onViewCreated: (FocusableCanvasView) -> Void
+    var nsView: FocusableNSView?
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = FocusableNSView()
+        view.wantsLayer = true
+        
+        // Create a mutable copy with the view set
+        var mutableSelf = self
+        mutableSelf.nsView = view
+        
+        // Call back with the reference to this representable
+        DispatchQueue.main.async {
+            onViewCreated(mutableSelf)
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Nothing to update
+    }
+    
+    // Custom NSView subclass that can become first responder
+    class FocusableNSView: NSView {
+        override var acceptsFirstResponder: Bool {
+            return true
+        }
+        
+        override func keyDown(with event: NSEvent) {
+            // Just pass the event to the next responder
+            super.keyDown(with: event)
+        }
+    }
+}
+
+// Add this after ColorPickerView struct near line 2220
+// Theme button for the theme selector
+struct ThemeButton: View {
+    let name: String
+    let primaryColor: Color
+    let secondaryColor: Color
+    let accentColor: Color
+    var isDark: Bool = false
+    let onSelect: () -> Void
     
     var body: some View {
-        Canvas { context, size in
-            // Draw topics as dots
-            for topic in topics {
-                func drawTopic(_ topic: Topic, color: Color) {
-                    let position = scaleToMinimap(topic.position)
-                    let dotSize: CGFloat = 6
+        Button(action: onSelect) {
+            VStack {
+                ZStack {
+                    // Background
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(secondaryColor)
+                        .frame(height: 60)
                     
-                    context.fill(
-                        Path(ellipseIn: CGRect(
-                            x: position.x - dotSize/2,
-                            y: position.y - dotSize/2,
-                            width: dotSize,
-                            height: dotSize
-                        )),
-                        with: .color(color)
-                    )
-                    
-                    // Draw lines to subtopics
-                    for subtopic in topic.subtopics {
-                        let startPoint = position
-                        let endPoint = scaleToMinimap(subtopic.position)
-                        
-                        context.stroke(
-                            Path { path in
-                                path.move(to: startPoint)
-                                path.addLine(to: endPoint)
-                            },
-                            with: .color(.blue.opacity(0.3)),
-                            lineWidth: 1
+                    // Sample topic
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isDark ? Color(red: 0.18, green: 0.18, blue: 0.2) : .white)
+                        .frame(width: 50, height: 24)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(primaryColor, lineWidth: 2)
                         )
-                        
-                        // Recursively draw subtopics
-                        drawTopic(subtopic, color: .blue.opacity(0.6))
-                    }
+                        .shadow(color: accentColor.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
                 
-                // Draw main topic
-                drawTopic(topic, color: .blue)
+                Text(name)
+                    .font(.system(size: 12))
+                    .foregroundColor(isDark ? .white : .primary)
+                    .padding(.top, 4)
             }
-            
-            // Draw visible area rectangle
-            if !topicsBounds.isEmpty {
-                let visibleRectInMinimap = CGRect(
-                    x: (visibleRect.minX - topicsBounds.minX) * (size.width / topicsBounds.width),
-                    y: (visibleRect.minY - topicsBounds.minY) * (size.height / topicsBounds.height),
-                    width: visibleRect.width * (size.width / topicsBounds.width),
-                    height: visibleRect.height * (size.height / topicsBounds.height)
-                )
-                
-                context.stroke(
-                    Path(visibleRectInMinimap),
-                    with: .color(.blue.opacity(0.5)),
-                    lineWidth: 1
-                )
-            }
-        }
-        .simultaneousGesture(
-            TapGesture()
-                .onEnded { _ in
-                    // Handle tap at the current cursor position
-                    if let window = NSApp.keyWindow,
-                       let contentView = window.contentView {
-                        let mouseLocation = NSEvent.mouseLocation
-                        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
-                        let viewPoint = contentView.convert(windowPoint, from: nil)
-                        
-                        // Convert the point to be relative to the minimap
-                        if let minimapFrame = (contentView as? NSHostingView<MinimapView>)?.frame {
-                            let relativePoint = CGPoint(
-                                x: viewPoint.x - minimapFrame.minX,
-                                y: viewPoint.y - minimapFrame.minY
-                            )
-                            onTapLocation(relativePoint)
-                        }
-                    }
-                }
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    onTapLocation(value.location)
-                }
-        )
-        .contentShape(Rectangle()) // Make entire minimap tappable
-    }
-    
-    private func scaleToMinimap(_ point: CGPoint) -> CGPoint {
-        guard !topicsBounds.isEmpty else { return .zero }
-        
-        let scaleX = size.width / topicsBounds.width
-        let scaleY = size.height / topicsBounds.height
-        let scale = min(scaleX, scaleY)
-        
-        return CGPoint(
-            x: (point.x - topicsBounds.minX) * scale,
-            y: (point.y - topicsBounds.minY) * scale
-        )
-    }
-}
-
-// Custom shape views
-private struct Diamond: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct RegularPolygon: Shape {
-    let sides: Int
-    
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        var path = Path()
-        
-        for i in 0..<sides {
-            let angle = (2.0 * .pi * Double(i)) / Double(sides) - (.pi / 2)
-            let point = CGPoint(
-                x: center.x + radius * cos(angle),
-                y: center.y + radius * sin(angle)
-            )
-            
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Parallelogram: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let offset: CGFloat = rect.width * 0.2
-        path.move(to: CGPoint(x: rect.minX + offset, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - offset, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Cloud: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let centerY = height * 0.5
-        
-        path.move(to: CGPoint(x: width * 0.2, y: centerY))
-        path.addCurve(
-            to: CGPoint(x: width * 0.8, y: centerY),
-            control1: CGPoint(x: width * 0.2, y: height * 0.2),
-            control2: CGPoint(x: width * 0.8, y: height * 0.2)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.2, y: centerY),
-            control1: CGPoint(x: width * 0.8, y: height * 0.8),
-            control2: CGPoint(x: width * 0.2, y: height * 0.8)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Heart: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        
-        path.move(to: CGPoint(x: width * 0.5, y: height * 0.75))
-        path.addCurve(
-            to: CGPoint(x: width * 0.1, y: height * 0.35),
-            control1: CGPoint(x: width * 0.5, y: height * 0.7),
-            control2: CGPoint(x: width * 0.1, y: height * 0.5)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.5, y: height * 0.25),
-            control1: CGPoint(x: width * 0.1, y: height * 0.2),
-            control2: CGPoint(x: width * 0.5, y: height * 0.25)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.9, y: height * 0.35),
-            control1: CGPoint(x: width * 0.5, y: height * 0.25),
-            control2: CGPoint(x: width * 0.9, y: height * 0.2)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.5, y: height * 0.75),
-            control1: CGPoint(x: width * 0.9, y: height * 0.5),
-            control2: CGPoint(x: width * 0.5, y: height * 0.7)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Shield: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        
-        path.move(to: CGPoint(x: width * 0.5, y: height))
-        path.addCurve(
-            to: CGPoint(x: 0, y: height * 0.4),
-            control1: CGPoint(x: width * 0.2, y: height * 0.9),
-            control2: CGPoint(x: 0, y: height * 0.7)
-        )
-        path.addLine(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: width, y: 0))
-        path.addLine(to: CGPoint(x: width, y: height * 0.4))
-        path.addCurve(
-            to: CGPoint(x: width * 0.5, y: height),
-            control1: CGPoint(x: width, y: height * 0.7),
-            control2: CGPoint(x: width * 0.8, y: height * 0.9)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Star: Shape {
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        let innerRadius = radius * 0.4
-        let points = 5
-        var path = Path()
-        
-        for i in 0..<points * 2 {
-            let angle = (2.0 * .pi * Double(i)) / Double(points * 2) - (.pi / 2)
-            let r = i % 2 == 0 ? radius : innerRadius
-            let point = CGPoint(
-                x: center.x + r * cos(angle),
-                y: center.y + r * sin(angle)
-            )
-            
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct Document: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let cornerRadius: CGFloat = 8
-        let foldSize: CGFloat = min(width, height) * 0.2
-        
-        path.move(to: CGPoint(x: 0, y: height))
-        path.addLine(to: CGPoint(x: 0, y: cornerRadius))
-        path.addArc(
-            center: CGPoint(x: cornerRadius, y: cornerRadius),
-            radius: cornerRadius,
-            startAngle: .degrees(180),
-            endAngle: .degrees(270),
-            clockwise: false
-        )
-        path.addLine(to: CGPoint(x: width - foldSize, y: 0))
-        path.addLine(to: CGPoint(x: width, y: foldSize))
-        path.addLine(to: CGPoint(x: width, y: height))
-        path.closeSubpath()
-        
-        // Add fold line
-        path.move(to: CGPoint(x: width - foldSize, y: 0))
-        path.addLine(to: CGPoint(x: width - foldSize, y: foldSize))
-        path.addLine(to: CGPoint(x: width, y: foldSize))
-        
-        return path
-    }
-}
-
-private struct DoubleRectangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let offset: CGFloat = 4
-        
-        // Back rectangle
-        path.addRect(CGRect(
-            x: offset,
-            y: offset,
-            width: rect.width - offset,
-            height: rect.height - offset
-        ))
-        
-        // Front rectangle
-        path.addRect(CGRect(
-            x: 0,
-            y: 0,
-            width: rect.width - offset,
-            height: rect.height - offset
-        ))
-        
-        return path
-    }
-}
-
-private struct Flag: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let poleWidth: CGFloat = width * 0.1
-        
-        // Pole
-        path.addRect(CGRect(
-            x: 0,
-            y: 0,
-            width: poleWidth,
-            height: height
-        ))
-        
-        // Flag part
-        path.move(to: CGPoint(x: poleWidth, y: height * 0.2))
-        path.addLine(to: CGPoint(x: width, y: height * 0.2))
-        path.addLine(to: CGPoint(x: width * 0.8, y: height * 0.5))
-        path.addLine(to: CGPoint(x: width, y: height * 0.8))
-        path.addLine(to: CGPoint(x: poleWidth, y: height * 0.8))
-        path.closeSubpath()
-        
-        return path
-    }
-}
-
-private struct Arrow: Shape {
-    enum Direction {
-        case left
-        case right
-    }
-    
-    let pointing: Direction
-    
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let width = rect.width
-        let height = rect.height
-        let arrowWidth = width * 0.3
-        
-        switch pointing {
-        case .left:
-            path.move(to: CGPoint(x: 0, y: height * 0.5))
-            path.addLine(to: CGPoint(x: arrowWidth, y: 0))
-            path.addLine(to: CGPoint(x: arrowWidth, y: height * 0.3))
-            path.addLine(to: CGPoint(x: width, y: height * 0.3))
-            path.addLine(to: CGPoint(x: width, y: height * 0.7))
-            path.addLine(to: CGPoint(x: arrowWidth, y: height * 0.7))
-            path.addLine(to: CGPoint(x: arrowWidth, y: height))
-            path.closeSubpath()
-        case .right:
-            path.move(to: CGPoint(x: width, y: height * 0.5))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: 0))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: height * 0.3))
-            path.addLine(to: CGPoint(x: 0, y: height * 0.3))
-            path.addLine(to: CGPoint(x: 0, y: height * 0.7))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: height * 0.7))
-            path.addLine(to: CGPoint(x: width - arrowWidth, y: height))
-            path.closeSubpath()
-        }
-        
-        return path
-    }
-}
-
-// Shape selector view
-struct ShapeSelector: View {
-    let selectedShape: Topic.Shape
-    let onShapeSelected: (Topic.Shape) -> Void
-    @State private var isShowingPopover = false
-    
-    private let shapes: [(Topic.Shape, String)] = [
-        (.rectangle, "Rectangle"),
-        (.roundedRectangle, "Rounded Rectangle"),
-        (.circle, "Circle"),
-        (.roundedSquare, "Rounded Square"),
-        (.line, "Line"),
-        (.diamond, "Diamond"),
-        (.hexagon, "Hexagon"),
-        (.octagon, "Octagon"),
-        (.parallelogram, "Parallelogram"),
-        (.cloud, "Cloud"),
-        (.heart, "Heart"),
-        (.shield, "Shield"),
-        (.star, "Star"),
-        (.document, "Document"),
-        (.doubleRectangle, "Double Rectangle"),
-        (.flag, "Flag"),
-        (.leftArrow, "Left Arrow"),
-        (.rightArrow, "Right Arrow")
-    ]
-    
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Shape")
-                .font(.headline)
-                .foregroundColor(.primary)
-            
-            Button(action: {
-                isShowingPopover.toggle()
-            }) {
-                HStack {
-                    ShapePreview(shape: selectedShape)
-                        .frame(width: 24, height: 24)
-                    Text(shapes.first { $0.0 == selectedShape }?.1 ?? "")
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(Color(.controlBackgroundColor))
-                .cornerRadius(6)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
-                VStack {
-                    LazyVGrid(columns: columns, spacing: 8) {
-                        ForEach(shapes, id: \.0) { shape, name in
-                            Button(action: {
-                                onShapeSelected(shape)
-                                isShowingPopover = false
-                            }) {
-                                ShapePreview(shape: shape)
-                                    .frame(width: 32, height: 32)
-                                    .background(shape == selectedShape ? Color.blue.opacity(0.2) : Color.clear)
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .help(name)
-                        }
-                    }
-                    .padding(8)
-                }
-                .frame(width: 180)
-                .background(Color(.windowBackgroundColor))
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal)
-    }
-}
-
-// Shape preview for the menu
-struct ShapePreview: View {
-    let shape: Topic.Shape
-    
-    var body: some View {
-        Group {
-            switch shape {
-            case .rectangle:
-                Rectangle()
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 4)
-            case .circle:
-                Circle()
-            case .roundedSquare:
-                RoundedRectangle(cornerRadius: 6)
-            case .line:
-                Rectangle().frame(height: 2)
-            case .diamond:
-                Diamond()
-            case .hexagon:
-                RegularPolygon(sides: 6)
-            case .octagon:
-                RegularPolygon(sides: 8)
-            case .parallelogram:
-                Parallelogram()
-            case .cloud:
-                Cloud()
-            case .heart:
-                Heart()
-            case .shield:
-                Shield()
-            case .star:
-                Star()
-            case .document:
-                Document()
-            case .doubleRectangle:
-                DoubleRectangle()
-            case .flag:
-                Flag()
-            case .leftArrow:
-                Arrow(pointing: .left)
-            case .rightArrow:
-                Arrow(pointing: .right)
-            }
-        }
-        .foregroundColor(.blue.opacity(0.6))
-    }
-}
-
-private struct TopicContent: View {
-    var topic: Topic
-    let isSelected: Bool
-    @Binding var editingName: String
-    @FocusState var isFocused: Bool
-    let onNameChange: (String) -> Void
-    let onEditingChange: (Bool) -> Void
-    
-    private func calculateWidth() -> CGFloat {
-        let text = topic.isEditing ? editingName : topic.name
-        return max(120, CGFloat(text.count * 10))
-    }
-    
-    var body: some View {
-        Group {
-            if topic.isEditing {
-                createTextField()
-            } else {
-                createTextDisplay()
-            }
-        }
-    }
-    
-    private func createTextField() -> some View {
-        let width = calculateWidth()
-        return TextField("", text: $editingName)
-            .textFieldStyle(.plain)
-            .foregroundColor(.black)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(minWidth: width, maxWidth: width)
+            .padding(4)
             .background(
-                createBackground()
-                    .frame(width: width + 32, height: 40) // Add padding to shape
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
             )
-            .overlay(
-                createBorder()
-                    .frame(width: width + 32, height: 40) // Match shape size
-            )
-            .focused($isFocused)
-            .onChange(of: editingName) { newValue in
-                onNameChange(newValue)
-            }
-            .onSubmit {
-                onNameChange(editingName)
-                isFocused = false
-                onEditingChange(false)
-            }
-            .onExitCommand {
-                isFocused = false
-                onEditingChange(false)
-            }
-            .multilineTextAlignment(.center)
-            .onKeyPress(.tab) {
-                isFocused = true
-                return .handled
-            }
-            .submitLabel(.return)
-    }
-    
-    private func createTextDisplay() -> some View {
-        let width = calculateWidth()
-        return Text(topic.name)
-            .foregroundColor(.black)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(width: width)
-            .background(
-                createBackground()
-                    .frame(width: width + 32, height: 40) // Add padding to shape
-            )
-            .overlay(
-                createBorder()
-                    .frame(width: width + 32, height: 40) // Match shape size
-            )
-    }
-    
-    private func createBackground() -> some View {
-        Group {
-            switch topic.shape {
-            case .rectangle:
-                Rectangle()
-                    .fill(Color.blue.opacity(0.1))
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.1))
-            case .circle:
-                Capsule()
-                    .fill(Color.blue.opacity(0.1))
-            case .roundedSquare:
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
-            case .line:
-                Rectangle()
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(height: 2)
-            case .diamond:
-                Diamond()
-                    .fill(Color.blue.opacity(0.1))
-            case .hexagon:
-                RegularPolygon(sides: 6)
-                    .fill(Color.blue.opacity(0.1))
-            case .octagon:
-                RegularPolygon(sides: 8)
-                    .fill(Color.blue.opacity(0.1))
-            case .parallelogram:
-                Parallelogram()
-                    .fill(Color.blue.opacity(0.1))
-            case .cloud:
-                Cloud()
-                    .fill(Color.blue.opacity(0.1))
-            case .heart:
-                Heart()
-                    .fill(Color.blue.opacity(0.1))
-            case .shield:
-                Shield()
-                    .fill(Color.blue.opacity(0.1))
-            case .star:
-                Star()
-                    .fill(Color.blue.opacity(0.1))
-            case .document:
-                Document()
-                    .fill(Color.blue.opacity(0.1))
-            case .doubleRectangle:
-                DoubleRectangle()
-                    .fill(Color.blue.opacity(0.1))
-            case .flag:
-                Flag()
-                    .fill(Color.blue.opacity(0.1))
-            case .leftArrow:
-                Arrow(pointing: .left)
-                    .fill(Color.blue.opacity(0.1))
-            case .rightArrow:
-                Arrow(pointing: .right)
-                    .fill(Color.blue.opacity(0.1))
-            }
         }
+        .buttonStyle(PlainButtonStyle())
     }
-    
-    private func createBorder() -> some View {
-        Group {
-            switch topic.shape {
-            case .rectangle:
-                Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .roundedRectangle:
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .circle:
-                Capsule()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .roundedSquare:
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .line:
-                Rectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-                    .frame(height: 2)
-            case .diamond:
-                Diamond()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .hexagon:
-                RegularPolygon(sides: 6)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .octagon:
-                RegularPolygon(sides: 8)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .parallelogram:
-                Parallelogram()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .cloud:
-                Cloud()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .heart:
-                Heart()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .shield:
-                Shield()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .star:
-                Star()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .document:
-                Document()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .doubleRectangle:
-                DoubleRectangle()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .flag:
-                Flag()
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .leftArrow:
-                Arrow(pointing: .left)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            case .rightArrow:
-                Arrow(pointing: .right)
-                    .stroke(isSelected ? Color.blue : Color.blue.opacity(0.3), lineWidth: 2)
-            }
+}
+
+// Add this extension in the InfiniteCanvas struct - just before the body property
+// MARK: - Theme Management
+extension InfiniteCanvas {
+    func applyTheme(
+        backgroundColor: Color, 
+        backgroundStyle: BackgroundStyle, 
+        topicFillColor: Color, 
+        topicBorderColor: Color,
+        topicTextColor: Color,
+        themeName: String = ""
+    ) {
+        // Update canvas background
+        self.backgroundColor = backgroundColor
+        self.backgroundStyle = backgroundStyle
+        
+        // Store theme settings for new topics
+        self.currentTheme = ThemeSettings(
+            name: themeName,
+            backgroundColor: backgroundColor,
+            backgroundStyle: backgroundStyle,
+            topicFillColor: topicFillColor,
+            topicBorderColor: topicBorderColor,
+            topicTextColor: topicTextColor
+        )
+        
+        // Update all topics with the theme colors
+        for topicId in viewModel.getAllTopicIds() {
+            // Update fill color
+            viewModel.updateTopicBackgroundColor(topicId, color: topicFillColor)
+            
+            // Update border color
+            viewModel.updateTopicBorderColor(topicId, color: topicBorderColor)
+            
+            // Update text color
+            viewModel.updateTopicForegroundColor(topicId, color: topicTextColor)
         }
+        
+        // Update the theme in the ViewModel
+        viewModel.setCurrentTheme(
+            topicFillColor: topicFillColor,
+            topicBorderColor: topicBorderColor,
+            topicTextColor: topicTextColor
+        )
     }
 }
 
 #Preview {
-    InfiniteCanvas()
+    InfiniteCanvas(viewModel: DependencyContainer.shared.makeCanvasViewModel())
 } 

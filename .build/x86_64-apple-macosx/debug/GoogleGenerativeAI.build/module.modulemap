@@ -1,0 +1,4 @@
+module GoogleGenerativeAI {
+    header "/Users/user/Documents/MindFlow/.build/x86_64-apple-macosx/debug/GoogleGenerativeAI.build/GoogleGenerativeAI-Swift.h"
+    requires objc
+}

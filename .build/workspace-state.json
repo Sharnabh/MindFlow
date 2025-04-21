@@ -1,0 +1,30 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "generative-ai-swift",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/google/generative-ai-swift",
+          "name" : "generative-ai-swift"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "44b8ce120425f9cf53ca756f3434ca2c2696f8bd",
+            "version" : "0.5.6"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "generative-ai-swift"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

@@ -7,19 +7,46 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CE4786122DAD7F7400B1888D /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */; };
 		CED8ED182D83F85D00F37456 /* MindFlow.pages in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED172D83F85D00F37456 /* MindFlow.pages */; };
 		CED8ED1A2D83FA5600F37456 /* MindFlow.docx in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED192D83FA5600F37456 /* MindFlow.docx */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		CE4785FB2DAD6F3800B1888D /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		CED8ED052D83F83C00F37456 /* MindFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MindFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CED8ED172D83F85D00F37456 /* MindFlow.pages */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.pages; sourceTree = "<group>"; };
 		CED8ED192D83FA5600F37456 /* MindFlow.docx */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.docx; sourceTree = "<group>"; };
+		CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MindFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CED7A4992DB53E0400515CF9 /* Exceptions for "MindFlow" folder in "MindFlow" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CED8ED042D83F83C00F37456 /* MindFlow */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		CED8ED072D83F83C00F37456 /* MindFlow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CED7A4992DB53E0400515CF9 /* Exceptions for "MindFlow" folder in "MindFlow" target */,
+			);
 			path = MindFlow;
 			sourceTree = "<group>";
 		};
@@ -30,28 +57,29 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE4786122DAD7F7400B1888D /* GoogleGenerativeAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		CE4785F72DAD6F3700B1888D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		CED8ECFC2D83F83C00F37456 = {
 			isa = PBXGroup;
 			children = (
 				CED8ED072D83F83C00F37456 /* MindFlow */,
-				CED8ED062D83F83C00F37456 /* Products */,
 				CED8ED172D83F85D00F37456 /* MindFlow.pages */,
 				CED8ED192D83FA5600F37456 /* MindFlow.docx */,
+				CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */,
+				CE4785F72DAD6F3700B1888D /* Frameworks */,
 			);
-			sourceTree = "<group>";
-		};
-		CED8ED062D83F83C00F37456 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				CED8ED052D83F83C00F37456 /* MindFlow.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -64,6 +92,7 @@
 				CED8ED012D83F83C00F37456 /* Sources */,
 				CED8ED022D83F83C00F37456 /* Frameworks */,
 				CED8ED032D83F83C00F37456 /* Resources */,
+				CE4785FB2DAD6F3800B1888D /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -74,9 +103,10 @@
 			);
 			name = MindFlow;
 			packageProductDependencies = (
+				CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */,
 			);
 			productName = MindFlow;
-			productReference = CED8ED052D83F83C00F37456 /* MindFlow.app */;
+			productReference = CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -87,7 +117,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 1630;
 				TargetAttributes = {
 					CED8ED042D83F83C00F37456 = {
 						CreatedOnToolsVersion = 16.2;
@@ -103,8 +133,11 @@
 			);
 			mainGroup = CED8ECFC2D83F83C00F37456;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CE4786102DAD7F7400B1888D /* XCRemoteSwiftPackageReference "generative-ai-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = CED8ED062D83F83C00F37456 /* Products */;
+			productRefGroup = CED8ECFC2D83F83C00F37456;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -170,7 +203,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = SART644AN3;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -233,7 +268,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = SART644AN3;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -259,15 +296,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = MindFlow/MindFlow.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"MindFlow/Preview Content\"";
-				DEVELOPMENT_TEAM = SART644AN3;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MindFlow/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MindFlow;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -286,15 +328,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = MindFlow/MindFlow.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"MindFlow/Preview Content\"";
-				DEVELOPMENT_TEAM = SART644AN3;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MindFlow/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MindFlow;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -330,6 +377,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CE4786102DAD7F7400B1888D /* XCRemoteSwiftPackageReference "generative-ai-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/generative-ai-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE4786102DAD7F7400B1888D /* XCRemoteSwiftPackageReference "generative-ai-swift" */;
+			productName = GoogleGenerativeAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CED8ECFD2D83F83C00F37456 /* Project object */;
 }
