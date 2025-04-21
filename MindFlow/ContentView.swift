@@ -14,6 +14,9 @@ struct ContentView: View {
     @State private var showingTemplatePopup = false
     @ObservedObject private var documentManager = DocumentManager.shared
     
+    // Panel reference to prevent multiple panels
+    private static var currentOpenPanel: NSOpenPanel? = nil
+    
     var body: some View {
         VStack(spacing: 0) {
             // Only show tab bar when not on startup screen
@@ -102,12 +105,33 @@ struct ContentView: View {
                 showingTemplatePopup = true
         }
         
-        // Open mind map
+        // Open mind map - this is only for backward compatibility and should NOT be used for file opening
+        // It's kept here in case other parts of the app still use this notification
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("OpenMindMap"),
             object: nil,
-            queue: .main) { _ in
-                openFilePicker()
+            queue: .main) { notification in
+                // Only handle if no URL is provided (this should be rare/never happen)
+                if notification.object == nil {
+                    // We don't call openFilePicker here anymore
+                    // That's handled through the menu -> AppDelegate.showOpenPanel
+                }
+                else if let url = notification.object as? URL {
+                    // Direct URL handling (backward compatibility)
+                    showingStartupScreen = false
+                    documentManager.openDocument(from: url)
+                }
+        }
+        
+        // Load document from URL (this is the primary way files are opened)
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("LoadDocumentFromURL"),
+            object: nil,
+            queue: .main) { notification in
+                if let url = notification.object as? URL {
+                    showingStartupScreen = false
+                    documentManager.openDocument(from: url)
+                }
         }
         
         // Save topics from canvas to document
@@ -124,15 +148,23 @@ struct ContentView: View {
         }
     }
     
-    // Open file picker for selecting a mind map to open
+    // This method should only be called directly, not through notifications
+    // We're keeping it for completeness but it should not be used in the notification flow
     private func openFilePicker() {
+        // If a panel is already open, don't create another one
+        guard ContentView.currentOpenPanel == nil else { return }
+        
         let openPanel = NSOpenPanel()
+        ContentView.currentOpenPanel = openPanel
         openPanel.canChooseFiles = true
         openPanel.canChooseDirectories = false
         openPanel.allowsMultipleSelection = false
         openPanel.allowedContentTypes = [UTType.mindFlowType]
         
         openPanel.begin { response in
+            // Clear the reference when done
+            ContentView.currentOpenPanel = nil
+            
             if response == .OK, let url = openPanel.url {
                 showingStartupScreen = false
                 documentManager.openDocument(from: url)

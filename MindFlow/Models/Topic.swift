@@ -259,7 +259,7 @@ extension Topic {
             isSelected: self.isSelected,
             isEditing: self.isEditing,
             isCollapsed: self.isCollapsed,
-            relations: [], // Initialize with empty relations
+            relations: self.relations, // Preserve relations
             shape: self.shape,
             backgroundColor: self.backgroundColor,
             backgroundOpacity: self.backgroundOpacity,
@@ -282,8 +282,6 @@ extension Topic {
         
         // Recursively copy subtopics
         copy.subtopics = self.subtopics.map { $0.deepCopy() }
-        
-        // Skip copying relations entirely to prevent circular references during serialization
         
         return copy
     }

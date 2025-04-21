@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct MindFlowApp: App {
@@ -106,8 +107,9 @@ struct MindFlowApp: App {
     }
     
     private func handleOpenMindMap() {
-        // Post a notification that will be caught by the ContentView to show file picker
-        NotificationCenter.default.post(name: NSNotification.Name("OpenMindMap"), object: nil)
+        // Call the AppDelegate method directly to open the file picker
+        // This is the ONLY place that should trigger the file picker flow
+        appDelegate.showOpenPanel()
     }
     
     private func handleNewMindMap() {
@@ -117,6 +119,9 @@ struct MindFlowApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    // Add a static property to track if an open panel is already showing
+    private static var isShowingOpenPanel = false
+    
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Register file type association without using setValue:forKey:
         // The correct way to register file types is through Info.plist, which we've already done
@@ -160,6 +165,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.alertStyle = .warning
                 alert.addButton(withTitle: "OK")
                 alert.runModal()
+            }
+        }
+    }
+    
+    @objc func showOpenPanel() {
+        // Prevent multiple panels from being shown
+        guard !AppDelegate.isShowingOpenPanel else { return }
+        
+        AppDelegate.isShowingOpenPanel = true
+        
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.allowedContentTypes = [UTType.mindFlowType]
+        
+        openPanel.begin { response in
+            // Mark that we're no longer showing the panel
+            AppDelegate.isShowingOpenPanel = false
+            
+            if response == .OK, let url = openPanel.url {
+                // Use a different notification name to avoid a loop
+                NotificationCenter.default.post(name: Notification.Name("LoadDocumentFromURL"), object: url)
             }
         }
     }

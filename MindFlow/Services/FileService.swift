@@ -152,15 +152,29 @@ class FileService: FileServiceProtocol, ObservableObject {
     private func saveFile(topics: [Topic], to url: URL, completion: @escaping (Bool, String?) -> Void) {
         do {
             // Create a serializable copy of the topics
+            // Important: We need to preserve the topic structure including relations
             let serializableTopics = topics.map { $0.deepCopy() }
             
-            // Encode topics
+            // Debug info
+            print("Saving \(serializableTopics.count) topics to \(url.lastPathComponent)")
+            
+            // Get all valid topic IDs to validate relations
+            let allTopicIds = Set(serializableTopics.map { $0.id })
+            
+            // Validate relations to avoid invalid references
+            for i in 0..<serializableTopics.count {
+                var topic = serializableTopics[i]
+                // Filter out any relations to topics that don't exist
+                topic.relations = topic.relations.filter { allTopicIds.contains($0) }
+            }
+            
+            // Encode topics with configurable output format
             let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(serializableTopics)
             
-            // Write to file
-            try data.write(to: url)
+            // Write to file with atomic option for safety
+            try data.write(to: url, options: .atomic)
             
             // Update state and sync with MindFlowFileManager
             DispatchQueue.main.async {
@@ -172,6 +186,7 @@ class FileService: FileServiceProtocol, ObservableObject {
             
             completion(true, nil)
         } catch {
+            print("Error saving file: \(error)")
             completion(false, "Failed to save file: \(error.localizedDescription)")
         }
     }
@@ -181,9 +196,15 @@ class FileService: FileServiceProtocol, ObservableObject {
             // Read file data
             let data = try Data(contentsOf: url)
             
+            // Debug info
+            print("Loading file from \(url.lastPathComponent)")
+            
             // Decode topics
             let decoder = JSONDecoder()
             let topics = try decoder.decode([Topic].self, from: data)
+            
+            // Debug info
+            print("Loaded \(topics.count) topics from file")
             
             // Sync URL with MindFlowFileManager
             DispatchQueue.main.async {
@@ -195,6 +216,7 @@ class FileService: FileServiceProtocol, ObservableObject {
             
             completion(topics, nil)
         } catch {
+            print("Error loading file: \(error)")
             completion(nil, "Failed to load file: \(error.localizedDescription)")
         }
     }
