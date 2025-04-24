@@ -14,6 +14,9 @@ struct ContentView: View {
     @State private var showingTemplatePopup = false
     @ObservedObject private var documentManager = DocumentManager.shared
     
+    // Get authentication service from dependency container
+    private let authService = DependencyContainer.shared.makeAuthService()
+    
     // Panel reference to prevent multiple panels
     private static var currentOpenPanel: NSOpenPanel? = nil
     
@@ -46,7 +49,9 @@ struct ContentView: View {
                     }
                 } else {
                     // Startup screen
-                    StartupScreenView(showingStartupScreen: $showingStartupScreen)
+                    StartupScreenView(showingStartupScreen: $showingStartupScreen, authService: authService)
+                        .environmentObject(viewModel)
+                        .environmentObject(authService)
                         .onChange(of: showingStartupScreen) { _, isShowing in
                             if !isShowing && documentManager.documents.isEmpty {
                                 // If we're hiding the startup screen but have no documents,
@@ -73,6 +78,84 @@ struct ContentView: View {
                     .zIndex(100)
                 }
             }
+            
+            // User authentication/profile indicator in toolbar
+            HStack {
+                Spacer()
+                
+                Menu {
+                    if authService.isAuthenticated, let user = authService.currentUser {
+                        Text(user.displayName)
+                            .font(.headline)
+                        
+                        Text(user.email)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Divider()
+                        
+                        Button("Sign Out") {
+                            do {
+                                try authService.signOut()
+                            } catch {
+                                print("Failed to sign out: \(error.localizedDescription)")
+                            }
+                        }
+                    } else {
+                        Button("Sign In") {
+                            if let authState = authState {
+                                authState.presentAuthFlow()
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if authService.isAuthenticated, let user = authService.currentUser {
+                            // Show user's profile pic/initials
+                            if let photoURL = user.photoURL {
+                                AsyncImage(url: photoURL) { image in
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                } placeholder: {
+                                    Text(String(user.displayName.prefix(1)))
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                }
+                                .frame(width: 24, height: 24)
+                                .clipShape(Circle())
+                            } else {
+                                Text(String(user.displayName.prefix(1)))
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .frame(width: 24, height: 24)
+                                    .background(Circle().fill(Color.accentColor))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Text(user.displayName)
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .foregroundColor(.accentColor)
+                            
+                            Text("Sign In")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.gray.opacity(0.1))
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .padding(.bottom, 8)
+            }
         }
         .onAppear {
             // Check if should show startup screen or not
@@ -85,7 +168,12 @@ struct ContentView: View {
             // Register for notifications
             registerNotifications()
         }
+        // Add auth flow to ContentView
+        .withAuthFlow(authService: authService)
     }
+    
+    // Environment value to access the auth state
+    @Environment(\.authState) private var authState
     
     // Register for all notifications
     private func registerNotifications() {

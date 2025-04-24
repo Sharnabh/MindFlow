@@ -20,6 +20,7 @@ struct MindFlowApp: App {
             ContentView()
                 .frame(minWidth: 800, minHeight: 600)
                 .environmentObject(dependencies.makeCanvasViewModel())
+                .environmentObject(dependencies.makeAuthService())
                 .onAppear {
                     // Register for our save notifications
                     NotificationCenter.default.addObserver(forName: NSNotification.Name("SaveMindMap"), object: nil, queue: .main) { _ in
@@ -36,6 +37,10 @@ struct MindFlowApp: App {
                     
                     NotificationCenter.default.addObserver(forName: NSNotification.Name("OpenMindMap"), object: nil, queue: .main) { _ in
                         self.handleOpenMindMap()
+                    }
+                    
+                    NotificationCenter.default.addObserver(forName: NSNotification.Name("SignOut"), object: nil, queue: .main) { _ in
+                        self.handleSignOut()
                     }
                 }
         }
@@ -91,6 +96,16 @@ struct MindFlowApp: App {
                 }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
             }
+            
+            // Add a MindFlow menu group with account commands
+            CommandGroup(after: .appInfo) {
+                Divider()
+                
+                Button("Sign Out") {
+                    NotificationCenter.default.post(name: NSNotification.Name("SignOut"), object: nil)
+                }
+                .disabled(!dependencies.makeAuthService().isAuthenticated)
+            }
         }
     }
     
@@ -115,6 +130,24 @@ struct MindFlowApp: App {
     private func handleNewMindMap() {
         // Show the template selection popup
         NotificationCenter.default.post(name: NSNotification.Name("ShowTemplateSelection"), object: nil)
+    }
+    
+    private func handleSignOut() {
+        // Get auth service and sign out
+        let authService = dependencies.makeAuthService()
+        if authService.isAuthenticated {
+            do {
+                try authService.signOut()
+            } catch {
+                // Show an alert for sign out errors
+                let alert = NSAlert()
+                alert.messageText = "Sign Out Failed"
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+        }
     }
 }
 

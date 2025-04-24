@@ -30,7 +30,7 @@ struct InfiniteCanvas: View {
     @State private var canvasViewRef: FocusableCanvasView?
     
     // Access theme service for background settings
-    @ObservedObject private var themeService = DependencyContainer.shared.themeService as! ThemeService
+    @ObservedObject private var themeService = DependencyContainer.shared.makeThemeService()
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1

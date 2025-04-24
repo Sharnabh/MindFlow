@@ -43,6 +43,12 @@ protocol TopicServiceProtocol {
     func removeParentChildRelation(childId: UUID)
     func addTopic(_ topic: Topic)
     func updateAllTopics(_ newTopics: [Topic])
+    
+    // Collaboration
+    func enableCollaboration(documentId: String)
+    func disableCollaboration()
+    func getCurrentDocumentId() -> String?
+    var isCollaborating: Bool { get }
 }
 
 // Represents a path to a topic in the hierarchy
@@ -66,6 +72,214 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     
     // Callback when topics are changed
     var onTopicsChanged: (() -> Void)? = nil
+    
+    // Reference to the change tracker for collaborative editing
+    private var changeTracker: TopicChangeTracker?
+    private var isCollaborationEnabled: Bool = false
+    private var currentDocumentId: String?
+    
+    // Computed property to expose collaboration state
+    var isCollaborating: Bool {
+        return isCollaborationEnabled
+    }
+    
+    // Initialize with optional dependency injection for the change tracker
+    init(changeTracker: TopicChangeTracker? = nil) {
+        self.changeTracker = changeTracker
+        
+        // Register for remote change notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRemoteChange),
+            name: NSNotification.Name("ApplyRemoteTopicChange"),
+            object: nil
+        )
+    }
+    
+    // MARK: - Collaboration
+    
+    func enableCollaboration(documentId: String) {
+        guard let changeTracker = changeTracker else {
+            print("Cannot enable collaboration: change tracker not available")
+            return
+        }
+        
+        self.isCollaborationEnabled = true
+        self.currentDocumentId = documentId
+        changeTracker.startTracking(for: documentId)
+    }
+    
+    func disableCollaboration() {
+        isCollaborationEnabled = false
+        currentDocumentId = nil
+        changeTracker?.stopTracking()
+    }
+    
+    func getCurrentDocumentId() -> String? {
+        return currentDocumentId
+    }
+    
+    @objc private func handleRemoteChange(_ notification: Notification) {
+        guard let change = notification.userInfo?["change"] as? TopicChange else {
+            return
+        }
+        
+        DispatchQueue.main.async {
+            self.applyRemoteChange(change)
+        }
+    }
+    
+    private func applyRemoteChange(_ change: TopicChange) {
+        // Convert UUID string to UUID
+        guard let topicId = UUID(uuidString: change.topicId) else { return }
+        
+        switch change.changeType {
+        case .create:
+            applyRemoteTopicCreation(change, topicId: topicId)
+        case .update:
+            applyRemoteTopicUpdate(change, topicId: topicId)
+        case .delete:
+            deleteTopic(withId: topicId)
+        case .move:
+            applyRemoteTopicMove(change, topicId: topicId)
+        case .connect:
+            applyRemoteTopicConnection(change)
+        case .disconnect:
+            applyRemoteTopicDisconnection(change)
+        }
+    }
+    
+    private func applyRemoteTopicCreation(_ change: TopicChange, topicId: UUID) {
+        // Extract topic properties from the change
+        guard let nameValue = change.properties["name"]?.unwrapped as? String,
+              let positionDict = change.properties["position"]?.unwrapped as? [String: CGFloat],
+              let x = positionDict["x"],
+              let y = positionDict["y"] else {
+            return
+        }
+        
+        let position = CGPoint(x: x, y: y)
+        
+        // Extract optional properties
+        let templateTypeStr = change.properties["templateType"]?.unwrapped as? String ?? TemplateType.mindMap.rawValue
+        let templateType = TemplateType(rawValue: templateTypeStr) ?? .mindMap
+        
+        var parentId: UUID? = nil
+        if let parentIdStr = change.properties["parentId"]?.unwrapped as? String {
+            parentId = UUID(uuidString: parentIdStr)
+        }
+        
+        // Create the topic
+        var topic = Topic(
+            id: topicId,
+            name: nameValue,
+            position: position,
+            parentId: parentId,
+            templateType: templateType
+        )
+        
+        // Extract color information if available
+        if let colorHex = change.properties["color"]?.unwrapped as? String, !colorHex.isEmpty {
+            let color = Color(hex: colorHex) ?? .blue
+            topic.backgroundColor = color
+            topic.borderColor = color
+        }
+        
+        // Add notes if available
+        if let notes = change.properties["notes"]?.unwrapped as? String {
+            topic.note = Note(content: notes)
+        }
+        
+        // Add icon if available
+        if let icon = change.properties["icon"]?.unwrapped as? String {
+            topic.metadata = ["icon": icon]
+        }
+        
+        // If it has a parent, add it as a subtopic
+        if let parentId = parentId {
+            if let parentPath = findTopicPath(id: parentId) {
+                var parent = parentPath.topic
+                parent.subtopics.append(topic)
+                updateTopicAtPath(parent, path: parentPath.path)
+            }
+        } else {
+            // Otherwise add as a main topic
+            topics.append(topic)
+        }
+        
+        onTopicsChanged?()
+    }
+    
+    private func applyRemoteTopicUpdate(_ change: TopicChange, topicId: UUID) {
+        guard let path = findTopicPath(id: topicId) else { return }
+        var topic = path.topic
+        
+        // Update properties based on what's in the change
+        if let nameValue = change.properties["name"]?.unwrapped as? String {
+            topic.name = nameValue
+        }
+        
+        if let positionDict = change.properties["position"]?.unwrapped as? [String: CGFloat],
+           let x = positionDict["x"],
+           let y = positionDict["y"] {
+            topic.position = CGPoint(x: x, y: y)
+        }
+        
+        if let colorHex = change.properties["color"]?.unwrapped as? String, !colorHex.isEmpty {
+            let color = Color(hex: colorHex) ?? topic.backgroundColor
+            topic.backgroundColor = color
+            topic.borderColor = color
+        }
+        
+        if let notes = change.properties["notes"]?.unwrapped as? String {
+            topic.note = Note(content: notes)
+        }
+        
+        if let icon = change.properties["icon"]?.unwrapped as? String {
+            if topic.metadata == nil {
+                topic.metadata = ["icon": icon]
+            } else {
+                topic.metadata?["icon"] = icon
+            }
+        }
+        
+        updateTopicAtPath(topic, path: path.path)
+        onTopicsChanged?()
+    }
+    
+    private func applyRemoteTopicMove(_ change: TopicChange, topicId: UUID) {
+        // Extract position
+        guard let positionDict = change.properties["position"]?.unwrapped as? [String: CGFloat],
+              let x = positionDict["x"],
+              let y = positionDict["y"] else {
+            return
+        }
+        
+        let newPosition = CGPoint(x: x, y: y)
+        moveTopic(withId: topicId, to: newPosition)
+    }
+    
+    private func applyRemoteTopicConnection(_ change: TopicChange) {
+        // Extract parent and child IDs
+        guard let parentIdStr = change.properties["parentId"]?.unwrapped as? String,
+              let childIdStr = change.properties["childId"]?.unwrapped as? String,
+              let parentId = UUID(uuidString: parentIdStr),
+              let childId = UUID(uuidString: childIdStr) else {
+            return
+        }
+        
+        addTopicAsChild(parentId: parentId, childId: childId)
+    }
+    
+    private func applyRemoteTopicDisconnection(_ change: TopicChange) {
+        // Extract child ID
+        guard let childIdStr = change.properties["childId"]?.unwrapped as? String,
+              let childId = UUID(uuidString: childIdStr) else {
+            return
+        }
+        
+        removeParentChildRelation(childId: childId)
+    }
     
     // MARK: - Topic Retrieval
     
@@ -110,6 +324,12 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     
     func addTopic(_ topic: Topic) {
         topics.append(topic)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled {
+            changeTracker?.trackTopicCreation(topic)
+        }
+        
         onTopicsChanged?()
     }
     
@@ -145,6 +365,11 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Select the new topic
         selectedTopicId = topic.id
         
+        // Track change for collaboration
+        if isCollaborationEnabled {
+            changeTracker?.trackTopicCreation(topic)
+        }
+        
         onTopicsChanged?()
         
         return topic
@@ -166,6 +391,12 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             parent.subtopics.append(subtopic)
             updateTopicAtPath(parent, path: parentPath.path)
             
+            // Track change for collaboration
+            if isCollaborationEnabled {
+                changeTracker?.trackTopicCreation(subtopic)
+                changeTracker?.trackTopicConnection(parentId.uuidString, childId: subtopic.id.uuidString)
+            }
+            
             // Return the newly created subtopic
             return subtopic
         }
@@ -174,8 +405,41 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     func updateTopic(_ topic: Topic) {
-        guard let path = findTopicPath(id: topic.id)?.path else { return }
+        guard let originalTopic = getTopic(withId: topic.id),
+              let path = findTopicPath(id: topic.id)?.path else { return }
+        
         updateTopicAtPath(topic, path: path)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled {
+            // Determine which properties changed
+            var changedProperties: [String: Any] = [:]
+            
+            if originalTopic.name != topic.name {
+                changedProperties["name"] = topic.name
+            }
+            
+            if originalTopic.position != topic.position {
+                changedProperties["position"] = [
+                    "x": topic.position.x,
+                    "y": topic.position.y
+                ]
+            }
+            
+            if originalTopic.backgroundColor != topic.backgroundColor {
+                changedProperties["color"] = topic.backgroundColor.hexString
+            }
+            
+            if originalTopic.note?.content != topic.note?.content {
+                changedProperties["notes"] = topic.note?.content ?? ""
+            }
+            
+            // Only track if something actually changed
+            if !changedProperties.isEmpty {
+                changeTracker?.trackTopicUpdate(topic, changedProperties: changedProperties)
+            }
+        }
+        
         onTopicsChanged?()
     }
     
@@ -183,6 +447,11 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Don't allow deleting if it's the only main topic and has no subtopics
         if topics.count == 1 && topics[0].id == id && topics[0].subtopics.isEmpty {
             return
+        }
+        
+        // Track change for collaboration before deletion
+        if isCollaborationEnabled {
+            changeTracker?.trackTopicDeletion(id.uuidString)
         }
         
         // Remove any relations to this topic
@@ -215,8 +484,18 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     func moveTopic(withId id: UUID, to position: CGPoint) {
         guard let path = findTopicPath(id: id) else { return }
         var topic = path.topic
+        
+        // Store original position for change tracking
+        let originalPosition = topic.position
+        
         topic.position = position
         updateTopicAtPath(topic, path: path.path)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled && originalPosition != position {
+            changeTracker?.trackTopicMovement(id.uuidString, newPosition: position)
+        }
+        
         onTopicsChanged?()
     }
     
@@ -239,6 +518,15 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Add relation (using ID)
         source.addRelation(targetId)
         updateTopicAtPath(source, path: sourcePath.path)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled {
+            let changedProperties: [String: Any] = [
+                "relation": targetId.uuidString,
+                "action": "add"
+            ]
+            changeTracker?.trackTopicUpdate(source, changedProperties: changedProperties)
+        }
     }
 
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
@@ -248,8 +536,17 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Remove relation (using ID)
         source.removeRelation(targetId)
         updateTopicAtPath(source, path: sourcePath.path)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled {
+            let changedProperties: [String: Any] = [
+                "relation": targetId.uuidString,
+                "action": "remove"
+            ]
+            changeTracker?.trackTopicUpdate(source, changedProperties: changedProperties)
+        }
     }
-
+    
     func removeAllRelationsToTopic(withId id: UUID) {
         // Remove relations in all main topics
         for i in 0..<topics.count {
@@ -267,60 +564,6 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         for i in 0..<topic.subtopics.count {
             removeRelationsToTopicInSubtopics(topicIdToRemove, in: &topic.subtopics[i])
         }
-    }
-    
-    // MARK: - State Management
-    
-    func selectTopic(withId id: UUID?) {
-        // Deselect previous selection
-        if let previousId = selectedTopicId, let previousPath = findTopicPath(id: previousId) {
-            var previous = previousPath.topic
-            previous.isSelected = false
-            updateTopicAtPath(previous, path: previousPath.path)
-        }
-        
-        // Select new topic
-        selectedTopicId = id
-        if let id = id, let topicPath = findTopicPath(id: id) {
-            var topic = topicPath.topic
-            topic.isSelected = true
-            updateTopicAtPath(topic, path: topicPath.path)
-        }
-    }
-    
-    func beginEditingTopic(withId id: UUID) {
-        guard let path = findTopicPath(id: id) else { return }
-        var topic = path.topic
-        topic.isEditing = true
-        updateTopicAtPath(topic, path: path.path)
-    }
-    
-    func endEditingTopic(withId id: UUID) {
-        guard let path = findTopicPath(id: id) else { return }
-        var topic = path.topic
-        topic.isEditing = false
-        updateTopicAtPath(topic, path: path.path)
-    }
-    
-    func collapseExpandTopic(withId id: UUID) {
-        guard let path = findTopicPath(id: id) else { return }
-        var topic = path.topic
-        topic.isCollapsed = !topic.isCollapsed
-        updateTopicAtPath(topic, path: path.path)
-    }
-    
-    // MARK: - Parent-Child Operations
-    
-    func isOrphanTopic(_ topic: Topic) -> Bool {
-        // A topic is an orphan if it's a main topic (no parent)
-        return topic.parentId == nil
-    }
-    
-    func hasParentChildCycle(parentId: UUID, childId: UUID) -> Bool {
-        guard getTopic(withId: parentId) != nil else { return false }
-        
-        // Check if the potential child is an ancestor of the parent
-        return isAncestor(potentialAncestorId: childId, ofTopicId: parentId)
     }
     
     func addTopicAsChild(parentId: UUID, childId: UUID) {
@@ -361,6 +604,11 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Update parent in the hierarchy
         updateTopicAtPath(parentTopic, path: parentPath.path)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled {
+            changeTracker?.trackTopicConnection(parentId.uuidString, childId: childId.uuidString)
+        }
     }
     
     func removeParentChildRelation(childId: UUID) {
@@ -371,6 +619,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Get the child topic
         var childTopic = childPath.topic
+        
+        // Store the parent ID for change tracking
+        let parentId = childTopic.parentId
         
         // Remove child from its current location
         let _ = removeSubtopicRecursively(id: childId, from: &topics[childPath.path.mainTopicIndex])
@@ -388,6 +639,11 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Add as a main topic
         topics.append(childTopic)
+        
+        // Track change for collaboration
+        if isCollaborationEnabled, let parentId = parentId {
+            changeTracker?.trackTopicDisconnection(parentId.uuidString, childId: childId.uuidString)
+        }
     }
     
     // MARK: - Clipboard Operations
@@ -623,5 +879,59 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             )
             topic.subtopics[i] = subtopic
         }
+    }
+    
+    // MARK: - State Management
+    
+    func selectTopic(withId id: UUID?) {
+        // Deselect previous selection
+        if let previousId = selectedTopicId, let previousPath = findTopicPath(id: previousId) {
+            var previous = previousPath.topic
+            previous.isSelected = false
+            updateTopicAtPath(previous, path: previousPath.path)
+        }
+        
+        // Select new topic
+        selectedTopicId = id
+        if let id = id, let topicPath = findTopicPath(id: id) {
+            var topic = topicPath.topic
+            topic.isSelected = true
+            updateTopicAtPath(topic, path: topicPath.path)
+        }
+    }
+    
+    func beginEditingTopic(withId id: UUID) {
+        guard let path = findTopicPath(id: id) else { return }
+        var topic = path.topic
+        topic.isEditing = true
+        updateTopicAtPath(topic, path: path.path)
+    }
+    
+    func endEditingTopic(withId id: UUID) {
+        guard let path = findTopicPath(id: id) else { return }
+        var topic = path.topic
+        topic.isEditing = false
+        updateTopicAtPath(topic, path: path.path)
+    }
+    
+    func collapseExpandTopic(withId id: UUID) {
+        guard let path = findTopicPath(id: id) else { return }
+        var topic = path.topic
+        topic.isCollapsed = !topic.isCollapsed
+        updateTopicAtPath(topic, path: path.path)
+    }
+    
+    // MARK: - Parent-Child Operations
+    
+    func isOrphanTopic(_ topic: Topic) -> Bool {
+        // A topic is an orphan if it's a main topic (no parent)
+        return topic.parentId == nil
+    }
+    
+    func hasParentChildCycle(parentId: UUID, childId: UUID) -> Bool {
+        guard getTopic(withId: parentId) != nil else { return false }
+        
+        // Check if the potential child is an ancestor of the parent
+        return isAncestor(potentialAncestorId: childId, ofTopicId: parentId)
     }
 } 

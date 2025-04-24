@@ -10,11 +10,13 @@ import UniformTypeIdentifiers
 
 struct StartupScreenView: View {
     @EnvironmentObject var viewModel: CanvasViewModel
+    @EnvironmentObject var authService: AuthenticationService
     @Binding var showingStartupScreen: Bool
     @State private var selectedOption: StartupOption = .templates
     @State private var recentFiles: [RecentFile] = []
     @State private var trashedFiles: [RecentFile] = []
     @State private var showingWelcome: Bool = true
+    @StateObject private var authState: AuthState
     
     // Colors from logo.svg
     private let backgroundColor = LinearGradient(
@@ -64,6 +66,11 @@ struct StartupScreenView: View {
         TemplateItem(name: "Org Chart", sfSymbolName: "person.3")
     ]
     
+    init(showingStartupScreen: Binding<Bool>, authService: AuthenticationService) {
+        self._showingStartupScreen = showingStartupScreen
+        self._authState = StateObject(wrappedValue: AuthState(authService: authService))
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // App logo and title
@@ -74,106 +81,125 @@ struct StartupScreenView: View {
                         .frame(width: 60, height: 60)
                         .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 3)
                         .overlay {
-                            // Stylized "M" similar to the SVG brain/"M" shape
-                            Path { path in
-                                let width: CGFloat = 30
-                                let height: CGFloat = 28
-                                let x = 30 - width/2
-                                let y = 30 - height/2
-                                
-                                // Left line
-                                path.move(to: CGPoint(x: x, y: y))
-                                path.addLine(to: CGPoint(x: x, y: y + height))
-                                
-                                // Middle up
-                                path.move(to: CGPoint(x: x, y: y))
-                                path.addLine(to: CGPoint(x: x + width/2, y: y + height/3))
-                                
-                                // Middle down
-                                path.addLine(to: CGPoint(x: x + width, y: y))
-                                
-                                // Right line
-                                path.move(to: CGPoint(x: x + width, y: y))
-                                path.addLine(to: CGPoint(x: x + width, y: y + height))
-                            }
-                            .stroke(centralLogoColor, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                            LogoPathView(color: centralLogoColor)
                         }
                 }
+                
+                Text("MindFlow")
+                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.bottom, 10)
+            }
+            .frame(height: 120)
+            .padding(.top, 40)
             
-            Text("MindFlow")
-                .font(.system(size: 32, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .padding(.bottom, 10)
-        }
-        .frame(height: 120)
-        .padding(.top, 40)
-        
-        // Main content
-        HStack(spacing: 20) {
-            // Left sidebar with options
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(StartupOption.allCases) { option in
-                    HStack {
-                        Text(option.rawValue)
-                            .font(.title3)
-                            .padding(.horizontal)
-                            .padding(.vertical, 12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .background(selectedOption == option ? centralLogoColor : Color.clear)
-                    .foregroundColor(selectedOption == option ? .white : .primary)
-                    .cornerRadius(8)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        // Hide welcome screen when an option is selected
-                        showingWelcome = false
-                        selectedOption = option
+            // Authentication status and sign-in button
+            HStack {
+                if authService.isAuthenticated, let user = authService.currentUser {
+                    HStack(spacing: 10) {
+                        Image(systemName: "person.circle.fill")
+                            .resizable()
+                            .frame(width: 24, height: 24)
+                            .foregroundColor(.white)
                         
-                        // If "Open Local Files" is selected, show file picker right away
-                        if option == .openLocalFiles {
-                            openFilePicker()
+                        Text(getFirstName(from: user.displayName ?? "User"))
+                            .foregroundColor(.white)
+                            .font(.headline)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.2))
+                    .cornerRadius(20)
+                } else {
+                    Button(action: {
+                        authState.presentAuthFlow()
+                    }) {
+                        HStack {
+                            Image(systemName: "person.badge.key.fill")
+                                .font(.system(size: 18))
+                            Text("Sign In")
+                                .font(.headline)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.25))
+                        .cornerRadius(20)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                        )
+                    }
+                }
+            }
+            .padding(.bottom, 20)
+            
+            // Main content
+            HStack(spacing: 20) {
+                // Left sidebar with options
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(StartupOption.allCases) { option in
+                        HStack {
+                            Text(option.rawValue)
+                                .font(.title3)
+                                .padding(.horizontal)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .background(selectedOption == option ? centralLogoColor : Color.clear)
+                        .foregroundColor(selectedOption == option ? .white : .primary)
+                        .cornerRadius(8)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // Hide welcome screen when an option is selected
+                            showingWelcome = false
+                            selectedOption = option
+                            
+                            // If "Open Local Files" is selected, show file picker right away
+                            if option == .openLocalFiles {
+                                openFilePicker()
+                            }
                         }
                     }
+                    
+                    Spacer()
                 }
+                .frame(width: 250)
+                .padding(20)
+                .background(Color.white.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 
-                Spacer()
-            }
-            .frame(width: 250)
-            .padding(20)
-            .background(Color.white.opacity(0.15))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Right content area
-            VStack {
-                if showingWelcome {
-                    welcomeView
-                } else {
-                    // Content based on selected option
-                    switch selectedOption {
-                    case .templates:
-                        templatesView
-                            .padding(.vertical, 0)
-                    case .recent:
-                        recentFilesView
-                    case .openLocalFiles:
-                        // This is handled by openFilePicker() when the option is selected
-                        EmptyView()
-                    case .trash:
-                        trashView
+                // Right content area
+                VStack {
+                    if showingWelcome {
+                        welcomeView
+                    } else {
+                        // Content based on selected option
+                        switch selectedOption {
+                        case .templates:
+                            templatesView
+                                .padding(.vertical, 0)
+                        case .recent:
+                            recentFilesView
+                        case .openLocalFiles:
+                            // This is handled by openFilePicker() when the option is selected
+                            EmptyView()
+                        case .trash:
+                            trashView
+                        }
                     }
+                    
+                    Spacer()
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white.opacity(0.15))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 30)
+            .padding(.bottom, 30)
+            
+            Spacer()
         }
-        .padding(.horizontal, 30)
-        .padding(.bottom, 30)
-        
-        Spacer()
-    }
         .background(backgroundColor)
         .edgesIgnoringSafeArea(.all)
         .onAppear {
@@ -181,7 +207,15 @@ struct StartupScreenView: View {
             loadRecentFiles()
             loadTrashFiles()
         }
-}
+        .sheet(isPresented: $authState.showAuthFlow) {
+            AuthView()
+                .environmentObject(authService)
+                .environmentObject(authState)
+                .frame(width: 500, height: 600)
+        }
+        
+    }
+
 
 // Templates view
 var templatesView: some View {
@@ -654,10 +688,47 @@ func featureRow(icon: String, title: String, description: String) -> some View {
     }
     .padding(.horizontal)
 }
+
+// Helper function to extract first name
+func getFirstName(from fullName: String) -> String {
+    return fullName.components(separatedBy: " ").first ?? fullName
+}
 }
 
-#Preview {
-    StartupScreenView(showingStartupScreen: .constant(true))
-        .environmentObject(DependencyContainer.shared.makeCanvasViewModel())
-        .frame(width: 1000, height: 600)
+// Logo path extracted as a separate view
+struct LogoPathView: View {
+    let color: Color
+    
+    var body: some View {
+        Path { path in
+            let width: CGFloat = 30
+            let height: CGFloat = 28
+            let x = 30 - width/2
+            let y = 30 - height/2
+            
+            // Left line
+            path.move(to: CGPoint(x: x, y: y))
+            path.addLine(to: CGPoint(x: x, y: y + height))
+            
+            // Middle up
+            path.move(to: CGPoint(x: x, y: y))
+            path.addLine(to: CGPoint(x: x + width/2, y: y + height/3))
+            
+            // Middle down
+            path.addLine(to: CGPoint(x: x + width, y: y))
+            
+            // Right line
+            path.move(to: CGPoint(x: x + width, y: y))
+            path.addLine(to: CGPoint(x: x + width, y: y + height))
+        }
+        .stroke(color, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+    }
 }
+
+//#Preview {
+//    let authService = DependencyContainer.shared.makeAuthService()
+//    return StartupScreenView(showingStartupScreen: .constant(true), authService: authService)
+//        .environmentObject(DependencyContainer.shared.makeCanvasViewModel())
+//        .environmentObject(authService)
+//        .frame(width: 1000, height: 600)
+//}
