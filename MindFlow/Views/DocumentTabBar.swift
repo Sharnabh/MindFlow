@@ -35,7 +35,7 @@ struct DocumentTabBar: View {
         )
     }
     
-    func documentTab(document: MindMapDocument, index: Int) -> some View {
+    func documentTab(document: MindFlowDocument, index: Int) -> some View {
         HStack(spacing: 4) {
             // Document name
             Text(document.filename)

@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-class MindMapDocument: Identifiable, ObservableObject {
+class MindFlowDocument: Identifiable, ObservableObject {
     let id = UUID()
     let filename: String
     let url: URL?

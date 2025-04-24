@@ -36,11 +36,24 @@ struct CollaborativeSession: Codable {
 }
 
 /// Document access permissions
-enum DocumentAccessLevel: String, Codable {
+enum DocumentAccessLevel: String, Codable, CaseIterable {
     case viewOnly
     case comment
     case edit
     case owner
+    
+    var displayName: String {
+        switch self {
+        case .viewOnly:
+            return "View only"
+        case .comment:
+            return "Can comment"
+        case .edit:
+            return "Can edit"
+        case .owner:
+            return "Owner"
+        }
+    }
 }
 
 /// Represents a change to a topic

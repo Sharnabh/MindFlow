@@ -105,13 +105,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		237C5D70CB429811CF948F40 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		CE6422162DB940990095D108 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -126,7 +119,6 @@
 				CED8ED172D83F85D00F37456 /* MindFlow.pages */,
 				CED8ED192D83FA5600F37456 /* MindFlow.docx */,
 				CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */,
-				237C5D70CB429811CF948F40 /* Pods */,
 				CE6422162DB940990095D108 /* Frameworks */,
 			);
 			sourceTree = "<group>";

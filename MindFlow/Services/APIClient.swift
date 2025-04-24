@@ -3,14 +3,15 @@ import Combine
 
 /// A client for making API requests to the MindFlow backend
 class APIClient {
-    private let baseURL: URL
+    private var baseURL: URL
+    private var webSocketURL: URL?
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     
     /// Initialize the API client
     /// - Parameter baseURL: The base URL for the API (default: retrieved from Info.plist)
-    init(baseURL: URL? = nil) {
+    init(baseURL: URL? = nil, webSocketURL: URL? = nil) {
         // Use provided URL or try to get from Info.plist
         if let url = baseURL {
             self.baseURL = url
@@ -18,8 +19,15 @@ class APIClient {
                   let url = URL(string: urlString) {
             self.baseURL = url
         } else {
-            // Default development URL
-            self.baseURL = URL(string: "https://api.mindflow.app/v1")!
+            // Default to local development URL instead of remote
+            self.baseURL = URL(string: "http://localhost:3000/api")!
+        }
+        
+        // Set WebSocket URL if provided, otherwise default to local WebSocket
+        if let wsURL = webSocketURL {
+            self.webSocketURL = wsURL
+        } else {
+            self.webSocketURL = URL(string: "ws://localhost:3000")
         }
         
         // Configure the URL session
@@ -36,6 +44,23 @@ class APIClient {
         // Use ISO8601 date formatting
         decoder.dateDecodingStrategy = .iso8601
         encoder.dateEncodingStrategy = .iso8601
+        
+        print("API Client configured for URL: \(self.baseURL.absoluteString)")
+        if let wsURL = self.webSocketURL {
+            print("WebSocket URL: \(wsURL.absoluteString)")
+        }
+    }
+    
+    /// Configure the client for local development server
+    func configureForLocalServer() {
+        self.baseURL = URL(string: "http://localhost:3000/api")!
+        self.webSocketURL = URL(string: "ws://localhost:3000")
+        print("API Client configured for local development server")
+    }
+    
+    /// Get the WebSocket URL for real-time collaboration
+    func getWebSocketURL() -> URL? {
+        return webSocketURL
     }
     
     /// Make a GET request
@@ -57,19 +82,19 @@ class APIClient {
         )
     }
     
-    /// Make a POST request
+    /// Make a POST request with dictionary
     /// - Parameters:
     ///   - endpoint: The API endpoint (path after base URL)
-    ///   - body: The request body (will be JSON encoded)
+    ///   - body: The request body as a dictionary (more flexible than strict types)
     ///   - headers: Optional HTTP headers
     /// - Returns: A publisher that emits the decoded response or an error
-    func post<T: Decodable, U: Encodable>(
+    func post<T: Decodable>(
         endpoint: String,
-        body: U,
+        body: [String: Any],
         headers: [String: String] = [:]
     ) -> AnyPublisher<T, Error> {
         do {
-            let bodyData = try encoder.encode(body)
+            let bodyData = try JSONSerialization.data(withJSONObject: body, options: [])
             return request(
                 endpoint: endpoint,
                 method: "POST",
@@ -79,6 +104,49 @@ class APIClient {
         } catch {
             return Fail(error: error).eraseToAnyPublisher()
         }
+    }
+    
+    /// Make a POST request returning a dictionary (for flexible response handling)
+    /// - Parameters:
+    ///   - endpoint: The API endpoint (path after base URL)
+    ///   - body: The request body (dictionary format)
+    ///   - headers: Optional HTTP headers
+    /// - Returns: A publisher that emits a dictionary response or an error
+    func post(
+        endpoint: String,
+        body: [String: Any],
+        headers: [String: String] = [:]
+    ) -> AnyPublisher<[String: Any], Error> {
+        do {
+            let bodyData = try JSONSerialization.data(withJSONObject: body, options: [])
+            return requestDictionary(
+                endpoint: endpoint,
+                method: "POST",
+                headers: headers,
+                body: bodyData
+            )
+        } catch {
+            return Fail(error: error).eraseToAnyPublisher()
+        }
+    }
+    
+    /// Make a GET request returning an array (for flexible response handling)
+    /// - Parameters:
+    ///   - endpoint: The API endpoint (path after base URL)
+    ///   - queryItems: Optional query parameters
+    ///   - headers: Optional HTTP headers
+    /// - Returns: A publisher that emits an array response or an error
+    func get(
+        endpoint: String,
+        queryItems: [URLQueryItem]? = nil,
+        headers: [String: String] = [:]
+    ) -> AnyPublisher<[Any], Error> {
+        return requestArray(
+            endpoint: endpoint,
+            method: "GET",
+            queryItems: queryItems,
+            headers: headers
+        )
     }
     
     /// Make a PUT request
@@ -191,6 +259,172 @@ class APIClient {
                     return apiError
                 } else if error is DecodingError {
                     return RESTAPIError.decodingError(error)
+                } else {
+                    return RESTAPIError.unknown(error)
+                }
+            }
+            .eraseToAnyPublisher()
+    }
+    
+    /// Make a network request and return the response as a dictionary
+    /// - Parameters:
+    ///   - endpoint: The API endpoint (path after base URL)
+    ///   - method: The HTTP method (GET, POST, etc.)
+    ///   - queryItems: Optional query parameters
+    ///   - headers: Optional HTTP headers
+    ///   - body: Optional request body
+    /// - Returns: A publisher that emits a dictionary response or an error
+    private func requestDictionary(
+        endpoint: String,
+        method: String,
+        queryItems: [URLQueryItem]? = nil,
+        headers: [String: String] = [:],
+        body: Data? = nil
+    ) -> AnyPublisher<[String: Any], Error> {
+        // Build the URL
+        var components = URLComponents(url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: true)
+        components?.queryItems = queryItems
+        
+        guard let url = components?.url else {
+            return Fail(error: URLError(.badURL)).eraseToAnyPublisher()
+        }
+        
+        // Create request
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add headers
+        for (key, value) in headers {
+            request.addValue(value, forHTTPHeaderField: key)
+        }
+        
+        // Add body if it exists
+        if let body = body {
+            request.httpBody = body
+        }
+        
+        // Make the request
+        return session.dataTaskPublisher(for: request)
+            .tryMap { data, response -> Data in
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+                
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    // Try to parse error message from response
+                    if let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
+                        throw RESTAPIError.serverError(
+                            statusCode: httpResponse.statusCode,
+                            message: errorResponse.message
+                        )
+                    } else {
+                        throw RESTAPIError.serverError(
+                            statusCode: httpResponse.statusCode,
+                            message: "HTTP Error \(httpResponse.statusCode)"
+                        )
+                    }
+                }
+                
+                return data
+            }
+            .tryMap { data -> [String: Any] in
+                guard let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw RESTAPIError.decodingError(
+                        NSError(domain: "MindFlow.APIClient", code: 3, 
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid JSON response format"])
+                    )
+                }
+                return jsonObject
+            }
+            .mapError { error -> Error in
+                if let urlError = error as? URLError {
+                    return RESTAPIError.networkError(urlError)
+                } else if let apiError = error as? RESTAPIError {
+                    return apiError
+                } else {
+                    return RESTAPIError.unknown(error)
+                }
+            }
+            .eraseToAnyPublisher()
+    }
+    
+    /// Make a network request and return the response as an array
+    /// - Parameters:
+    ///   - endpoint: The API endpoint (path after base URL)
+    ///   - method: The HTTP method (GET, POST, etc.)
+    ///   - queryItems: Optional query parameters
+    ///   - headers: Optional HTTP headers
+    ///   - body: Optional request body
+    /// - Returns: A publisher that emits an array response or an error
+    private func requestArray(
+        endpoint: String,
+        method: String,
+        queryItems: [URLQueryItem]? = nil,
+        headers: [String: String] = [:],
+        body: Data? = nil
+    ) -> AnyPublisher<[Any], Error> {
+        // Build the URL
+        var components = URLComponents(url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: true)
+        components?.queryItems = queryItems
+        
+        guard let url = components?.url else {
+            return Fail(error: URLError(.badURL)).eraseToAnyPublisher()
+        }
+        
+        // Create request
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add headers
+        for (key, value) in headers {
+            request.addValue(value, forHTTPHeaderField: key)
+        }
+        
+        // Add body if it exists
+        if let body = body {
+            request.httpBody = body
+        }
+        
+        // Make the request
+        return session.dataTaskPublisher(for: request)
+            .tryMap { data, response -> Data in
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+                
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    // Try to parse error message from response
+                    if let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
+                        throw RESTAPIError.serverError(
+                            statusCode: httpResponse.statusCode,
+                            message: errorResponse.message
+                        )
+                    } else {
+                        throw RESTAPIError.serverError(
+                            statusCode: httpResponse.statusCode,
+                            message: "HTTP Error \(httpResponse.statusCode)"
+                        )
+                    }
+                }
+                
+                return data
+            }
+            .tryMap { data -> [Any] in
+                guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [Any] else {
+                    throw RESTAPIError.decodingError(
+                        NSError(domain: "MindFlow.APIClient", code: 3, 
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid JSON array response format"])
+                    )
+                }
+                return jsonArray
+            }
+            .mapError { error -> Error in
+                if let urlError = error as? URLError {
+                    return RESTAPIError.networkError(urlError)
+                } else if let apiError = error as? RESTAPIError {
+                    return apiError
                 } else {
                     return RESTAPIError.unknown(error)
                 }

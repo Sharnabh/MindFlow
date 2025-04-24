@@ -11,7 +11,16 @@ router.get('/:documentId', documentController.getDocument);
 // Generate share link
 router.post('/:documentId/share', documentController.createShareLink);
 
-// Add collaborator
-router.post('/:documentId/collaborators', documentController.addCollaborator);
+// Add collaborator 
+router.post('/:documentId/invite', documentController.addCollaborator);
+
+// Get document collaborators
+router.get('/:documentId/collaborators', documentController.getCollaborators);
+
+// Update collaborator access
+router.put('/:documentId/collaborators/:userId', documentController.updateCollaboratorAccess);
+
+// Remove collaborator
+router.delete('/:documentId/collaborators/:userId', documentController.removeCollaborator);
 
 module.exports = router; 

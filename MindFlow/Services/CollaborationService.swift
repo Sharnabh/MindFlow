@@ -43,67 +43,70 @@ class CollaborationService: ObservableObject {
     func connect(to documentId: String, authToken: String) {
         self.documentId = documentId
         self.authToken = authToken
-        establishConnection()
-    }
-    
-    private func establishConnection() {
-        guard let documentId = documentId, 
-              let authToken = authToken,
-              let serverURL = serverURL else {
-            connectionState = .failed(NSError(
-                domain: "MindFlow.CollaborationService", 
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Missing document ID, auth token, or server URL"]
-            ))
-            return
+        self.connectionState = .connecting
+        
+        // Get WebSocket URL from APIClient
+        if let serverURL = DependencyContainer.shared.makeAPIClient().getWebSocketURL() {
+            // Build the connection URL - FIXED: remove /documents/ path segment which is causing 404
+            let urlString = "\(serverURL.absoluteString)"
+            if let url = URL(string: urlString) {
+                // Close existing connection if it exists
+                webSocketTask?.cancel(with: .goingAway, reason: nil)
+                
+                // Create session if needed
+                if session == nil {
+                    session = URLSession(configuration: .default)
+                }
+                
+                // In development mode, use different authentication
+                #if DEBUG
+                print("Creating WebSocket connection to \(url) with userId: \(authToken)")
+                
+                // Add userId and documentId as query parameters in development mode
+                var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                components?.queryItems = [
+                    URLQueryItem(name: "userId", value: authToken),
+                    URLQueryItem(name: "documentId", value: documentId)
+                ]
+                let urlWithAuth = components?.url ?? url
+                
+                webSocketTask = session?.webSocketTask(with: urlWithAuth)
+                #else
+                // For production, use Bearer token auth
+                var request = URLRequest(url: url)
+                request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+                webSocketTask = session?.webSocketTask(with: request)
+                #endif
+                
+                // Set up receive message handling
+                receiveMessage()
+                
+                // Connect to the server
+                webSocketTask?.resume()
+                
+                // After connection is established, send a message to join the document
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    self?.sendJoinDocumentMessage(documentId)
+                }
+                
+                // Ping to keep connection alive
+                startPingTimer()
+            } else {
+                let error = NSError(
+                    domain: "MindFlow.CollaborationService",
+                    code: 1002,
+                    userInfo: [NSLocalizedDescriptionKey: "Invalid WebSocket URL constructed"]
+                )
+                self.connectionState = .failed(error)
+            }
+        } else {
+            let error = NSError(
+                domain: "MindFlow.CollaborationService",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Missing WebSocket server URL"]
+            )
+            self.connectionState = .failed(error)
         }
-        
-        connectionState = .connecting
-        print("Establishing connection to: \(serverURL)")
-        
-        // Create URLSession with default configuration
-        let configuration = URLSessionConfiguration.default
-        session = URLSession(configuration: configuration)
-        
-        // Format URL for connection
-        var urlComponents = URLComponents(url: serverURL, resolvingAgainstBaseURL: true)
-        
-        // For Socket.io server, add auth in the connection handshake
-        // Add auth as a query parameter (token=authToken)
-        urlComponents?.queryItems = [URLQueryItem(name: "token", value: authToken)]
-        
-        guard let url = urlComponents?.url else {
-            connectionState = .failed(NSError(
-                domain: "MindFlow.CollaborationService", 
-                code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]
-            ))
-            return
-        }
-        
-        print("Connecting to WebSocket at: \(url)")
-        
-        // Create WebSocket task
-        var request = URLRequest(url: url)
-        
-        // Add auth header as an alternative authentication method
-        request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        
-        webSocketTask = session?.webSocketTask(with: request)
-        
-        // Set up receive message handling
-        receiveMessage()
-        
-        // Connect to the server
-        webSocketTask?.resume()
-        
-        // After connection is established, send a message to join the document
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.sendJoinDocumentMessage(documentId)
-        }
-        
-        // Ping to keep connection alive
-        startPingTimer()
     }
     
     private func receiveMessage() {
@@ -261,7 +264,7 @@ class CollaborationService: ObservableObject {
         
         // Create a new timer for a single reconnection attempt
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.establishConnection()
+            self?.connect(to: self?.documentId ?? "", authToken: self?.authToken ?? "")
         }
     }
     

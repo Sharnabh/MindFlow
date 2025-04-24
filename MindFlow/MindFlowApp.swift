@@ -106,6 +106,31 @@ struct MindFlowApp: App {
                 }
                 .disabled(!dependencies.makeAuthService().isAuthenticated)
             }
+            
+            // Add Collaboration menu
+            CommandMenu("Collaborate") {
+                Button("Share Document") {
+                    NotificationCenter.default.post(name: NSNotification.Name("ShowShareView"), object: nil)
+                }
+                .disabled(!dependencies.makeAuthService().isAuthenticated)
+                
+                Button("Show Collaborators") {
+                    NotificationCenter.default.post(name: NSNotification.Name("ShowCollaboratorsView"), object: nil)
+                }
+                .disabled(!dependencies.makeAuthService().isAuthenticated)
+                
+                Divider()
+                
+                Button("Enable Collaboration") {
+                    NotificationCenter.default.post(name: NSNotification.Name("EnableCollaboration"), object: nil)
+                }
+                .disabled(!dependencies.makeAuthService().isAuthenticated)
+                
+                Button("Disable Collaboration") {
+                    NotificationCenter.default.post(name: NSNotification.Name("DisableCollaboration"), object: nil)
+                }
+                .disabled(!dependencies.makeAuthService().isAuthenticated)
+            }
         }
     }
     

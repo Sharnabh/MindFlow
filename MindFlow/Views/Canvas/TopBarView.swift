@@ -7,6 +7,9 @@ struct TopBarView: View {
     @State private var showingNoteEditor = false
     let topBarHeight: CGFloat
     
+    // Add collaborationService for accessing collaborator information
+    @ObservedObject private var collaborationService = DependencyContainer.shared.makeCollaborationService()
+    
     var body: some View {
         Rectangle()
             .fill(Color(.windowBackgroundColor))
@@ -16,6 +19,11 @@ struct TopBarView: View {
                     Text("MindFlow")
                         .foregroundColor(.primary)
                         .padding(.horizontal)
+                    
+                    // Add collaborators indicator if collaboration is enabled
+                    if viewModel.topicService.isCollaborating {
+                        collaboratorsIndicator()
+                    }
                     
                     Spacer()
                     
@@ -253,6 +261,76 @@ struct NoteEditorView: View {
             viewModel.saveNote()
             // Clean up and reset state when the editor is closed
             viewModel.isEditingNote = false
+        }
+    }
+}
+
+// Collaborators indicator for TopBarView
+extension TopBarView {
+    @ViewBuilder
+    func collaboratorsIndicator() -> some View {
+        if !collaborationService.collaborators.isEmpty {
+            Menu {
+                Text("Active Collaborators (\(collaborationService.collaborators.count))")
+                    .font(.headline)
+                
+                Divider()
+                
+                ForEach(collaborationService.collaborators) { collaborator in
+                    HStack {
+                        Circle()
+                            .fill(Color(hex: collaborator.color) ?? .blue)
+                            .frame(width: 10, height: 10)
+                        Text(collaborator.displayName)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    ForEach(Array(collaborationService.collaborators.prefix(3).enumerated()), id: \.element.id) { index, collaborator in
+                        Circle()
+                            .fill(Color(hex: collaborator.color) ?? .blue)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 1)
+                            )
+                            .offset(x: -CGFloat(index * 5))
+                    }
+                    
+                    if collaborationService.collaborators.count > 0 {
+                        Text("\(collaborationService.collaborators.count)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.windowBackgroundColor).opacity(0.9))
+                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        } else {
+            HStack(spacing: 4) {
+                Image(systemName: "person.2")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("Waiting for collaborators...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.windowBackgroundColor).opacity(0.9))
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 } 

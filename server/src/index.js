@@ -78,8 +78,19 @@ io.on('connection', socket => {
   const userDisplayName = socket.user.displayName || 'Anonymous';
   const userPhotoURL = socket.user.photoURL || null;
   
+  // In development mode, the documentId is already in the socket from the middleware
+  if (process.env.NODE_ENV === 'development' && socket.documentId) {
+    // Automatically join the document specified in the connection
+    handleJoinDocument(socket, socket.documentId);
+  }
+  
   // Join a document collaboration session
   socket.on('joinDocument', async (documentId) => {
+    handleJoinDocument(socket, documentId);
+  });
+  
+  // Handle joining a document
+  async function handleJoinDocument(socket, documentId) {
     try {
       // Verify document exists and user has access
       const docRef = db.collection('documents').doc(documentId);
@@ -92,8 +103,10 @@ io.on('connection', socket => {
       
       const docData = doc.data();
       
-      // Check access permissions
-      if (!docData.collaborators.includes(userId) && docData.creatorId !== userId) {
+      // Check access permissions - in development mode, bypass for testing
+      if (process.env.NODE_ENV !== 'development' && 
+          !docData.collaborators.includes(userId) && 
+          docData.creatorId !== userId) {
         socket.emit('error', { message: 'Access denied' });
         return;
       }
@@ -144,7 +157,7 @@ io.on('connection', socket => {
       logger.error(`Error joining document: ${error.message}`);
       socket.emit('error', { message: 'Failed to join document session' });
     }
-  });
+  }
   
   // Handle topic changes
   socket.on('topicChange', async (changeData) => {

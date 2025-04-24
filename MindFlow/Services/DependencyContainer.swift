@@ -33,6 +33,12 @@ class DependencyContainer {
         // Initialize services
         self.authService = AuthenticationService()
         self.apiClient = APIClient()
+        
+        // Configure for local development server
+        #if DEBUG
+        self.apiClient.configureForLocalServer()
+        #endif
+        
         self.collaborationService = CollaborationService()
         self.themeService = ThemeService()
         self.documentSharingService = DocumentSharingService(

@@ -12,61 +12,73 @@ struct ShareView: View {
     @State private var linkCopied = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
+        VStack(alignment: .leading, spacing: 20) {
             HStack {
                 Text("Share Document")
-                    .font(.headline)
+                    .font(.title2)
+                    .bold()
                 
                 Spacer()
                 
                 Button(action: {
                     dismiss()
                 }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .medium))
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, 10)
+            
+            if viewModel.isLoading {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading...")
                         .foregroundColor(.secondary)
                 }
-                .buttonStyle(BorderlessButtonStyle())
-            }
-            .padding()
-            .background(Color(.secondarySystemFill))
-            
-            Divider()
-            
-            // Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Current collaborators
-                    if !viewModel.collaborators.isEmpty {
-                        collaboratorList
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage = viewModel.errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.largeTitle)
+                    
+                    Text("Error")
+                        .font(.headline)
+                    
+                    Text(errorMessage)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("Try Again") {
+                        viewModel.loadCollaborators()
+                        viewModel.createShareLink()
                     }
-                    
-                    // Invite by email
-                    inviteByEmail
-                    
-                    // Share link
-                    shareLink
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
                 }
-                .padding()
-            }
-            
-            Divider()
-            
-            // Footer with done button
-            HStack {
-                Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // Current collaborators
+                if !viewModel.collaborators.isEmpty {
+                    collaboratorList
+                }
                 
-                Button("Done") {
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+                Divider()
+                
+                // Share link
+                shareLink
+                
+                Divider()
+                
+                // Invite form
+                inviteForm
             }
-            .padding()
         }
-        .frame(width: 500, height: 600)
-        .background(Color(.systemFill))
+        .padding()
+        .frame(minWidth: 300, minHeight: 400)
         .onAppear {
             viewModel.loadCollaborators()
             viewModel.createShareLink()
@@ -105,7 +117,7 @@ struct ShareView: View {
         }
     }
     
-    private var inviteByEmail: some View {
+    private var inviteForm: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Invite people")
                 .font(.headline)
@@ -222,25 +234,6 @@ struct ShareView: View {
 
 // MARK: - Extensions
 
-extension DocumentAccessLevel {
-    static var allCases: [DocumentAccessLevel] {
-        [.viewOnly, .comment, .edit, .owner]
-    }
-    
-    var displayName: String {
-        switch self {
-        case .viewOnly:
-            return "View only"
-        case .comment:
-            return "Can comment"
-        case .edit:
-            return "Can edit"
-        case .owner:
-            return "Owner"
-        }
-    }
-}
-
 extension String {
     func isValidEmail() -> Bool {
         let emailRegEx = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
@@ -257,22 +250,51 @@ class ShareViewModel: ObservableObject {
     @Published var isCreatingLink = false
     @Published var isInviting = false
     @Published var inviteError: String?
+    @Published var isLoading = false
+    @Published var errorMessage: String?
     
     private let documentId: String
     private let documentSharingService: DocumentSharingService
     private var cancellables = Set<AnyCancellable>()
+    
+    // Current user ID for determining ownership
+    private var currentUserId: String? {
+        return DependencyContainer.shared.makeAuthService().currentUser?.id
+    }
     
     init(documentId: String, documentSharingService: DocumentSharingService) {
         self.documentId = documentId
         self.documentSharingService = documentSharingService
     }
     
+    /// Factory method to create a ShareViewModel
+    static func create(for document: MindFlowDocument) -> ShareViewModel? {
+        // document.id is a UUID (not optional)
+        let documentId = document.id.uuidString
+        
+        let authService = DependencyContainer.shared.makeAuthService()
+        guard authService.isAuthenticated, authService.currentUser != nil else {
+            print("Cannot create ShareViewModel: User not authenticated")
+            return nil
+        }
+        
+        return ShareViewModel(
+            documentId: documentId,
+            documentSharingService: DependencyContainer.shared.makeDocumentSharingService()
+        )
+    }
+    
     func loadCollaborators() {
+        isLoading = true
+        errorMessage = nil
+        
         documentSharingService.getDocumentCollaborators(documentId: documentId)
             .receive(on: DispatchQueue.main)
             .sink(
-                receiveCompletion: { completion in
+                receiveCompletion: { [weak self] completion in
+                    self?.isLoading = false
                     if case .failure(let error) = completion {
+                        self?.errorMessage = error.localizedDescription
                         print("Failed to load collaborators: \(error.localizedDescription)")
                     }
                 },
@@ -285,25 +307,24 @@ class ShareViewModel: ObservableObject {
     
     func createShareLink() {
         isCreatingLink = true
+        errorMessage = nil
         
-        documentSharingService.createShareLink(
-            documentId: documentId,
-            accessLevel: .viewOnly
-        )
-        .receive(on: DispatchQueue.main)
-        .sink(
-            receiveCompletion: { [weak self] completion in
-                self?.isCreatingLink = false
-                
-                if case .failure(let error) = completion {
-                    print("Failed to create share link: \(error.localizedDescription)")
+        documentSharingService.createShareLink(for: documentId)
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { [weak self] completion in
+                    self?.isCreatingLink = false
+                    
+                    if case .failure(let error) = completion {
+                        self?.errorMessage = error.localizedDescription
+                        print("Failed to create share link: \(error.localizedDescription)")
+                    }
+                },
+                receiveValue: { [weak self] shareLink in
+                    self?.shareLink = shareLink
                 }
-            },
-            receiveValue: { [weak self] shareLink in
-                self?.shareLink = shareLink
-            }
-        )
-        .store(in: &cancellables)
+            )
+            .store(in: &cancellables)
     }
     
     func inviteUser(email: String, accessLevel: DocumentAccessLevel) {

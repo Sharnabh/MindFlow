@@ -21,6 +21,15 @@ class TopicChangeTracker {
     /// Offline change queue
     private var offlineChanges: [TopicChange] = []
     
+    /// The current user profile
+    private var userProfile: UserProfile?
+    
+    /// The current topic ID being tracked
+    private var topicId: UUID?
+    
+    /// The current topic being tracked
+    private var topic: Topic?
+    
     /// Flag to indicate if the service is syncing changes
     private var isSyncing: Bool = false
     
@@ -88,7 +97,12 @@ class TopicChangeTracker {
         
         // Connect to the collaboration service
         if let currentUser = authService.currentUser {
-            collaborationService.connect(to: documentId, authToken: currentUser.id)
+            let authToken = currentUser.id ?? ""
+            if !authToken.isEmpty {
+                collaborationService.connect(to: documentId, authToken: authToken)
+            } else {
+                print("Warning: Cannot connect to collaboration service without auth token")
+            }
         }
     }
     
@@ -175,7 +189,7 @@ class TopicChangeTracker {
                 "x": topic.position.x,
                 "y": topic.position.y
             ],
-            "color": topic.backgroundColor.hexString ?? "",
+            "color": topic.backgroundColor.hexString ?? "#FFFFFF",
             "templateType": topic.templateType.rawValue
         ]
         
@@ -311,6 +325,57 @@ class TopicChangeTracker {
         )
         
         queueChange(change)
+    }
+    
+    /// Track changes to a topic
+    /// - Parameters:
+    ///   - topic: The topic to track changes for
+    ///   - currentUserProfile: The current user profile
+    func trackChangesToTopic(_ topic: Topic, currentUserProfile: UserProfile) {
+        self.userProfile = currentUserProfile
+        self.topicId = topic.id
+        self.topic = topic
+        // Document ID should be derived from the topic's metadata or passed separately
+        if let docId = topic.metadata?["documentId"] as? String {
+            self.documentId = docId
+        }
+        
+        // Store the user ID for this session
+        let userId = currentUserProfile.id
+        if !userId.isEmpty {
+            // Set the user ID for local change tracking
+            print("Setting user ID for change tracking: \(userId)")
+        } else {
+            print("Warning: No user ID available in current user profile")
+        }
+        
+        // Load the initial document version from UserDefaults or use 1 as default
+        if let documentId = self.documentId {
+            self.currentVersion = UserDefaults.standard.integer(forKey: "document_version_\(documentId)") 
+            if self.currentVersion == 0 {
+                self.currentVersion = 1
+                saveCurrentVersion()
+            }
+            
+            // Load any offline changes from storage
+            loadOfflineChanges()
+            
+            // Connect to the collaboration service
+            let authToken = currentUserProfile.id
+            if !authToken.isEmpty {
+                collaborationService.connect(to: documentId, authToken: authToken)
+            } else {
+                print("Warning: Cannot connect to collaboration service without auth token")
+            }
+        } else {
+            print("Warning: No document ID available for the topic")
+        }
+    }
+    
+    /// Update the local change queue
+    private func updateLocalChangeQueue() {
+        guard let topic = self.topic, let userId = userProfile?.id else { return }
+        // ... existing code ...
     }
     
     // MARK: - Private Methods

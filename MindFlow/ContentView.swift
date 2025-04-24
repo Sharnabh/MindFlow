@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: CanvasViewModel
     @State private var showingStartupScreen = true
     @State private var showingTemplatePopup = false
+    @State private var showShareView = false
     @ObservedObject private var documentManager = DocumentManager.shared
     
     // Get authentication service from dependency container
@@ -82,6 +83,43 @@ struct ContentView: View {
             // User authentication/profile indicator in toolbar
             HStack {
                 Spacer()
+                
+                // Share/Collaborate button
+                if !showingStartupScreen, let document = documentManager.activeDocument {
+                    Button(action: {
+                        showShareView = true
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.2.fill")
+                                .foregroundColor(.accentColor)
+                            
+                            Text("Collaborate")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.gray.opacity(0.1))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!authService.isAuthenticated)
+                    .popover(isPresented: $showShareView) {
+                        if let document = documentManager.activeDocument,
+                           let viewModel = ShareViewModel.create(for: document) {
+                            ShareView(viewModel: viewModel)
+                                .frame(width: 400, height: 500)
+                                .padding()
+                        } else {
+                            Text("Cannot share document. Please make sure you're signed in and the document has been saved.")
+                                .padding()
+                                .frame(width: 300)
+                        }
+                    }
+                    .padding(.trailing, 12)
+                }
                 
                 Menu {
                     if authService.isAuthenticated, let user = authService.currentUser {
@@ -191,6 +229,44 @@ struct ContentView: View {
             object: nil,
             queue: .main) { _ in
                 showingTemplatePopup = true
+        }
+        
+        // Collaboration notifications
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowShareView"),
+            object: nil,
+            queue: .main) { _ in
+                if !showingStartupScreen, documentManager.activeDocument != nil {
+                    showShareView = true
+                }
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowCollaboratorsView"),
+            object: nil,
+            queue: .main) { _ in
+                if !showingStartupScreen, documentManager.activeDocument != nil {
+                    // We'll use the same share view which includes collaborators
+                    showShareView = true
+                }
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("EnableCollaboration"),
+            object: nil,
+            queue: .main) { _ in
+                if !showingStartupScreen, let document = documentManager.activeDocument {
+                    viewModel.topicService.enableCollaboration(documentId: document.id.uuidString)
+                }
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("DisableCollaboration"),
+            object: nil,
+            queue: .main) { _ in
+                if !showingStartupScreen {
+                    viewModel.topicService.disableCollaboration()
+                }
         }
         
         // Open mind map - this is only for backward compatibility and should NOT be used for file opening

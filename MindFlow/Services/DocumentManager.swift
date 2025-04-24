@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 class DocumentManager: ObservableObject {
     static let shared = DocumentManager()
     
-    @Published var documents: [MindMapDocument] = []
+    @Published var documents: [MindFlowDocument] = []
     @Published var activeDocumentIndex: Int = -1
     
     private init() {
@@ -43,7 +43,7 @@ class DocumentManager: ObservableObject {
             templateType: templateType
         )
         
-        let newDocument = MindMapDocument(filename: name, topics: [centralTopic])
+        let newDocument = MindFlowDocument(filename: name, topics: [centralTopic])
         documents.append(newDocument)
         activeDocumentIndex = documents.count - 1
     }
@@ -61,7 +61,7 @@ class DocumentManager: ObservableObject {
             if let topics = loadedTopics {
                 // Create new document
                 let filename = url.lastPathComponent
-                let newDocument = MindMapDocument(filename: filename, url: url, topics: topics)
+                let newDocument = MindFlowDocument(filename: filename, url: url, topics: topics)
                 
                 DispatchQueue.main.async {
                     self.documents.append(newDocument)
@@ -154,10 +154,10 @@ class DocumentManager: ObservableObject {
     }
     
     // Update document URL after save
-    func updateDocumentURL(_ document: MindMapDocument, newURL: URL) {
+    func updateDocumentURL(_ document: MindFlowDocument, newURL: URL) {
         // Since we can't modify the URL property directly, we need to create a new document
         if let index = documents.firstIndex(where: { $0.id == document.id }) {
-            let newDocument = MindMapDocument(
+            let newDocument = MindFlowDocument(
                 filename: newURL.lastPathComponent,
                 url: newURL,
                 topics: document.topics
@@ -167,7 +167,7 @@ class DocumentManager: ObservableObject {
     }
     
     // Get the active document
-    var activeDocument: MindMapDocument? {
+    var activeDocument: MindFlowDocument? {
         guard activeDocumentIndex >= 0 && activeDocumentIndex < documents.count else {
             return nil
         }

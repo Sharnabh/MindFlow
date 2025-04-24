@@ -32,6 +32,9 @@ struct InfiniteCanvas: View {
     // Access theme service for background settings
     @ObservedObject private var themeService = DependencyContainer.shared.makeThemeService()
     
+    // Access collaboration service to show active collaborators
+    @ObservedObject private var collaborationService = DependencyContainer.shared.makeCollaborationService()
+    
     // Constants for canvas
     private let minScale: CGFloat = 0.1
     private let maxScale: CGFloat = 5.0
@@ -576,6 +579,66 @@ struct InfiniteCanvas: View {
             alert.alertStyle = .critical
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        }
+    }
+    
+    // Add this function to build the collaborator indicators
+    @ViewBuilder
+    private func collaboratorsIndicator() -> some View {
+        if viewModel.topicService.isCollaborating && !collaborationService.collaborators.isEmpty {
+            Menu {
+                Text("Active Collaborators (\(collaborationService.collaborators.count))")
+                    .font(.headline)
+                
+                Divider()
+                
+                ForEach(collaborationService.collaborators) { collaborator in
+                    HStack {
+                        Circle()
+                            .fill(Color(hex: collaborator.color) ?? .blue)
+                            .frame(width: 10, height: 10)
+                        Text(collaborator.displayName)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    ForEach(Array(collaborationService.collaborators.prefix(3).enumerated()), id: \.element.id) { index, collaborator in
+                        Circle()
+                            .fill(Color(hex: collaborator.color) ?? .blue)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 1)
+                            )
+                            .offset(x: -CGFloat(index * 5))
+                    }
+                    
+                    if collaborationService.collaborators.count > 0 {
+                        Text("\(collaborationService.collaborators.count)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(.systemFill).opacity(0.7))
+                .cornerRadius(12)
+            }
+        } else if viewModel.topicService.isCollaborating {
+            HStack(spacing: 4) {
+                Image(systemName: "person.2")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("Waiting for collaborators...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.systemFill).opacity(0.7))
+            .cornerRadius(12)
         }
     }
 }

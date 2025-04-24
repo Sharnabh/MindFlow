@@ -17,30 +17,29 @@ class DocumentSharingService {
     ///   - accessLevel: The access level to grant via this link
     ///   - expirationDays: Optional number of days until the link expires (nil = no expiration)
     /// - Returns: A publisher that emits the share link URL or an error
-    func createShareLink(documentId: String, 
-                         accessLevel: DocumentAccessLevel,
-                         expirationDays: Int? = 30) -> AnyPublisher<String, Error> {
-        guard let currentUser = authService.currentUser else {
-            return Fail(error: NSError(
-                domain: "MindFlow.DocumentSharingService",
-                code: 401,
-                userInfo: [NSLocalizedDescriptionKey: "User not authenticated"]
-            )).eraseToAnyPublisher()
+    func createShareLink(for documentId: String) -> AnyPublisher<String, Error> {
+        guard authService.isAuthenticated else {
+            return Fail(error: RESTAPIError.serverError(statusCode: 401, message: "Unauthorized")).eraseToAnyPublisher()
         }
         
-        let sharingRequest = SharingRequest(
-            documentId: documentId,
-            accessLevel: accessLevel,
-            expirationDays: expirationDays
-        )
+        // Use a much simpler request format that will work better with Node.js
+        let requestDictionary: [String: Any] = [
+            "accessLevel": "view"
+        ]
         
         return apiClient.post(
             endpoint: "documents/\(documentId)/share",
-            body: sharingRequest,
-            headers: ["Authorization": "Bearer \(currentUser.id)"]
+            body: requestDictionary
         )
-        .map { (response: ShareLinkResponse) -> String in
-            return response.shareLink
+        .tryMap { response -> String in
+            print("Share link response: \(response)")
+            
+            guard let shareLink = response["shareLink"] as? String,
+                  let success = response["success"] as? Bool, success else {
+                throw RESTAPIError.serverError(statusCode: 400, message: "Invalid response format")
+            }
+            
+            return shareLink
         }
         .eraseToAnyPublisher()
     }
@@ -100,20 +99,18 @@ class DocumentSharingService {
             )).eraseToAnyPublisher()
         }
         
-        let inviteRequest = InviteRequest(
-            email: email,
-            documentId: documentId,
-            accessLevel: accessLevel,
-            invitedBy: currentUser.id
-        )
+        let inviteRequest: [String: Any] = [
+            "email": email,
+            "accessLevel": accessLevel.rawValue
+        ]
         
         return apiClient.post(
             endpoint: "documents/\(documentId)/invite",
             body: inviteRequest,
             headers: ["Authorization": "Bearer \(currentUser.id)"]
         )
-        .map { (_: InviteResponse) -> Bool in
-            return true
+        .map { (response: [String: Any]) -> Bool in
+            return (response["success"] as? Bool) ?? false
         }
         .eraseToAnyPublisher()
     }
@@ -134,6 +131,62 @@ class DocumentSharingService {
             endpoint: "documents/\(documentId)/collaborators",
             headers: ["Authorization": "Bearer \(currentUser.id)"]
         )
+        .tryMap { (response: [Any]) -> [DocumentCollaborator] in
+            // Process the array of collaborators manually
+            return try response.compactMap { item -> DocumentCollaborator? in
+                guard let collabDict = item as? [String: Any] else { return nil }
+                
+                // Extract required fields with fallbacks
+                let id = collabDict["id"] as? String ?? UUID().uuidString
+                let email = collabDict["email"] as? String ?? "unknown@example.com"
+                let displayName = collabDict["displayName"] as? String ?? "Unknown User"
+                
+                // Handle optional fields
+                let photoURLString = collabDict["photoURL"] as? String
+                let photoURL = photoURLString != nil ? URL(string: photoURLString!) : nil
+                
+                let accessLevelStr = (collabDict["accessLevel"] as? String ?? "edit").lowercased()
+                let accessLevel: DocumentAccessLevel
+                switch accessLevelStr {
+                case "owner": accessLevel = .owner
+                case "edit": accessLevel = .edit
+                case "comment": accessLevel = .comment
+                default: accessLevel = .viewOnly
+                }
+                
+                // Handle dates
+                let dateFormatter = ISO8601DateFormatter()
+                let joinedAtStr = collabDict["joinedAt"] as? String
+                let joinedAt = joinedAtStr != nil ? 
+                    dateFormatter.date(from: joinedAtStr!) ?? Date() : Date()
+                
+                let lastActiveStr = collabDict["lastActive"] as? String
+                let lastActive = lastActiveStr != nil ?
+                    dateFormatter.date(from: lastActiveStr!) : nil
+                
+                let invitedBy = collabDict["invitedBy"] as? String
+                
+                let statusStr = (collabDict["status"] as? String ?? "active").lowercased()
+                let status: DocumentCollaborator.CollaboratorStatus
+                switch statusStr {
+                case "invited": status = .invited
+                case "removed": status = .removed
+                default: status = .active
+                }
+                
+                return DocumentCollaborator(
+                    id: id,
+                    email: email,
+                    displayName: displayName,
+                    photoURL: photoURL,
+                    accessLevel: accessLevel,
+                    joinedAt: joinedAt,
+                    lastActive: lastActive,
+                    invitedBy: invitedBy,
+                    status: status
+                )
+            }
+        }
         .eraseToAnyPublisher()
     }
     
@@ -154,18 +207,19 @@ class DocumentSharingService {
             )).eraseToAnyPublisher()
         }
         
-        let updateRequest = UpdateAccessRequest(
-            userId: userId,
-            accessLevel: accessLevel
-        )
+        // Use dictionary format for more flexibility
+        let updateRequest: [String: Any] = [
+            "userId": userId,
+            "accessLevel": accessLevel.rawValue
+        ]
         
-        return apiClient.put(
+        return apiClient.post(
             endpoint: "documents/\(documentId)/collaborators/\(userId)",
             body: updateRequest,
             headers: ["Authorization": "Bearer \(currentUser.id)"]
         )
-        .map { (_: EmptyResponse) -> Bool in
-            return true
+        .map { (response: EmptyResponse) -> Bool in
+            return response.success
         }
         .eraseToAnyPublisher()
     }
@@ -184,12 +238,13 @@ class DocumentSharingService {
             )).eraseToAnyPublisher()
         }
         
+        // Use dictionary format for flexibility
         return apiClient.delete(
             endpoint: "documents/\(documentId)/collaborators/\(userId)",
             headers: ["Authorization": "Bearer \(currentUser.id)"]
         )
-        .map { (_: EmptyResponse) -> Bool in
-            return true
+        .map { (response: EmptyResponse) -> Bool in 
+            return response.success
         }
         .eraseToAnyPublisher()
     }
