@@ -21,6 +21,31 @@ struct TopBarView: View {
                     
                     // Group all central buttons together in the middle
                     HStack(spacing: 12) {
+                        // Present button - start presentation mode
+                        Button(action: {
+                            // Start the presentation mode
+                            if !viewModel.topics.isEmpty {
+                                PresentationManager.shared.startPresentation(topics: viewModel.topics)
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "play.rectangle.fill")
+                                    .font(.system(size: 14))
+                                Text("Present")
+                                    .font(.system(size: 13))
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.gray.opacity(0.15))
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Start presentation mode")
+                        .disabled(viewModel.topics.isEmpty)
+                        .focusable(false)
+                        
                         // Auto layout button
                         Button(action: {
                             viewModel.performFullAutoLayout()
@@ -119,7 +144,7 @@ struct TopBarView: View {
                                     viewModel.topicHasNote(topic)
                                 } ?? false
                                 
-                                if hasNote {
+                                if (hasNote) {
                                     // If topic already has a note, load its content
                                     if let topic = viewModel.getTopicById(selectedId), let note = topic.note {
                                         viewModel.currentNoteContent = note.content
@@ -255,4 +280,4 @@ struct NoteEditorView: View {
             viewModel.isEditingNote = false
         }
     }
-} 
+}
