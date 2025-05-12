@@ -6,7 +6,8 @@ struct TopBarView: View {
     @Binding var isRelationshipMode: Bool
     @State private var showingNoteEditor = false
     let topBarHeight: CGFloat
-    
+    @State private var showingPresentationCustomization = false // Added state for customization sheet
+
     var body: some View {
         Rectangle()
             .fill(Color(.windowBackgroundColor))
@@ -21,11 +22,10 @@ struct TopBarView: View {
                     
                     // Group all central buttons together in the middle
                     HStack(spacing: 12) {
-                        // Present button - start presentation mode
+                        // Present button - now shows customization sheet
                         Button(action: {
-                            // Start the presentation mode
                             if !viewModel.topics.isEmpty {
-                                PresentationManager.shared.startPresentation(topics: viewModel.topics)
+                                self.showingPresentationCustomization = true // Show customization view
                             }
                         }) {
                             HStack(spacing: 4) {
@@ -42,10 +42,15 @@ struct TopBarView: View {
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help("Start presentation mode")
+                        .help("Customize and start presentation mode") // Updated help text
                         .disabled(viewModel.topics.isEmpty)
                         .focusable(false)
-                        
+                        .sheet(isPresented: $showingPresentationCustomization) { // Added sheet modifier
+                            PresentationCustomizationView(isPresented: $showingPresentationCustomization)
+                                .environmentObject(PresentationManager.shared) // Inject PresentationManager
+                                .environmentObject(viewModel) // Inject CanvasViewModel
+                        }
+
                         // Auto layout button
                         Button(action: {
                             viewModel.performFullAutoLayout()

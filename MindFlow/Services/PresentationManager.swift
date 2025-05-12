@@ -26,6 +26,7 @@ class PresentationManager: ObservableObject {
     @Published var slides: [Slide] = []
     @Published var currentSlideIndex: Int = 0
     @Published var slideTransition: AnyTransition = .opacity
+    @Published var settings: PresentationSettings = PresentationSettings.defaultSettings
     
     // Converts a mind map to slides
     func generateSlidesFromTopics(_ topics: [Topic]) -> [Slide] {
@@ -36,7 +37,7 @@ class PresentationManager: ObservableObject {
         
         // If there is more than one root topic, add an overview slide first.
         if rootTopics.count > 1 {
-            let overviewHeading = "OverView" // Changed heading
+            let overviewHeading = "Overview" // Changed heading
             let overviewBullets = rootTopics.map { $0.name }
             let overviewSlide = Slide(
                 heading: overviewHeading,
@@ -79,11 +80,17 @@ class PresentationManager: ObservableObject {
         }
     }
     
-    // Starts presentation
-    func startPresentation(topics: [Topic]) {
-        self.slides = generateSlidesFromTopics(topics)
+    // Starts presentation with already generated/selected slides
+    func startPresentation(slides: [Slide]) { // Modified to accept slides
+        self.slides = slides // Use the provided slides
         self.currentSlideIndex = 0
-        self.isPresenting = true
+        // Ensure isPresenting is set to true only if there are slides
+        if !self.slides.isEmpty {
+            self.isPresenting = true
+        } else {
+            print("Attempted to start presentation with no slides.")
+            self.isPresenting = false
+        }
     }
     
     // Navigate to next slide
