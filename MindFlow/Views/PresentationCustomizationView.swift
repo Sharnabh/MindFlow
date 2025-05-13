@@ -22,15 +22,40 @@ struct PresentationCustomizationView: View {
 
             HSplitView {
                 // Left Panel: Slide Preview and Selection
-                List {
-                    ForEach(slideSelections.indices, id: \.self) { index in
-                        HStack {
-                            Text(slideSelections[index].slide.heading)
-                                .lineLimit(1)
-                            Spacer()
-                            Toggle("", isOn: $slideSelections[index].isSelected)
-                                .labelsHidden()
+                VStack {
+                    Text("Select Slides")
+                        .font(.headline)
+                    List {
+                        ForEach($slideSelections, id: \.id) { $selection in // Explicitly provide id
+                            HStack {
+                                SlideSnapshotView(slide: selection.slide, settings: settings) // Added snapshot
+                                Text(selection.slide.heading)
+                                Spacer()
+                                Toggle("", isOn: $selection.isSelected)
+                                
+                                // Show delete button only for slides that are duplicates (have same heading as another slide)
+                                if isDuplicate(selection.slide) {
+                                    Button(action: {
+                                        if let index = slideSelections.firstIndex(where: { $0.id == selection.id }) {
+                                            slideSelections.remove(at: index)
+                                            saveSlideArrangement()
+                                        }
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+                                    .help("Delete duplicate slide")
+                                }
+                            }
+                            .contextMenu {
+                                Button("Duplicate") {
+                                    duplicateSlide(selection)
+                                }
+                            }
                         }
+                        .onMove(perform: moveSlide)
+                        .onDelete(perform: deleteSlides)
                     }
                 }
                 .frame(minWidth: 200, idealWidth: 250, maxWidth: 400)
@@ -82,27 +107,124 @@ struct PresentationCustomizationView: View {
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 400, idealHeight: 500)
         .onAppear(perform: loadInitialData)
+        .background(
+            Button("") {
+                // Action for Cmd+D: Duplicate the selected or first slide
+                if let selected = slideSelections.first(where: { $0.isSelected }) {
+                    duplicateSlide(selected)
+                } else if let first = slideSelections.first {
+                    duplicateSlide(first)
+                }
+            }
+            .keyboardShortcut("d", modifiers: .command)
+            .hidden() // Make the button invisible so it doesn't affect layout
+        )
     }
 
     private func loadInitialData() {
         // Load current settings from the presentation manager
         self.settings = presentationManager.settings
-        // Load slides based on current topics in the canvas view model
+        // Load slides, prioritizing any existing custom arrangement in PresentationManager
         loadSlides()
     }
 
     private func loadSlides() {
-        // This function assumes canvasViewModel.topics is populated.
-        // It also relies on presentationManager.generateSlidesFromTopics to correctly produce slides.
-        let allSlides = presentationManager.generateSlidesFromTopics(canvasViewModel.topics)
-        self.slideSelections = allSlides.map { SlideSelection(slide: $0, isSelected: true) }
+        // Check if PresentationManager has an existing customized slide list
+        if let existingSlides = presentationManager.activePresentationSlides, !existingSlides.isEmpty {
+            self.slideSelections = existingSlides.map { SlideSelection(slide: $0, isSelected: true) }
+            print("Debug: Loaded existing custom slide arrangement. Count: \(existingSlides.count)")
+        } else {
+            // No existing custom list, or it's empty. Generate from topics.
+            let allGeneratedSlides = presentationManager.generateSlidesFromTopics(canvasViewModel.topics)
+            self.slideSelections = allGeneratedSlides.map { SlideSelection(slide: $0, isSelected: true) }
+            print("Debug: Generated new slides from topics. Count: \(allGeneratedSlides.count)")
+            // Save this newly generated list as the current custom arrangement
+            saveSlideArrangement()
+        }
+    }
+
+    private func saveSlideArrangement() {
+        let currentSlidesToSave = slideSelections.map { $0.slide }
+        presentationManager.activePresentationSlides = currentSlidesToSave
+        print("Debug: Saved slide arrangement to PresentationManager. Count: \(currentSlidesToSave.count). First slide (if any): \(currentSlidesToSave.first?.heading ?? "N/A")")
+    }
+
+    private func moveSlide(from source: IndexSet, to destination: Int) {
+        slideSelections.move(fromOffsets: source, toOffset: destination)
+        saveSlideArrangement() // Persist changes to PresentationManager
+    }
+
+    private func deleteSlides(at offsets: IndexSet) {
+        slideSelections.remove(atOffsets: offsets)
+        saveSlideArrangement() // Persist changes to PresentationManager
+    }
+
+    private func duplicateSlide(_ slideSelectionToDuplicate: SlideSelection) {
+        // If Slide is a class, ensure a deep copy is made here.
+        // For example, Slide might need a copy() method or a copy initializer:
+        // let newSlideData = slideSelectionToDuplicate.slide.copy()
+        // If Slide is a struct, direct assignment creates a copy.
+        let newSlideData = slideSelectionToDuplicate.slide
+
+        let newSelection = SlideSelection(slide: newSlideData, isSelected: true)
+        
+        if let index = slideSelections.firstIndex(where: { $0.id == slideSelectionToDuplicate.id }) {
+            slideSelections.insert(newSelection, at: index + 1)
+        } else {
+            slideSelections.append(newSelection)
+        }
+        saveSlideArrangement() // Persist changes to PresentationManager
+    }
+    
+    private func isDuplicate(_ slide: Slide) -> Bool {
+        // Count how many slides have the same heading as this one
+        let matchingHeadingCount = slideSelections.filter { $0.slide.heading == slide.heading }.count
+        // If there's more than one with this heading, it's a duplicate
+        return matchingHeadingCount > 1
     }
 }
 
 struct SlideSelection: Identifiable {
-    var id: UUID { slide.id }
-    var slide: Slide // Corrected: Slide is a top-level struct
+    let id = UUID()
+    var slide: Slide
     var isSelected: Bool
+}
+
+struct SlideSnapshotView: View {
+    let slide: Slide
+    let settings: PresentationSettings
+
+    var body: some View {
+        ZStack {
+            settings.backgroundColor.color
+            VStack(alignment: .leading, spacing: 4) {
+                Text(slide.heading)
+                    .font(.system(size: 8, weight: .bold)) // Smaller font for preview
+                    .foregroundColor(settings.fontColor.color)
+                    .lineLimit(1) // Ensure heading fits
+
+                ForEach(slide.bullets.prefix(2), id: \.self) { bullet in // Show a couple of bullets
+                    HStack(alignment: .top, spacing: 2) {
+                        Text(settings.bulletStyle.rawValue)
+                            .font(.system(size: 6))
+                            .foregroundColor(settings.fontColor.color)
+                        Text(bullet)
+                            .font(.system(size: 6)) // Smaller font for preview
+                            .foregroundColor(settings.fontColor.color)
+                            .lineLimit(1) // Ensure bullet fits
+                    }
+                }
+                Spacer() // Push content to top
+            }
+            .padding(4) // Small padding within the snapshot
+        }
+        .frame(width: 80, height: 60) // Fixed size for the snapshot
+        .cornerRadius(4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Color.gray, lineWidth: 0.5) // Border for the snapshot
+        )
+    }
 }
 
 #if DEBUG

@@ -24,6 +24,7 @@ class PresentationManager: ObservableObject {
         }
     }
     @Published var slides: [Slide] = []
+    @Published var activePresentationSlides: [Slide]? // Added for persisting slide arrangements
     @Published var currentSlideIndex: Int = 0
     @Published var slideTransition: AnyTransition = .opacity
     @Published var settings: PresentationSettings = PresentationSettings.defaultSettings
