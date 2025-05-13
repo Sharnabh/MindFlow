@@ -62,6 +62,51 @@ struct PresentationCustomizationView: View {
 
                 ScrollView { // Right Panel: Customization Controls
                     Form {
+                        Section(header: Text("Themes")) {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(PresentationTheme.allCases, id: \.self) { theme in
+                                        Button(action: {
+                                            applyTheme(theme)
+                                        }) {
+                                            VStack {
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .fill(theme.backgroundColor)
+                                                    .frame(width: 80, height: 45)
+                                                    .overlay(
+                                                        VStack(alignment: .leading, spacing: 4) {
+                                                            Text("Aa")
+                                                                .font(.system(size: 12, weight: .bold))
+                                                                .foregroundColor(theme.textColor)
+                                                            
+                                                            HStack(spacing: 3) {
+                                                                Text("•")
+                                                                    .font(.system(size: 10))
+                                                                    .foregroundColor(theme.textColor)
+                                                                Text("Aa")
+                                                                    .font(.system(size: 9))
+                                                                    .foregroundColor(theme.textColor)
+                                                            }
+                                                        }
+                                                        .padding(6)
+                                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading),
+                                                        alignment: .topLeading
+                                                    )
+                                                    .shadow(radius: 1)
+                                                
+                                                Text(theme.name)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.primary)
+                                            }
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                            }
+                            .padding(.horizontal, -8)
+                        }
+                        
                         Section(header: Text("Appearance")) {
                             ColorPicker("Background Color", selection: $settings.backgroundColor.color)
                             ColorPicker("Font Color", selection: $settings.fontColor.color)
@@ -181,6 +226,95 @@ struct PresentationCustomizationView: View {
         let matchingHeadingCount = slideSelections.filter { $0.slide.heading == slide.heading }.count
         // If there's more than one with this heading, it's a duplicate
         return matchingHeadingCount > 1
+    }
+    
+    private func applyTheme(_ theme: PresentationTheme) {
+        // Apply the theme properties to the current settings
+        settings.backgroundColor = CodableColor(color: theme.backgroundColor)
+        settings.fontColor = CodableColor(color: theme.textColor)
+        settings.fontName = theme.fontName
+        settings.fontSize = theme.fontSize
+        settings.headingFontSize = theme.headingFontSize
+        settings.bulletStyle = theme.bulletStyle
+        
+        // Print debug message
+        print("Debug: Applied theme: \(theme.name)")
+    }
+}
+
+// Define PresentationTheme enum
+enum PresentationTheme: String, CaseIterable {
+    case classic = "Classic"
+    case modern = "Modern"
+    case minimal = "Minimal"
+    case dark = "Dark"
+    case gradient = "Gradient"
+    case nature = "Nature"
+    case tech = "Technology"
+    case business = "Business"
+    
+    var name: String {
+        return self.rawValue
+    }
+    
+    var backgroundColor: Color {
+        switch self {
+        case .classic: return Color.white
+        case .modern: return Color(red: 0.95, green: 0.95, blue: 0.97)
+        case .minimal: return Color(red: 0.98, green: 0.98, blue: 0.98)
+        case .dark: return Color(red: 0.15, green: 0.15, blue: 0.18)
+        case .gradient: return Color(red: 0.2, green: 0.4, blue: 0.6)
+        case .nature: return Color(red: 0.2, green: 0.5, blue: 0.3)
+        case .tech: return Color(red: 0.1, green: 0.1, blue: 0.2)
+        case .business: return Color(red: 0.95, green: 0.95, blue: 0.95)
+        }
+    }
+    
+    var textColor: Color {
+        switch self {
+        case .classic, .modern, .minimal, .business: return Color.black
+        case .dark, .gradient, .nature, .tech: return Color.white
+        }
+    }
+    
+    var fontName: String {
+        switch self {
+        case .classic: return "Helvetica Neue"
+        case .modern: return "Arial"
+        case .minimal: return "System"
+        case .dark: return "Helvetica Neue"
+        case .gradient: return "Helvetica Neue"
+        case .nature: return "Times New Roman"
+        case .tech: return "Courier New"
+        case .business: return "Helvetica Neue"
+        }
+    }
+    
+    var fontSize: CGFloat {
+        switch self {
+        case .minimal: return 14
+        case .tech: return 18
+        default: return 16
+        }
+    }
+    
+    var headingFontSize: CGFloat {
+        switch self {
+        case .minimal: return 24
+        case .tech: return 30
+        default: return 28
+        }
+    }
+    
+    var bulletStyle: BulletStyle {
+        switch self {
+        case .classic, .business: return .disc
+        case .modern, .gradient: return .dash
+        case .minimal: return .circle
+        case .dark: return .star
+        case .nature: return .square
+        case .tech: return .square
+        }
     }
 }
 
