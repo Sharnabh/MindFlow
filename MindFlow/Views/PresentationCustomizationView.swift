@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // This view assumes PresentationManager, CanvasViewModel, PresentationSettings, Topic,
 // and the nested types PresentationManager.Slide and PresentationSettings.BulletStyle
@@ -11,6 +12,7 @@ struct PresentationCustomizationView: View {
 
     @State private var settings: PresentationSettings = PresentationSettings.defaultSettings
     @State private var slideSelections: [SlideSelection] = []
+    @State private var cancellables = Set<AnyCancellable>()
 
     let fontNames = ["System", "Helvetica Neue", "Arial", "Times New Roman", "Courier New"]
 
@@ -151,7 +153,14 @@ struct PresentationCustomizationView: View {
             .frame(height: 50)
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 400, idealHeight: 500)
-        .onAppear(perform: loadInitialData)
+        .onAppear {
+            loadInitialData()
+            setupTopicChangeObserver()
+        }
+        .onDisappear {
+            // Clear subscriptions when view disappears
+            cancellables.removeAll()
+        }
         .background(
             Button("") {
                 // Action for Cmd+D: Duplicate the selected or first slide
@@ -164,6 +173,10 @@ struct PresentationCustomizationView: View {
             .keyboardShortcut("d", modifiers: .command)
             .hidden() // Make the button invisible so it doesn't affect layout
         )
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TopicsChanged"))) { _ in
+            print("Debug: Received TopicsChanged notification")
+            regenerateSlides()
+        }
     }
 
     private func loadInitialData() {
@@ -174,7 +187,12 @@ struct PresentationCustomizationView: View {
     }
 
     private func loadSlides() {
-        // Check if PresentationManager has an existing customized slide list
+        print("Debug: Loading slides from topics: \(canvasViewModel.topics.count)")
+        
+        // First, ensure the presentation manager has up-to-date slides
+        presentationManager.updateSlidesFromTopics(canvasViewModel.topics)
+        
+        // Then check if PresentationManager has an existing customized slide list
         if let existingSlides = presentationManager.activePresentationSlides, !existingSlides.isEmpty {
             self.slideSelections = existingSlides.map { SlideSelection(slide: $0, isSelected: true) }
             print("Debug: Loaded existing custom slide arrangement. Count: \(existingSlides.count)")
@@ -189,9 +207,17 @@ struct PresentationCustomizationView: View {
     }
 
     private func saveSlideArrangement() {
-        let currentSlidesToSave = slideSelections.map { $0.slide }
-        presentationManager.activePresentationSlides = currentSlidesToSave
-        print("Debug: Saved slide arrangement to PresentationManager. Count: \(currentSlidesToSave.count). First slide (if any): \(currentSlidesToSave.first?.heading ?? "N/A")")
+        // Only save if we actually have slides to save
+        if !slideSelections.isEmpty {
+            let currentSlidesToSave = slideSelections.map { $0.slide }
+            presentationManager.activePresentationSlides = currentSlidesToSave
+            print("Debug: Saved slide arrangement to PresentationManager. Count: \(currentSlidesToSave.count). First slide (if any): \(currentSlidesToSave.first?.heading ?? "N/A")")
+            
+            // Post a notification that the presentation slides have been updated
+            NotificationCenter.default.post(name: Notification.Name("PresentationSlidesUpdated"), object: nil)
+        } else {
+            print("Debug: Not saving slide arrangement - no slides available")
+        }
     }
 
     private func moveSlide(from source: IndexSet, to destination: Int) {
@@ -239,6 +265,51 @@ struct PresentationCustomizationView: View {
         
         // Print debug message
         print("Debug: Applied theme: \(theme.name)")
+    }
+
+    private func setupTopicChangeObserver() {
+        // Use Combine to observe topic changes in the CanvasViewModel directly
+        canvasViewModel.$topics
+            .dropFirst() // Skip the initial value
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main) // Add debounce to handle multiple rapid changes
+            .sink { topics in
+                print("Debug: Detected topic change via Combine. Topic count: \(topics.count)")
+                
+                // Update the presentation manager's slides directly
+                self.presentationManager.updateSlidesFromTopics(topics)
+                
+                // Then regenerate our view's slides from the updated manager
+                self.regenerateSlides()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func regenerateSlides() {
+        // Print debug before regenerating
+        print("Debug: Regenerating slides from \(canvasViewModel.topics.count) topics")
+        
+        // Get currently selected slide IDs to try to maintain selection
+        let selectedSlideHeadings = Set(slideSelections.filter { $0.isSelected }.map { $0.slide.heading })
+        
+        // Generate fresh slides from current topics
+        let newSlides = presentationManager.generateSlidesFromTopics(canvasViewModel.topics)
+        print("Debug: Generated \(newSlides.count) new slides")
+        
+        // Create new slide selections, preserving selection state when possible based on heading matches
+        slideSelections = newSlides.map { slide in
+            SlideSelection(
+                slide: slide,
+                isSelected: selectedSlideHeadings.contains(slide.heading)
+            )
+        }
+        
+        // If no slides are selected, select them all by default
+        if !slideSelections.contains(where: { $0.isSelected }) {
+            slideSelections = slideSelections.map { SlideSelection(slide: $0.slide, isSelected: true) }
+        }
+        
+        // Save the updated slide arrangement
+        saveSlideArrangement()
     }
 }
 

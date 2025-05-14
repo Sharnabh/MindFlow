@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // Represents a slide in the presentation
 struct Slide: Identifiable {
@@ -94,6 +95,30 @@ class PresentationManager: ObservableObject {
         }
     }
     
+    // Updates slides based on the current topics while preserving selection state
+    func updateSlidesFromTopics(_ topics: [Topic]) {
+        // Generate fresh slides from current topics
+        let newSlides = generateSlidesFromTopics(topics)
+        
+        if let activeSlides = activePresentationSlides {
+            // Get selected slide headings to maintain selection state where possible
+            let selectedSlideHeadings = Set(activeSlides.map { $0.heading })
+            print("Debug: PresentationManager updating slides. Had \(activeSlides.count) slides, generated \(newSlides.count) new slides")
+            
+            // Update the active presentation slides
+            activePresentationSlides = newSlides
+            
+            // If we're currently presenting, update the slides array
+            if isPresenting {
+                slides = newSlides
+            }
+        } else {
+            // If no active slides yet, initialize them
+            print("Debug: PresentationManager initializing active slides with \(newSlides.count) slides")
+            activePresentationSlides = newSlides
+        }
+    }
+    
     // Navigate to next slide
     func nextSlide() {
         if currentSlideIndex < slides.count - 1 {
@@ -123,6 +148,6 @@ class PresentationManager: ObservableObject {
         currentSlideIndex = 0
         
         // Post notification to ensure all components know the presentation has ended
-        NotificationCenter.default.post(name: .init("PresentationEnded"), object: nil)
+        NotificationCenter.default.post(name: Notification.Name("PresentationEnded"), object: nil)
     }
 }

@@ -147,6 +147,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         onTopicsChanged?()
         
+        // Post a notification that topics have changed
+        NotificationCenter.default.post(name: .topicsChanged, object: nil)
+        
         return topic
     }
     
@@ -166,6 +169,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             parent.subtopics.append(subtopic)
             updateTopicAtPath(parent, path: parentPath.path)
             
+            // Post a notification that topics have changed
+            NotificationCenter.default.post(name: Notification.Name("TopicsChanged"), object: nil)
+            
             // Return the newly created subtopic
             return subtopic
         }
@@ -177,6 +183,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         guard let path = findTopicPath(id: topic.id)?.path else { return }
         updateTopicAtPath(topic, path: path)
         onTopicsChanged?()
+        
+        // Post a notification that topics have changed
+        NotificationCenter.default.post(name: Notification.Name("TopicsChanged"), object: nil)
     }
     
     func deleteTopic(withId id: UUID) {
@@ -198,6 +207,10 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             }
             
             onTopicsChanged?()
+            
+            // Post a notification that topics have changed
+            NotificationCenter.default.post(name: Notification.Name("TopicsChanged"), object: nil)
+            
             return
         }
         
@@ -207,6 +220,10 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             if removeSubtopicRecursively(id: id, from: &topic) {
                 topics[i] = topic
                 onTopicsChanged?()
+                
+                // Post a notification that topics have changed
+                NotificationCenter.default.post(name: Notification.Name("TopicsChanged"), object: nil)
+                
                 return
             }
         }
@@ -218,6 +235,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         topic.position = position
         updateTopicAtPath(topic, path: path.path)
         onTopicsChanged?()
+        
+        // Post a notification that topics have changed
+        NotificationCenter.default.post(name: Notification.Name("TopicsChanged"), object: nil)
     }
     
     // MARK: - Relations
@@ -460,6 +480,9 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Replace all topics with the new array
         topics = newTopics
         onTopicsChanged?()
+        
+        // Post a notification that topics have changed
+        NotificationCenter.default.post(name: Notification.Name("TopicsChanged"), object: nil)
     }
     
     // MARK: - Helper Methods
@@ -624,4 +647,4 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             topic.subtopics[i] = subtopic
         }
     }
-} 
+}
