@@ -41,11 +41,22 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		CEDBE2D22DD5C6BC001AD8E7 /* Exceptions for "MindFlow" folder in "Copy Bundle Resources" phase from "MindFlow" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = CED8ED032D83F83C00F37456 /* Resources */;
+			membershipExceptions = (
+				Services/LayoutService.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		CED8ED072D83F83C00F37456 /* MindFlow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				CED7A4992DB53E0400515CF9 /* Exceptions for "MindFlow" folder in "MindFlow" target */,
+				CEDBE2D22DD5C6BC001AD8E7 /* Exceptions for "MindFlow" folder in "Copy Bundle Resources" phase from "MindFlow" target */,
 			);
 			path = MindFlow;
 			sourceTree = "<group>";

@@ -17,7 +17,7 @@ protocol LayoutServiceProtocol {
 }
 
 // Main implementation of the LayoutService
-class LayoutService: LayoutServiceProtocol {
+class LayoutService: LayoutServiceProtocol, ObservableObject {
     // Constants for layout parameters
     private let horizontalSpacing: CGFloat = 250 // Space between parent and child
     private let verticalSpacing: CGFloat = 100   // Space between siblings
