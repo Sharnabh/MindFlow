@@ -482,12 +482,18 @@ func findTopicAt(position: CGPoint, in topics: [Topic], tolerance: CGFloat = 40)
             }
         }
 
-        // Don't search through relations for hit-testing
-        // This prevents infinite loops and is not the intended behavior for finding a topic *at* a point.
-
         return nil
     }
     
+    // First search through top-level topics directly
+    for topic in topics {
+        let box = getTopicBox(topic: topic)
+        if box.insetBy(dx: -tolerance, dy: -tolerance).contains(position) {
+            return topic
+        }
+    }
+    
+    // Then search through the hierarchy
     // Keep track of searched topics to avoid cycles
     var searched = Set<UUID>()
     

@@ -356,8 +356,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Create a new reference to work with
         var newParentTopic = parentPath.topic
-        // Create a complete deep copy of the child to ensure we don't lose any data
-        // This is critical to avoid the bug where topics disappear when made children
+        // Create a complete deep copy of the child
         let childCopy = childPath.topic.deepCopy()
         
         // Handle differently if we're moving a main topic vs a subtopic
@@ -372,15 +371,13 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             let newPosition = calculatePositionForNewSubtopic(newParentTopic)
             updatedChildTopic.position = newPosition
             
-            // IMPORTANT: Order of operations matters here!
-            // 1. Add the child to the parent's subtopics first
+            // Add the child to the parent's subtopics
             newParentTopic.subtopics.append(updatedChildTopic)
             
-            // 2. Update the parent in the hierarchy before removing the child from main topics
-            // This ensures the child exists somewhere in the hierarchy before being removed
+            // Update the parent in the hierarchy first
             updateTopicAtPath(newParentTopic, path: parentPath.path)
             
-            // 3. Only now remove the original child from the main topics array
+            // Now remove the original child from the main topics array
             if let index = topics.firstIndex(where: { $0.id == childId }) {
                 topics.remove(at: index)
             }

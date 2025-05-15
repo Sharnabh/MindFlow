@@ -420,7 +420,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         }
         
         let model = GenerativeModel(
-            name: "emini-2.5-flash-preview-04-17",
+            name: "gemini-1.5-flash",
             apiKey: currentApiKey,
             generationConfig: GenerationConfig(
                 temperature: 0.7,
@@ -551,7 +551,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         }
         
         let model = GenerativeModel(
-            name: "emini-2.5-flash-preview-04-17",
+            name: "gemini-1.5-flash",
             apiKey: currentApiKey,
             generationConfig: GenerationConfig(
                 temperature: 0.7,
