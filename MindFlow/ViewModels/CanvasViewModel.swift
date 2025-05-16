@@ -98,6 +98,9 @@ class CanvasViewModel: ObservableObject {
         NotificationCenter.default.addObserver(self, selector: #selector(handleLoadRequest), name: NSNotification.Name("LoadMindMap"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleExportRequest), name: NSNotification.Name("RequestTopicsForExport"), object: nil)
     
+        // Subtopic creation from circle taps
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAddSubtopicInDirection), name: .addSubtopicInDirection, object: nil)
+    
         // Undo/Redo
         NotificationCenter.default.addObserver(self, selector: #selector(handleUndoRequest), name: NSNotification.Name("UndoRequested"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(handleRedoRequest), name: NSNotification.Name("RedoRequested"), object: nil)
@@ -171,6 +174,18 @@ class CanvasViewModel: ObservableObject {
             backgroundStyle: .grid,
             selectedTopicId: selectedTopicId
         )
+    }
+    
+    @objc private func handleAddSubtopicInDirection(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let topicId = userInfo["topicId"] as? UUID,
+              let direction = userInfo["direction"] as? String else {
+            print("Error: Missing required information in addSubtopicInDirection notification")
+            return
+        }
+        
+        // Call the method that handles the positioning and creation of the subtopic
+        addSubtopicInDirection(to: topicId, direction: direction)
     }
     
     // MARK: - Topic Management
@@ -1184,5 +1199,52 @@ class CanvasViewModel: ObservableObject {
             subtopicIndex: subtopicCount,
             totalSubtopics: totalSubtopics
         )
+    }
+    
+    // MARK: - Directional Subtopic Creation
+    
+    /// Adds a subtopic in a specific direction relative to the parent topic
+    /// - Parameters:
+    ///   - parentId: The ID of the parent topic
+    ///   - direction: The direction in which to add the subtopic ("top", "right", "bottom", "left")
+    func addSubtopicInDirection(to parentId: UUID, direction: String) {
+        guard let parentTopic = topicService.getTopic(withId: parentId) else { return }
+        
+        // Save state for undo
+        historyService.saveState(topicService.topics)
+        
+        // Create a subtopic - we'll adjust its position based on direction
+        if let newSubtopic = topicService.addSubtopic(to: parentId) {
+            // Calculate position offset based on the direction
+            let baseOffset: CGFloat = 150 // Base distance from parent
+            var positionOffset = CGPoint.zero
+            
+            switch direction {
+            case "top":
+                positionOffset = CGPoint(x: 0, y: -baseOffset)
+            case "right":
+                positionOffset = CGPoint(x: baseOffset, y: 0)
+            case "bottom":
+                positionOffset = CGPoint(x: 0, y: baseOffset)
+            case "left":
+                positionOffset = CGPoint(x: -baseOffset, y: 0)
+            default:
+                positionOffset = CGPoint(x: baseOffset, y: 0) // Default to right
+            }
+            
+            // Calculate new position based on parent position and direction
+            let newPosition = CGPoint(
+                x: parentTopic.position.x + positionOffset.x,
+                y: parentTopic.position.y + positionOffset.y
+            )
+            
+            // Update the position of the new subtopic
+            var updatedSubtopic = newSubtopic
+            updatedSubtopic.position = newPosition
+            topicService.updateTopic(updatedSubtopic)
+        }
+        
+        // Re-layout if needed
+        performAutoLayout()
     }
 }

@@ -274,76 +274,76 @@ struct TopicContent: View {
             case .rectangle:
                 Rectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .roundedRectangle:
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .circle:
                 Capsule()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .line:
                 Rectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
                     .frame(height: 2)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .diamond:
                 Diamond()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .hexagon:
                 RegularPolygon(sides: 6)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .octagon:
                 RegularPolygon(sides: 8)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .parallelogram:
                 Parallelogram()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .cloud:
                 Cloud()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .heart:
                 Heart()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .shield:
                 Shield()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .star:
                 Star()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .document:
                 Document()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .doubleRectangle:
                 DoubleRectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .flag:
                 Flag()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .leftArrow:
                 Arrow(pointing: .left)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             case .rightArrow:
                 Arrow(pointing: .right)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .selectionGlow(isSelected: isSelected, color: topic.borderColor, topic: topic)
             }
         }
     }

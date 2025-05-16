@@ -28,6 +28,7 @@ struct ConnectionLinesView: View {
                                 from: topic,
                                 to: currentSubtopic, // Use current state
                                 color: currentSubtopic.borderColor,
+                                textColor: currentSubtopic.foregroundColor,
                                 forceCurved: false, // Not forcing curved, will use individual topic settings
                                 onDelete: { onDeleteParentChild(topic.id, currentSubtopic.id) }, // Pass parent-child delete action
                                 isRelationship: false, // This is a parent-child relationship
@@ -47,6 +48,7 @@ struct ConnectionLinesView: View {
                             from: topic,
                             to: relatedTopic, // Use current state of related topic
                             color: .purple,
+                            textColor: .white,
                             forceCurved: false, // Not forcing curved, will use individual topic settings
                             onDelete: { onDeleteRelation(topic.id, relatedTopic.id) },
                             isRelationship: true, // This is a relationship line
@@ -79,6 +81,7 @@ private struct ConnectionLine: View {
     let from: Topic
     let to: Topic
     let color: Color
+    let textColor: Color
     let forceCurved: Bool
     let onDelete: () -> Void
     let isRelationship: Bool
@@ -121,10 +124,10 @@ private struct ConnectionLine: View {
                 Button(action: onDelete) {
                     ZStack {
                         Circle()
-                            .fill(Color.blue)
+                            .fill(color)
                             .frame(width: 32, height: 32)
                         Image(systemName: "scissors")
-                            .foregroundColor(.white)
+                            .foregroundColor(textColor)
                             .font(.system(size: 16))
                     }
                 }
