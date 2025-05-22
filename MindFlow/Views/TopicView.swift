@@ -1,52 +1,5 @@
 import SwiftUI
 
-// MARK: - AddSubtopicButton
-struct AddSubtopicButton: View {
-    let color: Color // The circle color
-    let textColor: Color // The plus icon color
-    let topicId: UUID
-    let direction: String
-    
-    @State private var isHovering = false
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-                .opacity(isHovering ? 0.9 : 0.4) // Low opacity by default, higher when hovered
-            
-            // Plus icon
-            Image(systemName: "plus")
-                .font(.system(size: 6))
-                .foregroundColor(textColor)  // Using the topic's foreground text color
-                .opacity(isHovering ? 0.9 : 0.4) // Low opacity by default, higher when hovered
-            
-            Color.clear
-                .frame(width: 30, height: 30) // Larger tap area
-                .contentShape(Circle())
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isHovering = hovering
-                        if hovering {
-                            NSCursor.pointingHand.set()
-                        } else {
-                            NSCursor.arrow.set()
-                        }
-                    }
-                }
-                .onTapGesture {
-                    // Post notification to add subtopic in the specified direction
-                    NotificationCenter.default.post(
-                        name: .addSubtopicInDirection,
-                        object: nil,
-                        userInfo: ["topicId": topicId, "direction": direction]
-                    )
-                }
-        }
-    }
-}
-
 // MARK: - CGPoint Extensions
 extension CGPoint: @retroactive AdditiveArithmetic {}
 extension CGPoint: @retroactive VectorArithmetic {
@@ -94,7 +47,7 @@ extension View {
         }
     }
     
-    @ViewBuilder func selectionGlow(isSelected: Bool, color: Color, topic: Topic) -> some View {
+    @ViewBuilder func selectionGlow(isSelected: Bool, color: Color) -> some View {
         self
             .shadow(color: isSelected ? color.opacity(0.9) : .clear, radius: 4, x: 0, y: 0)
             .overlay(
@@ -109,74 +62,6 @@ extension View {
                                 Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true),
                                 value: isSelected
                             )
-                            
-                        // White circles around the selected topic based on template type
-                        GeometryReader { geometry in
-                            ZStack {
-                                Group {
-                                    // For mind map template, only show right circle
-                                    if topic.templateType == .mindMap {
-                                        // Right circle
-                                        AddSubtopicButton(
-                                            color: color,
-                                            textColor: topic.foregroundColor,
-                                            topicId: topic.id,
-                                            direction: "right"
-                                        )
-                                        .position(x: geometry.size.width + 15, y: geometry.size.height / 2)
-                                    }
-                                    // For tree template, only show bottom circle
-                                    else if topic.templateType == .tree {
-                                        // Bottom circle
-                                        AddSubtopicButton(
-                                            color: color,
-                                            textColor: topic.foregroundColor,
-                                            topicId: topic.id,
-                                            direction: "bottom"
-                                        )
-                                        .position(x: geometry.size.width / 2, y: geometry.size.height + 15)
-                                    }
-                                    // For other template types, show all circles
-                                    else {
-                                        // Top circle
-                                        AddSubtopicButton(
-                                            color: color,
-                                            textColor: topic.foregroundColor,
-                                            topicId: topic.id,
-                                            direction: "top"
-                                        )
-                                        .position(x: geometry.size.width / 2, y: -15)
-                                        
-                                        // Right circle
-                                        AddSubtopicButton(
-                                            color: color,
-                                            textColor: topic.foregroundColor,
-                                            topicId: topic.id,
-                                            direction: "right"
-                                        )
-                                        .position(x: geometry.size.width + 15, y: geometry.size.height / 2)
-                                        
-                                        // Bottom circle
-                                        AddSubtopicButton(
-                                            color: color,
-                                            textColor: topic.foregroundColor,
-                                            topicId: topic.id,
-                                            direction: "bottom"
-                                        )
-                                        .position(x: geometry.size.width / 2, y: geometry.size.height + 15)
-                                        
-                                        // Left circle
-                                        AddSubtopicButton(
-                                            color: color,
-                                            textColor: topic.foregroundColor,
-                                            topicId: topic.id,
-                                            direction: "left"
-                                        )
-                                        .position(x: -15, y: geometry.size.height / 2)
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             )
