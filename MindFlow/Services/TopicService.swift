@@ -57,8 +57,8 @@ struct TopicPath {
 
 // Main implementation of the TopicService
 class TopicService: TopicServiceProtocol, ObservableObject {
-    @Published private(set) var topics: [Topic] = []
-    @Published private(set) var selectedTopicId: UUID?
+    @Published var topics: [Topic] = []
+    @Published var selectedTopicId: UUID?
     
     // For clipboard operations
     private var copiedTopic: Topic?
@@ -566,7 +566,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     // Update a topic at the specified path
-    private func updateTopicAtPath(_ topic: Topic, path: TopicPath) {
+    internal func updateTopicAtPath(_ topic: Topic, path: TopicPath) {
         if path.isEmpty {
             // It's a main topic
             if path.mainTopicIndex < topics.count {
@@ -604,7 +604,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     // Recursively remove a subtopic from the hierarchy
-    private func removeSubtopicRecursively(id: UUID, from topic: inout Topic) -> Bool {
+    internal func removeSubtopicRecursively(id: UUID, from topic: inout Topic) -> Bool {
         // Check direct children
         if let index = topic.subtopics.firstIndex(where: { $0.id == id }) {
             topic.subtopics.remove(at: index)
@@ -624,7 +624,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     // Calculate position for a new subtopic
-    private func calculatePositionForNewSubtopic(_ parentTopic: Topic) -> CGPoint {
+    internal func calculatePositionForNewSubtopic(_ parentTopic: Topic) -> CGPoint {
         let subtopicOffset: CGFloat = 150
         
         // Default position is to the right of the parent
