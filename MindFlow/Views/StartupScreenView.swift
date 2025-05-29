@@ -521,43 +521,70 @@ func createNewFromTemplate(template: TemplateItem) {
     
     savePanel.begin { result in
         if result == .OK, let url = savePanel.url {
-            // Close the startup screen and show the canvas
             self.closeStartupScreenAndShowCanvas()
-            
-            // Clear the canvas
-            MindFlowFileManager.shared.newFile()
-            NotificationCenter.default.post(name: NSNotification.Name("ClearCanvas"), object: nil)
-            
-            // Create a new mind map with a template structure
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                // Add the central topic to the canvas
-                self.viewModel.topicService.addTopic(centralTopic)
-                
-                // Select the topic
-                self.viewModel.topicService.selectTopic(withId: centralTopic.id)
-                
-                // Save the file
-                MindFlowFileManager.shared.saveFile(topics: [centralTopic], to: url) { success, errorMessage in
-                    if success {
-                        // Set as current file
-                        MindFlowFileManager.shared.currentURL = url
-                        
-                        // Add to recent files
-                        let newRecentFile = RecentFile(
-                            name: url.lastPathComponent,
-                            date: Date(),
-                            url: url
-                        )
-                        UserDefaults.standard.addToRecentFiles(newRecentFile)
-                    } else if let error = errorMessage {
-                        // Display error alert
-                        let alert = NSAlert()
-                        alert.messageText = "Failed to save file"
-                        alert.informativeText = error
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "OK")
-                        alert.runModal()
+
+            let fileName = url.deletingPathExtension().lastPathComponent
+
+            // 1. Create the document correctly in DocumentManager
+            // This will set up the activeDocument with the single correct topic.
+            DocumentManager.shared.createNewDocument(name: fileName, templateType: templateType)
+
+            // 2. Get the newly created active document's topics
+            guard let activeDoc = DocumentManager.shared.activeDocument else {
+                // Handle error: document not created or no topics
+                let alert = NSAlert()
+                alert.messageText = "Failed to create document"
+                alert.informativeText = "Could not retrieve the new document for saving (activeDocument is nil)."
+                alert.alertStyle = .critical
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+                return
+            }
+            // activeDoc.topics is [Topic], not Optional<[Topic]>
+            // The original 'guard let topicsToSave = activeDoc.topics' was incorrect if topics is non-optional.
+            let topicsToSave = activeDoc.topics
+
+            // It's good practice to check if topicsToSave is empty if that's an unexpected state,
+            // though the original code didn't explicitly do this beyond the guard.
+            // If an empty topics array is a problem, add a check here.
+            // For example:
+            // if topicsToSave.isEmpty {
+            //     let alert = NSAlert()
+            //     alert.messageText = "Document Creation Issue"
+            //     alert.informativeText = "The new document was created without any topics."
+            //     alert.alertStyle = .warning
+            //     alert.addButton(withTitle: "OK")
+            //     alert.runModal()
+            //     return
+            // }
+
+            // 3. Save these topics to the URL chosen by the user
+            MindFlowFileManager.shared.saveFile(topics: topicsToSave, to: url) { success, errorMessage in
+                if success {
+                    // 4. Update the document manager with the new URL for the saved document
+                    DocumentManager.shared.updateDocumentURL(activeDoc, newURL: url)
+                    // If isModified is a var, it should be set on the instance DocumentManager now holds
+                    // If DocumentManager replaced the instance, that new instance should have isModified = false
+                    // Or, if activeDoc is still the same reference and mutable:
+                    // activeDoc.isModified = false
+
+                    // Add to recent files
+                    let newRecentFile = RecentFile(name: url.lastPathComponent, date: Date(), url: url)
+                    UserDefaults.standard.addToRecentFiles(newRecentFile)
+                    
+                    // Select the newly created topic if possible
+                    if let firstTopicId = topicsToSave.first?.id {
+                         self.viewModel.topicService.selectTopic(withId: firstTopicId)
                     }
+
+                } else if let error = errorMessage {
+                    // Display error alert
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to save file"
+                    alert.informativeText = error
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
                 }
             }
         }
