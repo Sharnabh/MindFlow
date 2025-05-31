@@ -221,12 +221,12 @@ class CanvasViewModel: ObservableObject {
         _ = topicService.addMainTopic(at: position)
     }
     
-    func addSubtopic(to parentId: UUID) {
+    func addSubtopic(to parentId: UUID, preferredSide: Topic.SubtopicPlacementSide? = nil) {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
         // Add the subtopic
-        _ = topicService.addSubtopic(to: parentId)
+        _ = topicService.addSubtopic(to: parentId, preferredSide: preferredSide)
         
         // Auto-layout after adding subtopic
         performAutoLayout()

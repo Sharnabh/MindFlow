@@ -18,9 +18,7 @@ struct TemplateSelectionPopup: View {
     private let templates = [
         (name: "Mind Map", icon: "brain", type: TemplateType.mindMap, color: Color(hex: "#4E4376") ?? .purple),
         (name: "Tree", icon: "tree", type: TemplateType.tree, color: Color(hex: "#81C784") ?? .green),
-        (name: "Concept Map", icon: "network", type: TemplateType.conceptMap, color: Color(hex: "#64B5F6") ?? .blue),
-        (name: "Flowchart", icon: "arrow.triangle.branch", type: TemplateType.flowchart, color: Color(hex: "#4DB6AC") ?? .teal),
-        (name: "Org Chart", icon: "person.3", type: TemplateType.orgChart, color: Color(hex: "#B39DDB") ?? .purple)
+        (name: "Algorithm", icon: "function", type: TemplateType.algorithm, color: Color(hex: "#81C784") ?? .green)
     ]
     
     var body: some View {
@@ -89,4 +87,4 @@ struct TemplateSelectionPopup: View {
             print("Selected template: \(template)")
         }
     }
-} 
+}

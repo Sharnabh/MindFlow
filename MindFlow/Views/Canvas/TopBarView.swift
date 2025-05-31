@@ -6,7 +6,8 @@ struct TopBarView: View {
     @Binding var isRelationshipMode: Bool
     @State private var showingNoteEditor = false
     let topBarHeight: CGFloat
-    
+    @State private var showingPresentationCustomization = false // Added state for customization sheet
+
     var body: some View {
         Rectangle()
             .fill(Color(.windowBackgroundColor))
@@ -21,6 +22,35 @@ struct TopBarView: View {
                     
                     // Group all central buttons together in the middle
                     HStack(spacing: 12) {
+                        // Present button - now shows customization sheet
+                        Button(action: {
+                            if !viewModel.topics.isEmpty {
+                                self.showingPresentationCustomization = true // Show customization view
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "play.rectangle.fill")
+                                    .font(.system(size: 14))
+                                Text("Present")
+                                    .font(.system(size: 13))
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.gray.opacity(0.15))
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Customize and start presentation mode") // Updated help text
+                        .disabled(viewModel.topics.isEmpty)
+                        .focusable(false)
+                        .sheet(isPresented: $showingPresentationCustomization) { // Added sheet modifier
+                            PresentationCustomizationView(isPresented: $showingPresentationCustomization)
+                                .environmentObject(PresentationManager.shared) // Inject PresentationManager
+                                .environmentObject(viewModel) // Inject CanvasViewModel
+                        }
+
                         // Auto layout button
                         Button(action: {
                             viewModel.performFullAutoLayout()
@@ -119,7 +149,7 @@ struct TopBarView: View {
                                     viewModel.topicHasNote(topic)
                                 } ?? false
                                 
-                                if hasNote {
+                                if (hasNote) {
                                     // If topic already has a note, load its content
                                     if let topic = viewModel.getTopicById(selectedId), let note = topic.note {
                                         viewModel.currentNoteContent = note.content
@@ -255,4 +285,4 @@ struct NoteEditorView: View {
             viewModel.isEditingNote = false
         }
     }
-} 
+}

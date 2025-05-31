@@ -11,7 +11,7 @@ protocol TopicServiceProtocol {
     
     // Write operations
     func addMainTopic(at position: CGPoint) -> Topic
-    func addSubtopic(to parentId: UUID, preferredSide: Topic.SubtopicPlacementSide?) -> Topic?
+    func addSubtopic(to parentId: UUID) -> Topic?
     func updateTopic(_ topic: Topic)
     func deleteTopic(withId id: UUID)
     func moveTopic(withId id: UUID, to position: CGPoint)
@@ -57,8 +57,8 @@ struct TopicPath {
 
 // Main implementation of the TopicService
 class TopicService: TopicServiceProtocol, ObservableObject {
-    @Published var topics: [Topic] = []
-    @Published var selectedTopicId: UUID?
+    @Published private(set) var topics: [Topic] = []
+    @Published private(set) var selectedTopicId: UUID?
     
     // For clipboard operations
     private var copiedTopic: Topic?
@@ -153,7 +153,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         return topic
     }
     
-    func addSubtopic(to parentId: UUID, preferredSide: Topic.SubtopicPlacementSide? = nil) -> Topic? {
+    func addSubtopic(to parentId: UUID) -> Topic? {
         guard let parentTopic = getTopic(withId: parentId) else { return nil }
         
         // Calculate position for new subtopic
@@ -161,8 +161,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Create the subtopic
         let count = parentTopic.subtopics.count + 1
-        var subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: count)
-        subtopic.preferredPlacementSide = preferredSide // Set the preferred placement side
+        let subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: count)
         
         // Add to parent
         if let parentPath = findTopicPath(id: parentId) {
@@ -357,8 +356,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Create a new reference to work with
         var newParentTopic = parentPath.topic
-        // Create a complete deep copy of the child to ensure we don't lose any data
-        // This is critical to avoid the bug where topics disappear when made children
+        // Create a complete deep copy of the child
         let childCopy = childPath.topic.deepCopy()
         
         // Handle differently if we're moving a main topic vs a subtopic
@@ -373,15 +371,13 @@ class TopicService: TopicServiceProtocol, ObservableObject {
             let newPosition = calculatePositionForNewSubtopic(newParentTopic)
             updatedChildTopic.position = newPosition
             
-            // IMPORTANT: Order of operations matters here!
-            // 1. Add the child to the parent's subtopics first
+            // Add the child to the parent's subtopics
             newParentTopic.subtopics.append(updatedChildTopic)
             
-            // 2. Update the parent in the hierarchy before removing the child from main topics
-            // This ensures the child exists somewhere in the hierarchy before being removed
+            // Update the parent in the hierarchy first
             updateTopicAtPath(newParentTopic, path: parentPath.path)
             
-            // 3. Only now remove the original child from the main topics array
+            // Now remove the original child from the main topics array
             if let index = topics.firstIndex(where: { $0.id == childId }) {
                 topics.remove(at: index)
             }
@@ -567,7 +563,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     // Update a topic at the specified path
-    internal func updateTopicAtPath(_ topic: Topic, path: TopicPath) {
+    private func updateTopicAtPath(_ topic: Topic, path: TopicPath) {
         if path.isEmpty {
             // It's a main topic
             if path.mainTopicIndex < topics.count {
@@ -605,7 +601,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     // Recursively remove a subtopic from the hierarchy
-    internal func removeSubtopicRecursively(id: UUID, from topic: inout Topic) -> Bool {
+    private func removeSubtopicRecursively(id: UUID, from topic: inout Topic) -> Bool {
         // Check direct children
         if let index = topic.subtopics.firstIndex(where: { $0.id == id }) {
             topic.subtopics.remove(at: index)
@@ -625,7 +621,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     }
     
     // Calculate position for a new subtopic
-    internal func calculatePositionForNewSubtopic(_ parentTopic: Topic) -> CGPoint {
+    private func calculatePositionForNewSubtopic(_ parentTopic: Topic) -> CGPoint {
         let subtopicOffset: CGFloat = 150
         
         // Default position is to the right of the parent

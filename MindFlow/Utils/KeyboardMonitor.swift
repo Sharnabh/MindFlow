@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Cocoa
 
 // MARK: - Key Code Constants
 enum KeyCode {
@@ -16,6 +17,7 @@ extension NSNotification.Name {
     static let undoRequested = NSNotification.Name("UndoRequested")
     static let redoRequested = NSNotification.Name("RedoRequested")
     static let returnFocusToCanvas = NSNotification.Name("ReturnFocusToCanvas")
+    static let keyDown = NSNotification.Name("KeyDown")
 }
 
 // MARK: - KeyboardMonitor Protocol for testability
@@ -42,6 +44,7 @@ class KeyboardMonitor: KeyboardMonitorProtocol {
     
     // Event monitor reference
     private var monitor: Any?
+    private var eventMonitor: Any?
     
     // Notification center
     private let notificationCenter: NotificationCenterProtocol
@@ -141,6 +144,9 @@ class KeyboardMonitor: KeyboardMonitorProtocol {
             
             self?.keyHandler?(event)
             
+            // Post notification so it can be observed elsewhere
+            NotificationCenter.default.post(name: .keyDown, object: event)
+            
             // Return nil for handled events to prevent system sound and default behavior
             return shouldPassEvent ? event : nil
         }
@@ -151,5 +157,9 @@ class KeyboardMonitor: KeyboardMonitorProtocol {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
     }
-} 
+}

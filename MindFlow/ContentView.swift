@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showingStartupScreen = true
     @State private var showingTemplatePopup = false
     @ObservedObject private var documentManager = DocumentManager.shared
+    @ObservedObject private var presentationManager = PresentationManager.shared
     
     // Panel reference to prevent multiple panels
     private static var currentOpenPanel: NSOpenPanel? = nil
@@ -84,6 +85,10 @@ struct ContentView: View {
             
             // Register for notifications
             registerNotifications()
+        }
+        // No more sheet, the presentation is handled by PresentationHelper
+        .onReceive(NotificationCenter.default.publisher(for: .init("PresentationEnded"))) { _ in
+            presentationManager.isPresenting = false
         }
     }
     

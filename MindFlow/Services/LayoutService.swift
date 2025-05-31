@@ -17,7 +17,7 @@ protocol LayoutServiceProtocol {
 }
 
 // Main implementation of the LayoutService
-class LayoutService: LayoutServiceProtocol {
+class LayoutService: LayoutServiceProtocol, ObservableObject {
     // Constants for layout parameters
     private let horizontalSpacing: CGFloat = 250 // Space between parent and child
     private let verticalSpacing: CGFloat = 100   // Space between siblings
@@ -251,6 +251,107 @@ class LayoutService: LayoutServiceProtocol {
                 // Move to the next position
                 currentX += allocatedWidth + verticalSpacing
             }
+        } else if templateType == .algorithm {
+            // ALGORITHM/FLOWCHART TEMPLATE: Position subtopics vertically below the parent.
+            // If there are multiple subtopics, they are arranged horizontally first, then proceed downwards.
+
+            let parentSize = getTopicSize(for: topic) // Get parent topic's size
+
+            // Separate subtopics by preferred placement
+            let bottomSubtopics = topic.subtopics.filter { $0.preferredPlacementSide == .bottom || $0.preferredPlacementSide == nil }
+            let leftSubtopics = topic.subtopics.filter { $0.preferredPlacementSide == .left }
+            let rightSubtopics = topic.subtopics.filter { $0.preferredPlacementSide == .right }
+            let topSubtopics = topic.subtopics.filter { $0.preferredPlacementSide == .top } // Added topSubtopics
+
+            // Layout BOTTOM subtopics
+            if !bottomSubtopics.isEmpty {
+                let currentYBase = topic.position.y + parentSize.height / 2 + verticalSpacing
+                
+                // Pre-calculate sizes for bottom subtopics
+                let bottomSubtopicSizes = bottomSubtopics.map { getTopicSize(for: $0) }
+                let totalWidthOfBottom = bottomSubtopicSizes.reduce(0) { $0 + $1.width } + (bottomSubtopics.count > 1 ? horizontalSpacing * CGFloat(bottomSubtopics.count - 1) : 0)
+                var currentX = topic.position.x - totalWidthOfBottom / 2
+
+                for (index, subtopic) in bottomSubtopics.enumerated() {
+                    let subtopicSize = bottomSubtopicSizes[index]
+                    let x = currentX + subtopicSize.width / 2
+                    let y = currentYBase + subtopicSize.height / 2
+                    if let topicIndex = topic.subtopics.firstIndex(where: { $0.id == subtopic.id }) {
+                        topic.subtopics[topicIndex].position = CGPoint(x: x, y: y)
+                        // Recursively layout this subtopic's subtopics
+                        if !topic.subtopics[topicIndex].subtopics.isEmpty {
+                             layoutSubtopicTreeImproved(in: &topic.subtopics[topicIndex], horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                        }
+                    }
+                    currentX += subtopicSize.width + (index < bottomSubtopics.count - 1 ? horizontalSpacing : 0)
+                }
+            }
+
+            // Layout LEFT subtopics (stacked vertically)
+            if !leftSubtopics.isEmpty {
+                // Pre-calculate sizes for left subtopics
+                let leftSubtopicSizes = leftSubtopics.map { getTopicSize(for: $0) }
+                let totalHeightOfLeft = leftSubtopicSizes.reduce(0) { $0 + $1.height } + (leftSubtopics.count > 1 ? verticalSpacing * CGFloat(leftSubtopics.count - 1) : 0)
+                var currentY = topic.position.y - totalHeightOfLeft / 2
+
+                for (index, subtopic) in leftSubtopics.enumerated() {
+                    let subtopicSize = leftSubtopicSizes[index]
+                    let x = topic.position.x - parentSize.width / 2 - horizontalSpacing - subtopicSize.width / 2
+                    let y = currentY + subtopicSize.height / 2
+                     if let topicIndex = topic.subtopics.firstIndex(where: { $0.id == subtopic.id }) {
+                        topic.subtopics[topicIndex].position = CGPoint(x: x, y: y)
+                        // Recursively layout this subtopic's subtopics
+                        if !topic.subtopics[topicIndex].subtopics.isEmpty {
+                             layoutSubtopicTreeImproved(in: &topic.subtopics[topicIndex], horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                        }
+                    }
+                    currentY += subtopicSize.height + (index < leftSubtopics.count - 1 ? verticalSpacing : 0)
+                }
+            }
+
+            // Layout RIGHT subtopics (stacked vertically)
+            if !rightSubtopics.isEmpty {
+                // Pre-calculate sizes for right subtopics
+                let rightSubtopicSizes = rightSubtopics.map { getTopicSize(for: $0) }
+                let totalHeightOfRight = rightSubtopicSizes.reduce(0) { $0 + $1.height } + (rightSubtopics.count > 1 ? verticalSpacing * CGFloat(rightSubtopics.count - 1) : 0)
+                var currentY = topic.position.y - totalHeightOfRight / 2
+                
+                for (index, subtopic) in rightSubtopics.enumerated() {
+                    let subtopicSize = rightSubtopicSizes[index]
+                    let x = topic.position.x + parentSize.width / 2 + horizontalSpacing + subtopicSize.width / 2
+                    let y = currentY + subtopicSize.height / 2
+                    if let topicIndex = topic.subtopics.firstIndex(where: { $0.id == subtopic.id }) {
+                        topic.subtopics[topicIndex].position = CGPoint(x: x, y: y)
+                        // Recursively layout this subtopic's subtopics
+                        if !topic.subtopics[topicIndex].subtopics.isEmpty {
+                             layoutSubtopicTreeImproved(in: &topic.subtopics[topicIndex], horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                        }
+                    }
+                    currentY += subtopicSize.height + (index < rightSubtopics.count - 1 ? verticalSpacing : 0)
+                }
+            }
+
+            // Layout TOP subtopics (stacked vertically above)
+            if !topSubtopics.isEmpty {
+                // Pre-calculate sizes for top subtopics
+                let topSubtopicSizes = topSubtopics.map { getTopicSize(for: $0) }
+                let totalHeightOfTop = topSubtopicSizes.reduce(0) { $0 + $1.height } + (topSubtopics.count > 1 ? verticalSpacing * CGFloat(topSubtopics.count - 1) : 0)
+                var currentY = topic.position.y - parentSize.height / 2 - verticalSpacing - totalHeightOfTop // Adjust Y to be above parent
+
+                for (index, subtopic) in topSubtopics.enumerated() {
+                    let subtopicSize = topSubtopicSizes[index]
+                    let x = topic.position.x // Center horizontally with parent
+                    let y = currentY + subtopicSize.height / 2
+                     if let topicIndex = topic.subtopics.firstIndex(where: { $0.id == subtopic.id }) {
+                        topic.subtopics[topicIndex].position = CGPoint(x: x, y: y)
+                        // Recursively layout this subtopic's subtopics
+                        if !topic.subtopics[topicIndex].subtopics.isEmpty {
+                             layoutSubtopicTreeImproved(in: &topic.subtopics[topicIndex], horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+                        }
+                    }
+                    currentY += subtopicSize.height + (index < topSubtopics.count - 1 ? verticalSpacing : 0)
+                }
+            }
         } else {
             // MIND MAP TEMPLATE (DEFAULT): Position subtopics in a vertical column to the right
             
@@ -335,4 +436,4 @@ class LayoutService: LayoutServiceProtocol {
             topic.subtopics[i] = subtopic
         }
     }
-} 
+}

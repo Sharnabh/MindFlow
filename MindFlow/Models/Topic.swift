@@ -77,6 +77,14 @@ struct Topic: Identifiable, Equatable {
         }
     }
     
+    // New enum for specifying subtopic placement side
+    enum SubtopicPlacementSide: String, Codable {
+        case left
+        case right
+        case bottom // Default for algorithm flow
+        case top // Added new case for top placement
+    }
+
     var id: UUID
     var name: String
     var position: CGPoint
@@ -114,6 +122,9 @@ struct Topic: Identifiable, Equatable {
     // Template type for this topic and its descendants
     var templateType: TemplateType = .mindMap
     
+    // Preferred placement side for this topic relative to its parent (primarily for Algorithm template)
+    var preferredPlacementSide: SubtopicPlacementSide? = nil
+    
     init(
         id: UUID = UUID(),
         name: String,
@@ -141,7 +152,8 @@ struct Topic: Identifiable, Equatable {
         textAlignment: TextAlignment = .center,
         note: Note? = nil,
         metadata: [String: Any]? = nil,
-        templateType: TemplateType = .mindMap
+        templateType: TemplateType = .mindMap,
+        preferredPlacementSide: SubtopicPlacementSide? = nil // Added to initializer
     ) {
         self.id = id
         self.name = name
@@ -170,6 +182,7 @@ struct Topic: Identifiable, Equatable {
         self.note = note
         self.metadata = metadata
         self.templateType = templateType
+        self.preferredPlacementSide = preferredPlacementSide // Initialize the new property
     }
     
     // Implement Equatable
@@ -202,7 +215,8 @@ struct Topic: Identifiable, Equatable {
         // Compare metadata by checking if both are nil or both have the same count
         ((lhs.metadata == nil && rhs.metadata == nil) || 
          (lhs.metadata?.count == rhs.metadata?.count)) &&
-        lhs.templateType == rhs.templateType
+        lhs.templateType == rhs.templateType &&
+        lhs.preferredPlacementSide == rhs.preferredPlacementSide // Compare the new property
     }
 }
 
@@ -212,10 +226,11 @@ extension Topic {
             name: "Main Topic \(count)",
             position: position,
             templateType: templateType
+            // preferredPlacementSide will be nil for main topics
         )
     }
     
-    func createSubtopic(at position: CGPoint, count: Int) -> Topic {
+    func createSubtopic(at position: CGPoint, count: Int, preferredSide: SubtopicPlacementSide? = nil) -> Topic {
         // First check if theme colors are set, if not use parent's colors
         let backgroundColor = Topic.themeColors.backgroundColor ?? self.backgroundColor
         let borderColor = Topic.themeColors.borderColor ?? self.borderColor
@@ -233,7 +248,8 @@ extension Topic {
             branchStyle: self.branchStyle,
             foregroundColor: foregroundColor,
             foregroundOpacity: self.foregroundOpacity,
-            templateType: self.templateType // Inherit template type from parent
+            templateType: self.templateType, // Inherit template type from parent
+            preferredPlacementSide: preferredSide // Set preferred side for subtopic
         )
     }
     
@@ -277,7 +293,8 @@ extension Topic {
             textAlignment: self.textAlignment,
             note: self.note,
             metadata: self.metadata,
-            templateType: self.templateType
+            templateType: self.templateType,
+            preferredPlacementSide: self.preferredPlacementSide // Copy the new property
         )
         
         // Recursively copy subtopics
@@ -285,4 +302,4 @@ extension Topic {
         
         return copy
     }
-} 
+}
