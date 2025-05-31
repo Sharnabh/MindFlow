@@ -70,6 +70,34 @@ extension View {
     }
 }
 
+// Define the AddSubtopicButton view
+struct AddSubtopicButton: View {
+    let side: Topic.SubtopicPlacementSide
+    let action: () -> Void
+    @State private var isHovered: Bool = false
+    private let buttonSize: CGFloat = 22 // Decreased from 28
+    private let iconSystemName: String = "plus.circle.fill"
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: iconSystemName)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(Color.accentColor) // Or your desired color
+                .opacity(isHovered ? 1.0 : 0.65) // Opacity increases on hover
+                .background(Circle().fill(Color(NSColor.windowBackgroundColor).opacity(isHovered ? 0.5 : 0.2))) // Subtle background, theme-aware
+                .scaleEffect(isHovered ? 1.1 : 1.0)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
 // MARK: - TopicView
 struct TopicView: View {
     var topic: Topic
@@ -224,6 +252,29 @@ struct TopicView: View {
                     .buttonStyle(PlainButtonStyle())
                     .offset(x: 14)  // Half of the button width to make it straddle the edge
                 }
+            }
+
+            // Add directional subtopic buttons
+            if isSelected && viewModel.topicService.getTopic(withId: topic.id)?.templateType == .algorithm {
+                let topicBox = getTopicBox(topic: topic)
+                let buttonSize: CGFloat = 22 // Updated to match AddSubtopicButton
+                let spacingToEdge: CGFloat = 10 // Increased from 6
+
+                // Calculate center-to-center offset for buttons
+                let verticalButtonOffset = topicBox.height / 2 + spacingToEdge + buttonSize / 2
+                let horizontalButtonOffset = topicBox.width / 2 + spacingToEdge + buttonSize / 2
+
+                AddSubtopicButton(side: .top, action: { viewModel.addSubtopic(to: topic.id, preferredSide: .top) })
+                    .offset(x: 0, y: -verticalButtonOffset)
+
+                AddSubtopicButton(side: .bottom, action: { viewModel.addSubtopic(to: topic.id, preferredSide: .bottom) })
+                    .offset(x: 0, y: verticalButtonOffset)
+
+                AddSubtopicButton(side: .left, action: { viewModel.addSubtopic(to: topic.id, preferredSide: .left) })
+                    .offset(x: -horizontalButtonOffset, y: 0)
+
+                AddSubtopicButton(side: .right, action: { viewModel.addSubtopic(to: topic.id, preferredSide: .right) })
+                    .offset(x: horizontalButtonOffset, y: 0)
             }
         }
         .position(animatedPosition)
