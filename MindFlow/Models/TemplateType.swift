@@ -4,9 +4,7 @@ import SwiftUI
 enum TemplateType: String, CaseIterable, Identifiable, Codable {
     case mindMap = "Mind Map"
     case tree = "Tree"
-    case conceptMap = "Concept Map"
-    case flowchart = "Flowchart"
-    case orgChart = "Org Chart"
+    case algorithm = "Algorithm"
     
     var id: String { self.rawValue }
     
@@ -16,12 +14,8 @@ enum TemplateType: String, CaseIterable, Identifiable, Codable {
             return "brain"
         case .tree:
             return "tree"
-        case .conceptMap:
-            return "network"
-        case .flowchart:
-            return "arrow.triangle.branch"
-        case .orgChart:
-            return "person.3"
+        case .algorithm:
+            return "arrow.down.right.circle" // Changed icon for flowchart
         }
     }
     
@@ -32,44 +26,50 @@ enum TemplateType: String, CaseIterable, Identifiable, Codable {
             return .rightSide
         case .tree:
             return .below
-        case .conceptMap:
-            return .radial
-        case .flowchart:
-            return .below
-        case .orgChart:
-            return .below
+        case .algorithm:
+            return .flowchart // Changed to flowchart
         }
     }
     
     /// Calculates the position for a new subtopic based on the template type
     func calculateSubtopicPosition(parentTopic: Topic, subtopicIndex: Int, totalSubtopics: Int) -> CGPoint {
         // Spacing constants
-        let horizontalSpacing: CGFloat = 200
-        let verticalSpacing: CGFloat = 60
+        let horizontalSpacing: CGFloat = 150 // Adjusted for flowchart
+        let verticalSpacing: CGFloat = 100   // Adjusted for flowchart
         
         switch subtopicArrangement {
         case .rightSide:
             // Mind Map style: arrange to the right in a vertical column
             let totalHeight = verticalSpacing * CGFloat(totalSubtopics - 1)
-            let startY = parentTopic.position.y + totalHeight/2
-            let y = startY - (CGFloat(subtopicIndex) * verticalSpacing)
+            let startY = parentTopic.position.y - totalHeight / 2 // Centering the block of subtopics
+            let y = startY + (CGFloat(subtopicIndex) * verticalSpacing)
             let x = parentTopic.position.x + horizontalSpacing
             return CGPoint(x: x, y: y)
             
         case .below:
             // Tree style: arrange below in a horizontal row
-            let totalWidth = verticalSpacing * CGFloat(totalSubtopics - 1)
-            let startX = parentTopic.position.x - totalWidth/2
-            let x = startX + (CGFloat(subtopicIndex) * verticalSpacing)
-            let y = parentTopic.position.y + horizontalSpacing
+            let totalWidth = horizontalSpacing * CGFloat(totalSubtopics - 1) // Use horizontalSpacing for width calculation
+            let startX = parentTopic.position.x - totalWidth / 2 // Centering the block of subtopics
+            let x = startX + (CGFloat(subtopicIndex) * horizontalSpacing)
+            let y = parentTopic.position.y + verticalSpacing // Use verticalSpacing for y-offset
             return CGPoint(x: x, y: y)
             
         case .radial:
             // Concept Map style: arrange in a circle around the parent
-            let radius = horizontalSpacing
+            let radius = (horizontalSpacing + verticalSpacing) / 2 // Average spacing for radius
             let angle = (2.0 * .pi / Double(totalSubtopics)) * Double(subtopicIndex)
             let x = parentTopic.position.x + radius * cos(angle)
             let y = parentTopic.position.y + radius * sin(angle)
+            return CGPoint(x: x, y: y)
+
+        case .flowchart:
+            // Flowchart style: arrange primarily downwards, then slightly horizontally for multiple
+            // For simplicity, let's arrange them vertically below the parent,
+            // with slight horizontal staggering if multiple direct children.
+            let y = parentTopic.position.y + verticalSpacing
+            // Simple horizontal distribution if multiple subtopics
+            let initialXOffset: CGFloat = -CGFloat(totalSubtopics - 1) * horizontalSpacing / 4
+            let x = parentTopic.position.x + initialXOffset + (CGFloat(subtopicIndex) * horizontalSpacing / 2)
             return CGPoint(x: x, y: y)
         }
     }
@@ -97,6 +97,35 @@ enum TemplateType: String, CaseIterable, Identifiable, Codable {
         case .radial:
             // Concept Map style: use angle-based calculation
             return calculateAngleBasedConnectionPoints(fromBox: fromBox, toBox: toBox, fromCenter: fromCenter, toCenter: toCenter)
+
+        case .flowchart:
+            let dx = toCenter.x - fromCenter.x
+            let dy = toCenter.y - fromCenter.y
+
+            // Make the condition for horizontal connections stricter:
+            // dx must be significantly larger than dy to be considered "primarily horizontal".
+            // Using a factor of 1.5, meaning abs(dx) must be > 1.5 * abs(dy).
+            if abs(dx) > abs(dy) * 1.5 { // Primarily horizontal
+                if dx > 0 { // Child is to the right of parent
+                    let start = CGPoint(x: fromBox.maxX, y: fromBox.midY)
+                    let end = CGPoint(x: toBox.minX, y: toBox.midY)
+                    return (start, end)
+                } else { // Child is to the left of parent
+                    let start = CGPoint(x: fromBox.minX, y: fromBox.midY)
+                    let end = CGPoint(x: toBox.maxX, y: toBox.midY)
+                    return (start, end)
+                }
+            } else { // Primarily vertical (or diagonal, favoring vertical)
+                if dy > 0 { // Child is below parent
+                    let start = CGPoint(x: fromBox.midX, y: fromBox.maxY)
+                    let end = CGPoint(x: toBox.midX, y: toBox.minY)
+                    return (start, end)
+                } else { // Child is above parent (or dy is 0, dx is also 0 or small)
+                    let start = CGPoint(x: fromBox.midX, y: fromBox.minY)
+                    let end = CGPoint(x: toBox.midX, y: toBox.maxY)
+                    return (start, end)
+                }
+            }
         }
     }
     
@@ -134,4 +163,5 @@ enum SubtopicArrangement {
     case rightSide  // Mind Map style: parent on left, children to the right
     case below      // Tree style: parent on top, children below
     case radial     // Concept Map style: children in a circle around the parent
-} 
+    case flowchart  // Flowchart style: parent above, children below, or side-by-side for decisions
+}

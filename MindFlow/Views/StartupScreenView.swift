@@ -59,9 +59,7 @@ struct StartupScreenView: View {
     let templates: [TemplateItem] = [
         TemplateItem(name: "Mind Map", sfSymbolName: "brain"),
         TemplateItem(name: "Tree", sfSymbolName: "tree"),
-        TemplateItem(name: "Concept Map", sfSymbolName: "network"),
-        TemplateItem(name: "Flowchart", sfSymbolName: "arrow.triangle.branch"),
-        TemplateItem(name: "Org Chart", sfSymbolName: "person.3")
+        TemplateItem(name: "Algorithm", sfSymbolName: "function")
     ]
     
     var body: some View {
@@ -246,6 +244,8 @@ func getColorForTemplate(template: TemplateItem) -> Color {
         return centralLogoColor
     case "Tree":
         return greenNodeColor
+    case "Algorithm": // Added Algorithm case
+        return tealNodeColor // Or any other color you prefer
     case "Concept Map":
         return blueNodeColor
     case "Flowchart":
@@ -498,9 +498,7 @@ func createNewFromTemplate(template: TemplateItem) {
     switch template.name {
     case "Mind Map": templateType = .mindMap
     case "Tree": templateType = .tree
-    case "Concept Map": templateType = .conceptMap
-    case "Flowchart": templateType = .flowchart
-    case "Org Chart": templateType = .orgChart
+    case "Algorithm": templateType = .algorithm // Added Algorithm case
     default: templateType = .mindMap
     }
     

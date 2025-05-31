@@ -11,7 +11,7 @@ protocol TopicServiceProtocol {
     
     // Write operations
     func addMainTopic(at position: CGPoint) -> Topic
-    func addSubtopic(to parentId: UUID) -> Topic?
+    func addSubtopic(to parentId: UUID, preferredSide: Topic.SubtopicPlacementSide?) -> Topic?
     func updateTopic(_ topic: Topic)
     func deleteTopic(withId id: UUID)
     func moveTopic(withId id: UUID, to position: CGPoint)
@@ -153,7 +153,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         return topic
     }
     
-    func addSubtopic(to parentId: UUID) -> Topic? {
+    func addSubtopic(to parentId: UUID, preferredSide: Topic.SubtopicPlacementSide? = nil) -> Topic? {
         guard let parentTopic = getTopic(withId: parentId) else { return nil }
         
         // Calculate position for new subtopic
@@ -161,7 +161,8 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         
         // Create the subtopic
         let count = parentTopic.subtopics.count + 1
-        let subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: count)
+        var subtopic = parentTopic.createSubtopic(at: subtopicPosition, count: count)
+        subtopic.preferredPlacementSide = preferredSide // Set the preferred placement side
         
         // Add to parent
         if let parentPath = findTopicPath(id: parentId) {

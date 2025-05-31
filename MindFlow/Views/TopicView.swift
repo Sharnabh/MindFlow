@@ -171,6 +171,34 @@ struct TopicView: View {
                     }
             )
             .gesture(createDragGesture())
+            .contextMenu { // Add context menu here
+                if viewModel.topicService.getTopic(withId: topic.id)?.templateType == .algorithm {
+                    Button("Add Subtopic Top") {
+                        viewModel.addSubtopic(to: topic.id, preferredSide: .top)
+                    }
+                    Button("Add Subtopic Below") {
+                        viewModel.addSubtopic(to: topic.id, preferredSide: .bottom)
+                    }
+                    Button("Add Subtopic Left") {
+                        viewModel.addSubtopic(to: topic.id, preferredSide: .left)
+                    }
+                    Button("Add Subtopic Right") {
+                        viewModel.addSubtopic(to: topic.id, preferredSide: .right)
+                    }
+                } else {
+                    // Default context menu items for other template types (if any)
+                    Button("Add Subtopic") { // Default behavior
+                        viewModel.addSubtopic(to: topic.id)
+                    }
+                }
+                // Common context menu items
+                Button("Edit Topic") {
+                    viewModel.beginEditingTopic(withId: topic.id)
+                }
+                Button("Delete Topic") {
+                    viewModel.deleteTopic(withId: topic.id)
+                }
+            }
             .overlay(alignment: .trailing) {
                 // Link button - show on right side edge of the topic
                 if shouldShowLinkButton {
