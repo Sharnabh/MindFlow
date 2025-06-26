@@ -14,7 +14,7 @@ class RelationViewModel: ObservableObject {
         guard findTopic(id: targetId) != nil else { return }
         
         // Check if the relation already exists
-        if sourceTopic.relations.contains(targetId) {
+        if sourceTopic.relations.contains(where: { $0.targetId == targetId }) {
             return
         }
         

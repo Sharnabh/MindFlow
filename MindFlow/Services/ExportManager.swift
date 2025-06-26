@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import Foundation
 
 enum ExportFormat: String, CaseIterable, Identifiable {
     case png = "PNG"
@@ -627,11 +628,11 @@ class ExportManager {
         // Now draw relationship lines
         func drawRelations(for topic: Topic) {
             // Draw relations for this topic
-            for relationId in topic.relations {
+            for relationship in topic.relations {
                 guard let fromRect = topicRects[topic.id],
-                      let toRect = topicRects[relationId],
+                      let toRect = topicRects[relationship.targetId],
                       let fromPos = topicPositions[topic.id],
-                      let toPos = topicPositions[relationId] else {
+                      let toPos = topicPositions[relationship.targetId] else {
                     continue
                 }
                 

@@ -1,6 +1,27 @@
 import Foundation
 import SwiftUI
 
+// Relationship model for storing topic relationships with style information
+struct Relationship: Identifiable, Equatable, Codable {
+    let id: UUID
+    let targetId: UUID
+    let isCurved: Bool
+    let createdAt: Date
+    
+    init(id: UUID = UUID(), targetId: UUID, isCurved: Bool = false, createdAt: Date = Date()) {
+        self.id = id
+        self.targetId = targetId
+        self.isCurved = isCurved
+        self.createdAt = createdAt
+    }
+    
+    static func == (lhs: Relationship, rhs: Relationship) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.targetId == rhs.targetId &&
+        lhs.isCurved == rhs.isCurved
+    }
+}
+
 // Note model for storing topic notes
 struct Note: Identifiable, Equatable, Codable {
     let id: UUID
@@ -93,7 +114,7 @@ struct Topic: Identifiable, Equatable {
     var isSelected: Bool
     var isEditing: Bool
     var isCollapsed: Bool
-    var relations: [UUID] = []
+    var relations: [Relationship] = []
     var shape: Shape
     var backgroundColor: Color
     var backgroundOpacity: Double
@@ -134,7 +155,7 @@ struct Topic: Identifiable, Equatable {
         isSelected: Bool = false,
         isEditing: Bool = false,
         isCollapsed: Bool = false,
-        relations: [UUID] = [],
+        relations: [Relationship] = [],
         shape: Shape = .roundedRectangle,
         backgroundColor: Color = .blue,
         backgroundOpacity: Double = 1.0,
@@ -253,15 +274,15 @@ extension Topic {
         )
     }
     
-    mutating func addRelation(_ topicId: UUID) {
+    mutating func addRelation(_ topicId: UUID, isCurved: Bool = false) {
         // Don't add if it's already a relation or if it's self
-        if !relations.contains(topicId) && topicId != self.id {
-            relations.append(topicId)
+        if !relations.contains(where: { $0.targetId == topicId }) && topicId != self.id {
+            relations.append(Relationship(targetId: topicId, isCurved: isCurved))
         }
     }
     
     mutating func removeRelation(_ topicId: UUID) {
-        relations.removeAll(where: { $0 == topicId })
+        relations.removeAll(where: { $0.targetId == topicId })
     }
     
     /// Creates a deep copy of the Topic, including all of its subtopics

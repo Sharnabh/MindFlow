@@ -3,6 +3,7 @@ import SwiftUI
 struct BranchStyleSection: View {
     @ObservedObject var viewModel: CanvasViewModel
     let selectedTopic: Topic
+    @Binding var isCircularRelationshipMode: Bool
     
     var body: some View {
         SidebarSection(title: "Branch Style", content: AnyView(
@@ -57,6 +58,26 @@ struct BranchStyleSection: View {
                         .help("Changes all connections on the canvas")
                 }
                 .padding(.horizontal)
+                
+                // Circular relationship mode toggle
+                HStack {
+                    Toggle("Circular Relationships", isOn: $isCircularRelationshipMode)
+                        .font(.system(size: 14))
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .help("Create curved/circular relationship lines between topics")
+                
+                // Information text for circular mode
+                if isCircularRelationshipMode {
+                    Text("Circular mode creates curved relationship lines")
+                        .foregroundColor(.blue)
+                        .font(.system(size: 11))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                }
             }
         ))
     }

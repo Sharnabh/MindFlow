@@ -24,6 +24,7 @@ struct InfiniteCanvas: View {
     @State private var backgroundOpacity: Double = 1.0 // Track background opacity
     @State private var sidebarMode: SidebarMode = .style
     @State private var isRelationshipMode: Bool = false // Track relationship mode
+    @State private var isCircularRelationshipMode: Bool = false // Track circular relationship mode
     @State private var touchBarDelegate: InfiniteCanvasTouchBarDelegate?
     
     // Reference to the NSViewRepresentable for exporting
@@ -249,7 +250,7 @@ struct InfiniteCanvas: View {
                     )
                     
                     // Topics layer
-                    TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode)
+                    TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode, isCircularRelationshipMode: $isCircularRelationshipMode)
                         .scaleEffect(scale)
                         .offset(x: offset.x, y: offset.y)
                 }
@@ -334,7 +335,9 @@ struct InfiniteCanvas: View {
                         isShowingColorPicker: $isShowingColorPicker,
                         isShowingBorderColorPicker: $isShowingBorderColorPicker,
                         isShowingForegroundColorPicker: $isShowingForegroundColorPicker,
-                        isShowingBackgroundColorPicker: $isShowingBackgroundColorPicker
+                        isShowingBackgroundColorPicker: $isShowingBackgroundColorPicker,
+                        isRelationshipMode: $isRelationshipMode,
+                        isCircularRelationshipMode: $isCircularRelationshipMode
                     )
                 }
             }

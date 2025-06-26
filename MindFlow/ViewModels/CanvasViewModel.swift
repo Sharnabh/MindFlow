@@ -316,14 +316,14 @@ class CanvasViewModel: ObservableObject {
         // Check all topics for relationships to the moved topic
         for topic in topics {
             // Update topics that have a relation TO the moved topic
-            if topic.relations.contains(id) {
+            if topic.relations.contains(where: { $0.targetId == id }) {
                 // This topic has a relation to the moved topic
                 // Update it to refresh the relationship line
                 topicService.updateTopic(topic)
             }
             
             // Also update topics that the moved topic has a relation TO
-            if movedTopic.relations.contains(topic.id) {
+            if movedTopic.relations.contains(where: { $0.targetId == topic.id }) {
                 // The moved topic has a relation to this topic
                 // Update the moved topic to refresh the relationship line
                 topicService.updateTopic(movedTopic)
@@ -333,12 +333,12 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - Relations
     
-    func addRelation(from sourceId: UUID, to targetId: UUID) {
+    func addRelation(from sourceId: UUID, to targetId: UUID, isCurved: Bool = false) {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
         // Add the relation
-        topicService.addRelation(from: sourceId, to: targetId)
+        topicService.addRelation(from: sourceId, to: targetId, isCurved: isCurved)
     }
     
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
@@ -743,15 +743,15 @@ class CanvasViewModel: ObservableObject {
         startRelationDrag(from: fromId, to: toPosition)
     }
     
-    func handleRelationDragEnded(_ fromId: UUID) {
+    func handleRelationDragEnded(_ fromId: UUID, isCircularMode: Bool = false) {
         // If we have a relation drag state
         if let (sourceId, toPosition) = relationDragState {
             // Find the target topic at the end position
             if let targetTopic = findTopicAt(position: toPosition, in: topics) {
                 // Don't create relation to self
                 if sourceId != targetTopic.id {
-                    // Add the relationship
-                    addRelation(from: sourceId, to: targetTopic.id)
+                    // Add the relationship with circular mode state
+                    addRelation(from: sourceId, to: targetTopic.id, isCurved: isCircularMode)
                 }
             }
         }
@@ -835,8 +835,8 @@ class CanvasViewModel: ObservableObject {
             }
             
             // Process custom relationships
-            for relatedTopicId in topic.relations {
-                if let relatedName = idToNameMap[relatedTopicId] {
+            for relationship in topic.relations {
+                if let relatedName = idToNameMap[relationship.targetId] {
                     connections.append("\(topic.name) -> \(relatedName) (relation)")
                 }
             }

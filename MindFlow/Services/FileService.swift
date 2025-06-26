@@ -153,7 +153,7 @@ class FileService: FileServiceProtocol, ObservableObject {
         do {
             // Create a serializable copy of the topics
             // Important: We need to preserve the topic structure including relations
-            let serializableTopics = topics.map { $0.deepCopy() }
+            var serializableTopics = topics.map { $0.deepCopy() }
             
             // Debug info
             print("Saving \(serializableTopics.count) topics to \(url.lastPathComponent)")
@@ -165,7 +165,8 @@ class FileService: FileServiceProtocol, ObservableObject {
             for i in 0..<serializableTopics.count {
                 var topic = serializableTopics[i]
                 // Filter out any relations to topics that don't exist
-                topic.relations = topic.relations.filter { allTopicIds.contains($0) }
+                topic.relations = topic.relations.filter { allTopicIds.contains($0.targetId) }
+                serializableTopics[i] = topic
             }
             
             // Encode topics with configurable output format

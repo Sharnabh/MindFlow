@@ -17,7 +17,7 @@ protocol TopicServiceProtocol {
     func moveTopic(withId id: UUID, to position: CGPoint)
     
     // Relations
-    func addRelation(from sourceId: UUID, to targetId: UUID)
+    func addRelation(from sourceId: UUID, to targetId: UUID, isCurved: Bool)
     func removeRelation(from sourceId: UUID, to targetId: UUID)
     func removeAllRelationsToTopic(withId id: UUID)
     
@@ -243,7 +243,7 @@ class TopicService: TopicServiceProtocol, ObservableObject {
     
     // MARK: - Relations
     
-    func addRelation(from sourceId: UUID, to targetId: UUID) {
+    func addRelation(from sourceId: UUID, to targetId: UUID, isCurved: Bool = false) {
         // Prevent adding relation to self
         if sourceId == targetId { return }
 
@@ -253,12 +253,12 @@ class TopicService: TopicServiceProtocol, ObservableObject {
 
         // Check if relation already exists
         var source = sourcePath.topic
-        if source.relations.contains(targetId) {
+        if source.relations.contains(where: { $0.targetId == targetId }) {
             return
         }
 
-        // Add relation (using ID)
-        source.addRelation(targetId)
+        // Add relation with curve state
+        source.addRelation(targetId, isCurved: isCurved)
         updateTopicAtPath(source, path: sourcePath.path)
     }
 
