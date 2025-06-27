@@ -1,24 +1,34 @@
 import Foundation
 import SwiftUI
 
+// Enum for relationship line styles
+enum RelationshipStyle: String, CaseIterable, Codable {
+    case straight = "straight"
+    case curved = "curved"
+    case squared = "squared"
+}
+
 // Relationship model for storing topic relationships with style information
 struct Relationship: Identifiable, Equatable, Codable {
     let id: UUID
     let targetId: UUID
-    let isCurved: Bool
+    let isCurved: Bool // Backward compatibility
+    let relationshipType: String // "straight", "curved", or "squared"
     let createdAt: Date
     
-    init(id: UUID = UUID(), targetId: UUID, isCurved: Bool = false, createdAt: Date = Date()) {
+    init(id: UUID = UUID(), targetId: UUID, isCurved: Bool = false, relationshipType: String = "straight", createdAt: Date = Date()) {
         self.id = id
         self.targetId = targetId
         self.isCurved = isCurved
+        // For backward compatibility, if isCurved is true, use "curved", otherwise use the specified type
+        self.relationshipType = isCurved ? "curved" : relationshipType
         self.createdAt = createdAt
     }
     
     static func == (lhs: Relationship, rhs: Relationship) -> Bool {
         lhs.id == rhs.id &&
         lhs.targetId == rhs.targetId &&
-        lhs.isCurved == rhs.isCurved
+        lhs.relationshipType == rhs.relationshipType
     }
 }
 
@@ -278,6 +288,13 @@ extension Topic {
         // Don't add if it's already a relation or if it's self
         if !relations.contains(where: { $0.targetId == topicId }) && topicId != self.id {
             relations.append(Relationship(targetId: topicId, isCurved: isCurved))
+        }
+    }
+    
+    mutating func addRelation(_ topicId: UUID, relationshipType: String) {
+        // Don't add if it's already a relation or if it's self
+        if !relations.contains(where: { $0.targetId == topicId }) && topicId != self.id {
+            relations.append(Relationship(targetId: topicId, relationshipType: relationshipType))
         }
     }
     

@@ -54,6 +54,7 @@ struct SidebarView: View {
     @Binding var isShowingBackgroundColorPicker: Bool
     @Binding var isRelationshipMode: Bool
     @Binding var isCircularRelationshipMode: Bool
+    @Binding var isSquaredRelationshipMode: Bool
     
     private let topBarHeight: CGFloat = 40
     private let sidebarWidth: CGFloat = 300
@@ -90,7 +91,8 @@ struct SidebarView: View {
                                     isShowingColorPicker: $isShowingColorPicker,
                                     isShowingBorderColorPicker: $isShowingBorderColorPicker,
                                     isShowingForegroundColorPicker: $isShowingForegroundColorPicker,
-                                    isCircularRelationshipMode: $isCircularRelationshipMode
+                                    isCircularRelationshipMode: $isCircularRelationshipMode,
+                                    isSquaredRelationshipMode: $isSquaredRelationshipMode
                                 )
                             } else if sidebarMode == .map {
                                 MapModeContent(
@@ -100,7 +102,8 @@ struct SidebarView: View {
                                     backgroundOpacity: $backgroundOpacity,
                                     isShowingBackgroundColorPicker: $isShowingBackgroundColorPicker,
                                     isRelationshipMode: $isRelationshipMode,
-                                    isCircularRelationshipMode: $isCircularRelationshipMode
+                                    isCircularRelationshipMode: $isCircularRelationshipMode,
+                                    isSquaredRelationshipMode: $isSquaredRelationshipMode
                                 )
                             } else {
                                 AIModeContent(viewModel: viewModel)
@@ -122,6 +125,7 @@ private struct StyleModeContent: View {
     @Binding var isShowingBorderColorPicker: Bool
     @Binding var isShowingForegroundColorPicker: Bool
     @Binding var isCircularRelationshipMode: Bool
+    @Binding var isSquaredRelationshipMode: Bool
     
     var body: some View {
         VStack(spacing: 16) {
@@ -139,7 +143,7 @@ private struct StyleModeContent: View {
                     isShowingForegroundColorPicker: $isShowingForegroundColorPicker
                 )
                 
-                BranchStyleSection(viewModel: viewModel, selectedTopic: selectedTopic, isCircularRelationshipMode: $isCircularRelationshipMode)
+                BranchStyleSection(viewModel: viewModel, selectedTopic: selectedTopic, isCircularRelationshipMode: $isCircularRelationshipMode, isSquaredRelationshipMode: $isSquaredRelationshipMode)
             } else {
                 Text("Select a topic to edit its properties")
                     .foregroundColor(.secondary)
@@ -158,6 +162,7 @@ private struct MapModeContent: View {
     @Binding var isShowingBackgroundColorPicker: Bool
     @Binding var isRelationshipMode: Bool
     @Binding var isCircularRelationshipMode: Bool
+    @Binding var isSquaredRelationshipMode: Bool
     
     var body: some View {
         ScrollView {

@@ -121,6 +121,7 @@ struct TopicView: View {
     let onRelationDragEnded: (() -> Void)?
     let isRelationshipMode: Bool
     let isCircularRelationshipMode: Bool
+    let isSquaredRelationshipMode: Bool
     
     // Get access to the view model
     @ObservedObject var viewModel: CanvasViewModel
@@ -136,6 +137,7 @@ struct TopicView: View {
          onRelationDragEnded: (() -> Void)? = nil,
          isRelationshipMode: Bool = false,
          isCircularRelationshipMode: Bool = false,
+         isSquaredRelationshipMode: Bool = false,
          viewModel: CanvasViewModel) {
         
         self.topic = topic
@@ -149,6 +151,7 @@ struct TopicView: View {
         self.onRelationDragEnded = onRelationDragEnded
         self.isRelationshipMode = isRelationshipMode
         self.isCircularRelationshipMode = isCircularRelationshipMode
+        self.isSquaredRelationshipMode = isSquaredRelationshipMode
         self.viewModel = viewModel
         
         // Initialize position state
@@ -367,6 +370,7 @@ struct TopicsCanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @Binding var isRelationshipMode: Bool
     @Binding var isCircularRelationshipMode: Bool
+    @Binding var isSquaredRelationshipMode: Bool
     
     @State private var animatedTemporaryLineStart: CGPoint = .zero
     @State private var animatedTemporaryLineEnd: CGPoint = .zero
@@ -396,7 +400,8 @@ struct TopicsCanvasView: View {
                     viewModel.removeParentChildRelation(childId: childId)
                 },
                 selectedId: viewModel.selectedTopicId,
-                isCircularRelationshipMode: isCircularRelationshipMode
+                isCircularRelationshipMode: isCircularRelationshipMode,
+                isSquaredRelationshipMode: isSquaredRelationshipMode
             )
             
             // Draw all topics
@@ -410,10 +415,11 @@ struct TopicsCanvasView: View {
                 onEditingChange: viewModel.setTopicEditing,
                 onRelationDragChanged: viewModel.handleRelationDragChanged,
                 onRelationDragEnded: { fromId in
-                    viewModel.handleRelationDragEnded(fromId, isCircularMode: isCircularRelationshipMode)
+                    viewModel.handleRelationDragEnded(fromId, isCircularMode: isCircularRelationshipMode, isSquaredMode: isSquaredRelationshipMode)
                 },
                 isRelationshipMode: isRelationshipMode,
                 isCircularRelationshipMode: isCircularRelationshipMode,
+                isSquaredRelationshipMode: isSquaredRelationshipMode,
                 viewModel: viewModel
             )
             
@@ -469,6 +475,7 @@ private struct TopicsView: View {
     let onRelationDragEnded: ((UUID) -> Void)?
     let isRelationshipMode: Bool
     let isCircularRelationshipMode: Bool
+    let isSquaredRelationshipMode: Bool
     @ObservedObject var viewModel: CanvasViewModel
     
     var body: some View {
@@ -500,6 +507,7 @@ private struct TopicsView: View {
                     },
                     isRelationshipMode: isRelationshipMode,
                     isCircularRelationshipMode: isCircularRelationshipMode,
+                    isSquaredRelationshipMode: isSquaredRelationshipMode,
                     viewModel: viewModel
                 )
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
@@ -519,6 +527,7 @@ private struct TopicsView: View {
                         onRelationDragEnded: onRelationDragEnded,
                         isRelationshipMode: isRelationshipMode,
                         isCircularRelationshipMode: isCircularRelationshipMode,
+                        isSquaredRelationshipMode: isSquaredRelationshipMode,
                         viewModel: viewModel
                     )
                     .transition(.scale(scale: 0.95).combined(with: .opacity))

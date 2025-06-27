@@ -127,3 +127,53 @@ struct CircularCurvePath: Shape {
         return path
     }
 }
+
+struct SquaredSPath: Shape {
+    var start: CGPoint
+    var end: CGPoint
+    
+    var animatableData: AnimatablePair<CGPoint.AnimatableData, CGPoint.AnimatableData> {
+        get { AnimatablePair(start.animatableData, end.animatableData) }
+        set {
+            start.animatableData = newValue.first
+            end.animatableData = newValue.second
+        }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: start)
+        
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        
+        // Determine if we should prioritize horizontal or vertical first segment
+        let isMoreHorizontal = abs(dx) > abs(dy)
+        
+        if isMoreHorizontal {
+            // Horizontal-first path: go horizontal, then vertical, then horizontal
+            let segmentLength = abs(dx) * 0.4 // Use 40% of horizontal distance for first/last segments
+            let direction = dx > 0 ? 1 : -1
+            
+            let point1 = CGPoint(x: start.x + CGFloat(direction) * segmentLength, y: start.y)
+            let point2 = CGPoint(x: start.x + CGFloat(direction) * segmentLength, y: end.y)
+            
+            path.addLine(to: point1)
+            path.addLine(to: point2)
+            path.addLine(to: end)
+        } else {
+            // Vertical-first path: go vertical, then horizontal, then vertical
+            let segmentLength = abs(dy) * 0.4 // Use 40% of vertical distance for first/last segments
+            let direction = dy > 0 ? 1 : -1
+            
+            let point1 = CGPoint(x: start.x, y: start.y + CGFloat(direction) * segmentLength)
+            let point2 = CGPoint(x: end.x, y: start.y + CGFloat(direction) * segmentLength)
+            
+            path.addLine(to: point1)
+            path.addLine(to: point2)
+            path.addLine(to: end)
+        }
+        
+        return path
+    }
+}

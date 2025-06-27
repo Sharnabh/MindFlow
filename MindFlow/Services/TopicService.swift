@@ -262,6 +262,25 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         updateTopicAtPath(source, path: sourcePath.path)
     }
 
+    func addRelation(from sourceId: UUID, to targetId: UUID, relationshipType: String) {
+        // Prevent adding relation to self
+        if sourceId == targetId { return }
+
+        // Ensure both topics exist
+        guard let sourcePath = findTopicPath(id: sourceId),
+              let _ = getTopic(withId: targetId) else { return }
+
+        // Check if relation already exists
+        var source = sourcePath.topic
+        if source.relations.contains(where: { $0.targetId == targetId }) {
+            return
+        }
+
+        // Add relation with relationship type
+        source.addRelation(targetId, relationshipType: relationshipType)
+        updateTopicAtPath(source, path: sourcePath.path)
+    }
+
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
         guard let sourcePath = findTopicPath(id: sourceId) else { return }
 

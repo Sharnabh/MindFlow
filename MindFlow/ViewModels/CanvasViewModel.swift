@@ -341,6 +341,14 @@ class CanvasViewModel: ObservableObject {
         topicService.addRelation(from: sourceId, to: targetId, isCurved: isCurved)
     }
     
+    func addRelation(from sourceId: UUID, to targetId: UUID, relationshipType: String) {
+        // Save state for undo
+        historyService.saveState(topicService.topics)
+        
+        // Add the relation with relationship type
+        topicService.addRelation(from: sourceId, to: targetId, relationshipType: relationshipType)
+    }
+    
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
         // Save state for undo
         historyService.saveState(topicService.topics)
@@ -743,15 +751,25 @@ class CanvasViewModel: ObservableObject {
         startRelationDrag(from: fromId, to: toPosition)
     }
     
-    func handleRelationDragEnded(_ fromId: UUID, isCircularMode: Bool = false) {
+    func handleRelationDragEnded(_ fromId: UUID, isCircularMode: Bool = false, isSquaredMode: Bool = false) {
         // If we have a relation drag state
         if let (sourceId, toPosition) = relationDragState {
             // Find the target topic at the end position
             if let targetTopic = findTopicAt(position: toPosition, in: topics) {
                 // Don't create relation to self
                 if sourceId != targetTopic.id {
-                    // Add the relationship with circular mode state
-                    addRelation(from: sourceId, to: targetTopic.id, isCurved: isCircularMode)
+                    // Determine the relationship type based on the current toggle states
+                    let relationshipType: String
+                    if isSquaredMode {
+                        relationshipType = "squared"
+                    } else if isCircularMode {
+                        relationshipType = "curved"
+                    } else {
+                        relationshipType = "straight"
+                    }
+                    
+                    // Add the relationship with the determined type
+                    addRelation(from: sourceId, to: targetTopic.id, relationshipType: relationshipType)
                 }
             }
         }
