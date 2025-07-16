@@ -316,14 +316,14 @@ class CanvasViewModel: ObservableObject {
         // Check all topics for relationships to the moved topic
         for topic in topics {
             // Update topics that have a relation TO the moved topic
-            if topic.relations.contains(id) {
+            if topic.relations.contains(where: { $0.targetId == id }) {
                 // This topic has a relation to the moved topic
                 // Update it to refresh the relationship line
                 topicService.updateTopic(topic)
             }
             
             // Also update topics that the moved topic has a relation TO
-            if movedTopic.relations.contains(topic.id) {
+            if movedTopic.relations.contains(where: { $0.targetId == topic.id }) {
                 // The moved topic has a relation to this topic
                 // Update the moved topic to refresh the relationship line
                 topicService.updateTopic(movedTopic)
@@ -333,12 +333,20 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - Relations
     
-    func addRelation(from sourceId: UUID, to targetId: UUID) {
+    func addRelation(from sourceId: UUID, to targetId: UUID, isCurved: Bool = false) {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
         // Add the relation
-        topicService.addRelation(from: sourceId, to: targetId)
+        topicService.addRelation(from: sourceId, to: targetId, isCurved: isCurved)
+    }
+    
+    func addRelation(from sourceId: UUID, to targetId: UUID, relationshipType: String) {
+        // Save state for undo
+        historyService.saveState(topicService.topics)
+        
+        // Add the relation with relationship type
+        topicService.addRelation(from: sourceId, to: targetId, relationshipType: relationshipType)
     }
     
     func removeRelation(from sourceId: UUID, to targetId: UUID) {
@@ -743,15 +751,25 @@ class CanvasViewModel: ObservableObject {
         startRelationDrag(from: fromId, to: toPosition)
     }
     
-    func handleRelationDragEnded(_ fromId: UUID) {
+    func handleRelationDragEnded(_ fromId: UUID, isCircularMode: Bool = false, isSquaredMode: Bool = false) {
         // If we have a relation drag state
         if let (sourceId, toPosition) = relationDragState {
             // Find the target topic at the end position
             if let targetTopic = findTopicAt(position: toPosition, in: topics) {
                 // Don't create relation to self
                 if sourceId != targetTopic.id {
-                    // Add the relationship
-                    addRelation(from: sourceId, to: targetTopic.id)
+                    // Determine the relationship type based on the current toggle states
+                    let relationshipType: String
+                    if isSquaredMode {
+                        relationshipType = "squared"
+                    } else if isCircularMode {
+                        relationshipType = "curved"
+                    } else {
+                        relationshipType = "straight"
+                    }
+                    
+                    // Add the relationship with the determined type
+                    addRelation(from: sourceId, to: targetTopic.id, relationshipType: relationshipType)
                 }
             }
         }
@@ -835,8 +853,8 @@ class CanvasViewModel: ObservableObject {
             }
             
             // Process custom relationships
-            for relatedTopicId in topic.relations {
-                if let relatedName = idToNameMap[relatedTopicId] {
+            for relationship in topic.relations {
+                if let relatedName = idToNameMap[relationship.targetId] {
                     connections.append("\(topic.name) -> \(relatedName) (relation)")
                 }
             }
@@ -888,6 +906,9 @@ class CanvasViewModel: ObservableObject {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
+        // Check if this is an algorithm flowchart (has shape information)
+        let isAlgorithmFlowchart = parentTopics.first?.shape != nil
+        
         // Add each parent topic as a main topic
         var xOffset: CGFloat = 0
         
@@ -900,12 +921,26 @@ class CanvasViewModel: ObservableObject {
             var newTopic = Topic.createMainTopic(at: position, count: topicService.getAllTopics().count + 1)
             newTopic.name = parentTopic.name
             
+            // Apply algorithm shape styling if available
+            if let shape = parentTopic.shape {
+                switch shape {
+                case "oval": // Start/End
+                    newTopic.borderColor = .green
+                case "diamond": // Decision
+                    newTopic.borderColor = .orange
+                case "parallelogram": // Input/Output
+                    newTopic.borderColor = .blue
+                case "hexagon": // Preparation
+                    newTopic.borderColor = .purple
+                default: // Rectangle (process)
+                    newTopic.borderColor = .gray
+                }
+            }
+            
             // Apply current theme colors if they exist
             if let backgroundColor = Topic.themeColors.backgroundColor,
-               let borderColor = Topic.themeColors.borderColor,
                let textColor = Topic.themeColors.foregroundColor {
                 newTopic.backgroundColor = backgroundColor
-                newTopic.borderColor = borderColor
                 newTopic.foregroundColor = textColor
             }
             
@@ -913,33 +948,44 @@ class CanvasViewModel: ObservableObject {
             let addedTopicId = newTopic.id
             topicService.addTopic(newTopic)
             
-            // Add children
-            var yOffset: CGFloat = 0
-            for childTopic in parentTopic.children.filter({ $0.isSelected }) {
-                // Create child position
-                let childPosition = CGPoint(x: position.x + 150, y: position.y + yOffset)
-                yOffset += 60 // Space them out vertically
-                
-                // Add as subtopic
-                if let topic = topicService.getTopic(withId: addedTopicId) {
-                    let childCount = topic.subtopics.count + 1
-                    var newSubtopic = topic.createSubtopic(at: childPosition, count: childCount)
-                    newSubtopic.name = childTopic.name
+            // Add children - use recursive approach for algorithm flowcharts
+            if isAlgorithmFlowchart {
+                // Use recursive function for deeply nested algorithm structures
+                addNestedChildren(
+                    to: addedTopicId,
+                    children: parentTopic.children,
+                    basePosition: position,
+                    level: 1
+                )
+            } else {
+                // Use original approach for simple hierarchies
+                var yOffset: CGFloat = 0
+                for childTopic in parentTopic.children.filter({ $0.isSelected }) {
+                    // Create child position
+                    let childPosition = CGPoint(x: position.x + 150, y: position.y + yOffset)
+                    yOffset += 60 // Space them out vertically
                     
-                    // Apply current theme colors if they exist
-                    if let backgroundColor = Topic.themeColors.backgroundColor,
-                       let borderColor = Topic.themeColors.borderColor,
-                       let textColor = Topic.themeColors.foregroundColor {
-                        newSubtopic.backgroundColor = backgroundColor
-                        newSubtopic.borderColor = borderColor
-                        newSubtopic.foregroundColor = textColor
-                    }
-                    
-                    // Add the subtopic
-                    if let parentPath = topicService.findTopicPath(id: addedTopicId) {
-                        var parent = parentPath.topic
-                        parent.subtopics.append(newSubtopic)
-                        topicService.updateTopic(parent)
+                    // Add as subtopic
+                    if let topic = topicService.getTopic(withId: addedTopicId) {
+                        let childCount = topic.subtopics.count + 1
+                        var newSubtopic = topic.createSubtopic(at: childPosition, count: childCount)
+                        newSubtopic.name = childTopic.name
+                        
+                        // Apply current theme colors if they exist
+                        if let backgroundColor = Topic.themeColors.backgroundColor,
+                           let borderColor = Topic.themeColors.borderColor,
+                           let textColor = Topic.themeColors.foregroundColor {
+                            newSubtopic.backgroundColor = backgroundColor
+                            newSubtopic.borderColor = borderColor
+                            newSubtopic.foregroundColor = textColor
+                        }
+                        
+                        // Add the subtopic
+                        if let parentPath = topicService.findTopicPath(id: addedTopicId) {
+                            var parent = parentPath.topic
+                            parent.subtopics.append(newSubtopic)
+                            topicService.updateTopic(parent)
+                        }
                     }
                 }
             }
@@ -1099,7 +1145,7 @@ class CanvasViewModel: ObservableObject {
                 
                 // Add children to the new subtopic
                 var childSubtopics: [Topic] = []
-                for childTopic in parentTopicWithReason.children where childTopic.isSelected {
+                for childTopic in parentTopicWithReason.children.filter({ $0.isSelected }) {
                     let childCount = childSubtopics.count
                     let childPosition = CGPoint(x: subtopicPosition.x + 150, y: subtopicPosition.y + CGFloat(childCount) * 60)
                     
@@ -1184,5 +1230,76 @@ class CanvasViewModel: ObservableObject {
             subtopicIndex: subtopicCount,
             totalSubtopics: totalSubtopics
         )
+    }
+    
+    // Recursive function to add all nested children for algorithm flowcharts
+    private func addNestedChildren(
+        to parentTopicId: UUID,
+        children: [TopicWithReason],
+        basePosition: CGPoint,
+        level: Int = 1
+    ) {
+        guard !children.isEmpty else { return }
+        
+        var yOffset: CGFloat = 0
+        let xOffset: CGFloat = CGFloat(level) * 150 // Indent by level
+        
+        for (index, childTopic) in children.filter({ $0.isSelected }).enumerated() {
+            // Create child position with proper indentation
+            let childPosition = CGPoint(
+                x: basePosition.x + xOffset,
+                y: basePosition.y + yOffset + CGFloat(index * 60)
+            )
+            yOffset += 60
+            
+            // Add as subtopic
+            if let parentTopic = topicService.getTopic(withId: parentTopicId) {
+                let childCount = parentTopic.subtopics.count + 1
+                var newSubtopic = parentTopic.createSubtopic(at: childPosition, count: childCount)
+                newSubtopic.name = childTopic.name
+                
+                // Apply algorithm shape information if available
+                if let shape = childTopic.shape {
+                    // Store shape information for future algorithm rendering features
+                    // For now, we could use different colors or styles based on shape
+                    switch shape {
+                    case "oval": // Start/End
+                        newSubtopic.borderColor = .green
+                    case "diamond": // Decision
+                        newSubtopic.borderColor = .orange
+                    case "parallelogram": // Input/Output
+                        newSubtopic.borderColor = .blue
+                    case "hexagon": // Preparation
+                        newSubtopic.borderColor = .purple
+                    default: // Rectangle (process)
+                        newSubtopic.borderColor = .gray
+                    }
+                }
+                
+                // Apply current theme colors if they exist
+                if let backgroundColor = Topic.themeColors.backgroundColor,
+                   let textColor = Topic.themeColors.foregroundColor {
+                    newSubtopic.backgroundColor = backgroundColor
+                    newSubtopic.foregroundColor = textColor
+                }
+                
+                // Add the subtopic
+                if let parentPath = topicService.findTopicPath(id: parentTopicId) {
+                    var parent = parentPath.topic
+                    parent.subtopics.append(newSubtopic)
+                    topicService.updateTopic(parent)
+                    
+                    // Recursively add this subtopic's children
+                    if !childTopic.children.isEmpty {
+                        addNestedChildren(
+                            to: newSubtopic.id,
+                            children: childTopic.children,
+                            basePosition: childPosition,
+                            level: level + 1
+                        )
+                    }
+                }
+            }
+        }
     }
 }

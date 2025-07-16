@@ -120,6 +120,8 @@ struct TopicView: View {
     let onRelationDragChanged: ((CGPoint) -> Void)?
     let onRelationDragEnded: (() -> Void)?
     let isRelationshipMode: Bool
+    let isCircularRelationshipMode: Bool
+    let isSquaredRelationshipMode: Bool
     
     // Get access to the view model
     @ObservedObject var viewModel: CanvasViewModel
@@ -134,6 +136,8 @@ struct TopicView: View {
          onRelationDragChanged: ((CGPoint) -> Void)? = nil, 
          onRelationDragEnded: (() -> Void)? = nil,
          isRelationshipMode: Bool = false,
+         isCircularRelationshipMode: Bool = false,
+         isSquaredRelationshipMode: Bool = false,
          viewModel: CanvasViewModel) {
         
         self.topic = topic
@@ -146,6 +150,8 @@ struct TopicView: View {
         self.onRelationDragChanged = onRelationDragChanged
         self.onRelationDragEnded = onRelationDragEnded
         self.isRelationshipMode = isRelationshipMode
+        self.isCircularRelationshipMode = isCircularRelationshipMode
+        self.isSquaredRelationshipMode = isSquaredRelationshipMode
         self.viewModel = viewModel
         
         // Initialize position state
@@ -363,6 +369,8 @@ struct TopicView: View {
 struct TopicsCanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @Binding var isRelationshipMode: Bool
+    @Binding var isCircularRelationshipMode: Bool
+    @Binding var isSquaredRelationshipMode: Bool
     
     @State private var animatedTemporaryLineStart: CGPoint = .zero
     @State private var animatedTemporaryLineEnd: CGPoint = .zero
@@ -391,7 +399,9 @@ struct TopicsCanvasView: View {
                 onDeleteParentChild: { _, childId in
                     viewModel.removeParentChildRelation(childId: childId)
                 },
-                selectedId: viewModel.selectedTopicId
+                selectedId: viewModel.selectedTopicId,
+                isCircularRelationshipMode: isCircularRelationshipMode,
+                isSquaredRelationshipMode: isSquaredRelationshipMode
             )
             
             // Draw all topics
@@ -404,8 +414,12 @@ struct TopicsCanvasView: View {
                 onNameChange: viewModel.updateTopicName,
                 onEditingChange: viewModel.setTopicEditing,
                 onRelationDragChanged: viewModel.handleRelationDragChanged,
-                onRelationDragEnded: viewModel.handleRelationDragEnded,
+                onRelationDragEnded: { fromId in
+                    viewModel.handleRelationDragEnded(fromId, isCircularMode: isCircularRelationshipMode, isSquaredMode: isSquaredRelationshipMode)
+                },
                 isRelationshipMode: isRelationshipMode,
+                isCircularRelationshipMode: isCircularRelationshipMode,
+                isSquaredRelationshipMode: isSquaredRelationshipMode,
                 viewModel: viewModel
             )
             
@@ -413,12 +427,17 @@ struct TopicsCanvasView: View {
             if let (fromId, toPosition) = viewModel.relationDragState,
                let fromTopic = viewModel.findTopic(id: fromId) {
                 let points = calculateIntersection(from: fromTopic, toPosition: toPosition, topics: viewModel.topics)
-                let shouldUseCurvedStyle = fromTopic.branchStyle == .curved
+                let shouldUseCurvedStyle = isCircularRelationshipMode || fromTopic.branchStyle == .curved
                 
                 Group {
                     if shouldUseCurvedStyle {
-                        AnimatedCurvePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
-                            .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                        if isCircularRelationshipMode {
+                            CircularCurvePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
+                                .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                        } else {
+                            AnimatedCurvePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
+                                .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                        }
                     } else {
                         AnimatedLinePath(start: animatedTemporaryLineStart, end: animatedTemporaryLineEnd)
                             .stroke(Color.purple.opacity(0.5), lineWidth: 2)
@@ -455,6 +474,8 @@ private struct TopicsView: View {
     let onRelationDragChanged: ((UUID, CGPoint) -> Void)?
     let onRelationDragEnded: ((UUID) -> Void)?
     let isRelationshipMode: Bool
+    let isCircularRelationshipMode: Bool
+    let isSquaredRelationshipMode: Bool
     @ObservedObject var viewModel: CanvasViewModel
     
     var body: some View {
@@ -485,6 +506,8 @@ private struct TopicsView: View {
                         { handler(topic.id) }
                     },
                     isRelationshipMode: isRelationshipMode,
+                    isCircularRelationshipMode: isCircularRelationshipMode,
+                    isSquaredRelationshipMode: isSquaredRelationshipMode,
                     viewModel: viewModel
                 )
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
@@ -503,6 +526,8 @@ private struct TopicsView: View {
                         onRelationDragChanged: onRelationDragChanged,
                         onRelationDragEnded: onRelationDragEnded,
                         isRelationshipMode: isRelationshipMode,
+                        isCircularRelationshipMode: isCircularRelationshipMode,
+                        isSquaredRelationshipMode: isSquaredRelationshipMode,
                         viewModel: viewModel
                     )
                     .transition(.scale(scale: 0.95).combined(with: .opacity))

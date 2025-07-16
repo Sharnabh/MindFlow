@@ -3,6 +3,8 @@ import SwiftUI
 struct BranchStyleSection: View {
     @ObservedObject var viewModel: CanvasViewModel
     let selectedTopic: Topic
+    @Binding var isCircularRelationshipMode: Bool
+    @Binding var isSquaredRelationshipMode: Bool
     
     var body: some View {
         SidebarSection(title: "Branch Style", content: AnyView(
@@ -57,6 +59,62 @@ struct BranchStyleSection: View {
                         .help("Changes all connections on the canvas")
                 }
                 .padding(.horizontal)
+                
+                // Circular relationship mode toggle
+                HStack {
+                    Toggle("Circular Relationships", isOn: Binding(
+                        get: { isCircularRelationshipMode },
+                        set: { newValue in
+                            if newValue {
+                                isSquaredRelationshipMode = false // Disable squared mode
+                            }
+                            isCircularRelationshipMode = newValue
+                        }
+                    ))
+                        .font(.system(size: 14))
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .help("Create curved/circular relationship lines between topics")
+                
+                // Squared relationship mode toggle
+                HStack {
+                    Toggle("Squared Relationships", isOn: Binding(
+                        get: { isSquaredRelationshipMode },
+                        set: { newValue in
+                            if newValue {
+                                isCircularRelationshipMode = false // Disable circular mode
+                            }
+                            isSquaredRelationshipMode = newValue
+                        }
+                    ))
+                        .font(.system(size: 14))
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 4)
+                .help("Create squared S-shaped relationship lines between topics")
+                
+                // Information text for circular mode
+                if isCircularRelationshipMode {
+                    Text("Circular mode creates curved relationship lines")
+                        .foregroundColor(.blue)
+                        .font(.system(size: 11))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                }
+                
+                // Information text for squared mode
+                if isSquaredRelationshipMode {
+                    Text("Squared mode creates rectangular S-shaped relationship lines")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 11))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                }
             }
         ))
     }

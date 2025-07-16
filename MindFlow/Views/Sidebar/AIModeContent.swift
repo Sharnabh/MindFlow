@@ -6,6 +6,7 @@ fileprivate enum AIAssistantMode: String, CaseIterable {
     case organizeTopics = "Organize Topics"
     case analyzeStructure = "Analyze Structure"
     case brainStorm = "Brainstorm"
+    case generateAlgorithm = "Generate Algorithm"
     
     var description: String {
         switch self {
@@ -17,6 +18,8 @@ fileprivate enum AIAssistantMode: String, CaseIterable {
             return "Analyze your mind map structure and get suggestions"
         case .brainStorm:
             return "Free-form brainstorming and topic exploration"
+        case .generateAlgorithm:
+            return "Generate algorithm flowcharts with proper shapes and connections"
         }
     }
     
@@ -30,6 +33,8 @@ fileprivate enum AIAssistantMode: String, CaseIterable {
             return "You are a mind map analyst. Help users analyze and improve their mind map structure."
         case .brainStorm:
             return "You are a brainstorming facilitator. Help users explore and expand their ideas freely."
+        case .generateAlgorithm:
+            return "You are an algorithm visualization expert. Help users create structured algorithm flowcharts with proper flowchart shapes (rectangles for processes, diamonds for decisions, ovals for start/end) and appropriate connection types (straight for sequential flow, curved for conditional branches, squared for loops). Generate clear, step-by-step algorithm representations."
         }
     }
 }
@@ -148,7 +153,7 @@ struct AIModeContent: View {
                             .frame(height: 1)
                             .id("bottomSpacer")
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 8) // Reduced from default padding to 8
                     .padding(.vertical, 8)
                     .background(
                         GeometryReader { contentGeometry in
@@ -227,9 +232,25 @@ struct AIModeContent: View {
             // Add button
             createAddSelectedButton(message: message)
         }
-        .padding(12)
+        .padding(8) // Reduced from 12 to 8
         .background(Color(.darkGray))
         .cornerRadius(16)
+    }
+    
+    // Helper function to recursively check if all topics are selected
+    private func areAllTopicsSelected(_ topic: TopicWithReason) -> Bool {
+        if !topic.isSelected {
+            return false
+        }
+        return topic.children.allSatisfy { areAllTopicsSelected($0) }
+    }
+    
+    // Helper function to recursively set selection state for all topics
+    private func setSelectionRecursively(_ topic: inout TopicWithReason, selected: Bool) {
+        topic.isSelected = selected
+        for i in 0..<topic.children.count {
+            setSelectionRecursively(&topic.children[i], selected: selected)
+        }
     }
     
     // Create the add selected button
@@ -239,23 +260,17 @@ struct AIModeContent: View {
             let messageIndex = chatMessages.firstIndex(where: { $0.id == message.id })
             let suggestions = messageIndex.flatMap { chatMessages[$0].topicSuggestions }
             
-            // Check if all topics are already selected
-            let allSelected = suggestions?.parentTopics.allSatisfy { parent in
-                parent.isSelected && parent.children.allSatisfy { $0.isSelected }
-            } ?? false
+            // Check if all topics are already selected (recursively)
+            let allSelected = suggestions?.parentTopics.allSatisfy { areAllTopicsSelected($0) } ?? false
             
             // Select All/Deselect All button - left aligned
             Button(action: {
                 if let messageIndex = messageIndex,
                    var suggestions = suggestions {
                     
-                    // Toggle selection (select all or deselect all)
+                    // Toggle selection (select all or deselect all) recursively
                     for i in 0..<suggestions.parentTopics.count {
-                        suggestions.parentTopics[i].isSelected = !allSelected
-                        
-                        for j in 0..<suggestions.parentTopics[i].children.count {
-                            suggestions.parentTopics[i].children[j].isSelected = !allSelected
-                        }
+                        setSelectionRecursively(&suggestions.parentTopics[i], selected: !allSelected)
                     }
                     
                     // Update suggestions in chat message
@@ -361,6 +376,8 @@ struct AIModeContent: View {
             return "Ask for analysis of your mind map structure..."
         case .brainStorm:
             return "Enter a topic to brainstorm..."
+        case .generateAlgorithm:
+            return "Describe an algorithm to generate flowchart..."
         }
     }
     
@@ -565,6 +582,8 @@ struct AIModeContent: View {
             analyzeMapStructure(topic: topic)
         case .brainStorm:
             generateBrainstorm(topic: topic)
+        case .generateAlgorithm:
+            generateAlgorithm(topic: topic)
         }
     }
     
@@ -755,6 +774,37 @@ struct AIModeContent: View {
         }
     }
     
+    // Generate algorithm flowchart (used by Generate Algorithm mode)
+    private func generateAlgorithm(topic: String) {
+        guard !topic.isEmpty else { return }
+        
+        isGeneratingHierarchy = true
+        aiError = nil
+        
+        // Get existing topics to avoid duplication
+        let existingTopics = viewModel.getAllTopicTexts()
+        
+        Task {
+            do {
+                let result = try await AIService.shared.generateAlgorithmFlowchart(
+                    algorithmDescription: topic,
+                    existingTopics: existingTopics
+                )
+                
+                DispatchQueue.main.async {
+                    // Add AI response with algorithm flowchart suggestions
+                    addChatMessage("Here's your algorithm flowchart:", isUser: false, topicSuggestions: result)
+                    isGeneratingHierarchy = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    addChatMessage("Error generating algorithm flowchart: \(error.localizedDescription)", isUser: false)
+                    isGeneratingHierarchy = false
+                }
+            }
+        }
+    }
+
     private func applyHierarchy(_ suggestions: TopicHierarchyResult) {
         if let parentTopic = selectedParentTopic {
             // Add the selected topics as subtopics of the selected parent topic
@@ -1282,7 +1332,7 @@ fileprivate struct ChatHierarchyView: View {
                         ChatChildTopicView(
                             childTopic: $parentTopic.children[childIndex]
                         )
-                        .padding(.leading, 24)
+                        .padding(.leading, 4) // Reduced from 12 to 4
                     }
                 }
             }
@@ -1294,29 +1344,43 @@ fileprivate struct ChatChildTopicView: View {
     @Binding var childTopic: TopicWithReason
     
     var body: some View {
-        HStack(alignment: .top) {
-            Toggle("", isOn: $childTopic.isSelected)
-                .toggleStyle(CheckboxToggleStyle())
-                .labelsHidden()
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(childTopic.name)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white)
-                    .onTapGesture {
-                        childTopic.isSelected.toggle()
-                    }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                Toggle("", isOn: $childTopic.isSelected)
+                    .toggleStyle(CheckboxToggleStyle())
+                    .labelsHidden()
                 
-                if !childTopic.reason.isEmpty {
-                    Text(childTopic.reason)
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(childTopic.name)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                        .onTapGesture {
+                            childTopic.isSelected.toggle()
+                        }
+                    
+                    if !childTopic.reason.isEmpty {
+                        Text(childTopic.reason)
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                    }
                 }
             }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            childTopic.isSelected.toggle()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                childTopic.isSelected.toggle()
+            }
+            
+            // Recursively display nested children without heavy indentation
+            if !childTopic.children.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(childTopic.children.indices, id: \.self) { nestedChildIndex in
+                        ChatChildTopicView(
+                            childTopic: $childTopic.children[nestedChildIndex]
+                        )
+                        .padding(.leading, 4) // Reduced from 8 to 4 for minimal indent
+                    }
+                }
+            }
         }
     }
 }

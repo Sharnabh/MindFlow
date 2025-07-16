@@ -281,6 +281,39 @@ class AIService: ObservableObject, @unchecked Sendable {
         }
     }
     
+    /// Generates an algorithm flowchart based on a description
+    /// - Parameters:
+    ///   - algorithmDescription: The description of the algorithm
+    ///   - existingTopics: Existing topics to consider
+    /// - Returns: The resulting topic hierarchy representing the algorithm
+    func generateAlgorithmFlowchart(algorithmDescription: String, existingTopics: [String]) async throws -> TopicHierarchyResult {
+        isLoading = true
+        errorMessage = nil
+        
+        let prompt = createAlgorithmFlowchartPrompt(
+            algorithmDescription: algorithmDescription,
+            existingTopics: existingTopics
+        )
+        
+        do {
+            let response = try await callGeminiAPIAsync(with: prompt)
+            let result = try parseAlgorithmResponse(response)
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            print(result)
+            
+            return result
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+
     // MARK: - Private Methods
     
     private func createIdeaGenerationPrompt(
@@ -400,6 +433,71 @@ class AIService: ObservableObject, @unchecked Sendable {
         
         Ensure all original topics are included somewhere in the hierarchy.
         """
+    }
+    
+    private func createAlgorithmFlowchartPrompt(
+        algorithmDescription: String,
+        existingTopics: [String]
+    ) -> String {
+        var prompt = """
+        Create a detailed flowchart for the following algorithm description:
+        
+        "\(algorithmDescription)"
+        
+        The flowchart should include:
+        1. All major steps of the algorithm
+        2. Decision points (if/else conditions)
+        3. Loop structures (for/while loops)
+        4. Input/output operations
+        5. Start and end points
+        
+        For each step, specify:
+        - The text content for the flowchart box
+        - The appropriate shape type:
+          * "oval" for start/end points
+          * "rectangle" for process steps
+          * "diamond" for decision points
+          * "parallelogram" for input/output
+          * "hexagon" for preparation/initialization
+        - Connection type to the next step:
+          * "straight" for sequential flow
+          * "curved" for conditional branches (Yes/No from decisions)
+          * "squared" for loop back connections
+        
+        """
+        
+        if !existingTopics.isEmpty {
+            prompt += "\nExisting topics (avoid duplicating these):\n"
+            existingTopics.forEach { prompt += "- \($0)\n" }
+        }
+        
+        prompt += """
+        
+        Format your response as a JSON array of objects with "name", "reason", "shape", "connectionType", and "children" fields.
+        
+        Example:
+        [
+          {
+            "name": "Start",
+            "reason": "Algorithm entry point",
+            "shape": "oval",
+            "connectionType": "straight",
+            "children": [
+              {
+                "name": "Initialize variables",
+                "reason": "Set up required variables",
+                "shape": "hexagon",
+                "connectionType": "straight",
+                "children": []
+              }
+            ]
+          }
+        ]
+        
+        Create a complete, executable algorithm flowchart.
+        """
+        
+        return prompt
     }
     
     private func callGeminiAPI(
@@ -572,6 +670,31 @@ class AIService: ObservableObject, @unchecked Sendable {
     
     // Private property to store the system prompt
     private var systemPrompt: String = "You are an AI assistant helping with mind mapping."
+    
+    private func parseAlgorithmResponse(_ response: String) throws -> TopicHierarchyResult {
+            // Parse the algorithm response similar to hierarchy but with shape and connection information
+            let topics = try parseTopicsResponse(response)
+            
+            // For algorithm flowcharts, we don't filter out any topics as each step is important
+            var algorithmTopics: [TopicWithReason] = []
+            
+            for var parentTopic in topics {
+                // Process children recursively to preserve algorithm structure
+                parentTopic.children = processAlgorithmChildren(parentTopic.children)
+                algorithmTopics.append(parentTopic)
+            }
+            
+            return TopicHierarchyResult(parentTopics: algorithmTopics, mainIdea: "Algorithm Flowchart")
+        }
+        
+        private func processAlgorithmChildren(_ children: [TopicWithReason]) -> [TopicWithReason] {
+            return children.map { child in
+                var processedChild = child
+                processedChild.children = processAlgorithmChildren(child.children)
+                return processedChild
+            }
+        }
+
 }
 
 // MARK: - Supporting Types
@@ -602,4 +725,5 @@ enum APIStatus {
     case failed
     case noInternet
     case missingAPIKey
-} 
+}
+
