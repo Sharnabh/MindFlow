@@ -8,8 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		CE4786122DAD7F7400B1888D /* GoogleGenerativeAI in Frameworks */ = {isa = PBXBuildFile; productRef = CE4786112DAD7F7400B1888D /* GoogleGenerativeAI */; };
-		CED8ED182D83F85D00F37456 /* MindFlow.pages in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED172D83F85D00F37456 /* MindFlow.pages */; };
-		CED8ED1A2D83FA5600F37456 /* MindFlow.docx in Resources */ = {isa = PBXBuildFile; fileRef = CED8ED192D83FA5600F37456 /* MindFlow.docx */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -162,8 +160,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CED8ED1A2D83FA5600F37456 /* MindFlow.docx in Resources */,
-				CED8ED182D83F85D00F37456 /* MindFlow.pages in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
