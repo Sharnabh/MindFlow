@@ -909,6 +909,14 @@ class CanvasViewModel: ObservableObject {
         // Check if this is an algorithm flowchart (has shape information)
         let isAlgorithmFlowchart = parentTopics.first?.shape != nil
         
+        // Determine the template type to use - get from existing topics or default to algorithm for algorithm flowcharts
+        let templateType: TemplateType
+        if isAlgorithmFlowchart {
+            templateType = .algorithm
+        } else {
+            templateType = topicService.topics.first?.templateType ?? .mindMap
+        }
+        
         // Add each parent topic as a main topic
         var xOffset: CGFloat = 0
         
@@ -917,22 +925,27 @@ class CanvasViewModel: ObservableObject {
             let position = CGPoint(x: 100 + xOffset, y: 100)
             xOffset += 200 // Space them out horizontally
             
-            // Add as main topic
-            var newTopic = Topic.createMainTopic(at: position, count: topicService.getAllTopics().count + 1)
+            // Add as main topic with correct template type
+            var newTopic = Topic.createMainTopic(at: position, count: topicService.getAllTopics().count + 1, templateType: templateType)
             newTopic.name = parentTopic.name
             
             // Apply algorithm shape styling if available
             if let shape = parentTopic.shape {
                 switch shape {
                 case "oval": // Start/End
+                    newTopic.shape = .circle
                     newTopic.borderColor = .green
                 case "diamond": // Decision
+                    newTopic.shape = .diamond
                     newTopic.borderColor = .orange
                 case "parallelogram": // Input/Output
+                    newTopic.shape = .parallelogram
                     newTopic.borderColor = .blue
                 case "hexagon": // Preparation
+                    newTopic.shape = .hexagon
                     newTopic.borderColor = .purple
                 default: // Rectangle (process)
+                    newTopic.shape = .rectangle
                     newTopic.borderColor = .gray
                 }
             }
@@ -1117,6 +1130,9 @@ class CanvasViewModel: ObservableObject {
         // Save state for undo
         historyService.saveState(topicService.topics)
         
+        // Check if this is an algorithm flowchart (has shape information)
+        let isAlgorithmFlowchart = parentTopics.first?.shape != nil
+        
         // Process all selected parent topics
         let selectedParentTopics = parentTopics.filter { $0.isSelected }
         
@@ -1136,12 +1152,33 @@ class CanvasViewModel: ObservableObject {
                 var newSubtopic = parentTopic.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
                 newSubtopic.name = parentTopicWithReason.name
                 
-                // Inherit parent's colors directly
-                newSubtopic.backgroundColor = parentTopic.backgroundColor
-                newSubtopic.borderColor = parentTopic.borderColor
-                newSubtopic.foregroundColor = parentTopic.foregroundColor
-                newSubtopic.backgroundOpacity = parentTopic.backgroundOpacity
-                newSubtopic.borderOpacity = parentTopic.borderOpacity
+                // Apply algorithm shape styling if available
+                if isAlgorithmFlowchart, let shape = parentTopicWithReason.shape {
+                    switch shape {
+                    case "oval": // Start/End
+                        newSubtopic.shape = .circle
+                        newSubtopic.borderColor = .green
+                    case "diamond": // Decision
+                        newSubtopic.shape = .diamond
+                        newSubtopic.borderColor = .orange
+                    case "parallelogram": // Input/Output
+                        newSubtopic.shape = .parallelogram
+                        newSubtopic.borderColor = .blue
+                    case "hexagon": // Preparation
+                        newSubtopic.shape = .hexagon
+                        newSubtopic.borderColor = .purple
+                    default: // Rectangle (process)
+                        newSubtopic.shape = .rectangle
+                        newSubtopic.borderColor = .gray
+                    }
+                } else {
+                    // Inherit parent's colors directly for non-algorithm topics
+                    newSubtopic.backgroundColor = parentTopic.backgroundColor
+                    newSubtopic.borderColor = parentTopic.borderColor
+                    newSubtopic.foregroundColor = parentTopic.foregroundColor
+                    newSubtopic.backgroundOpacity = parentTopic.backgroundOpacity
+                    newSubtopic.borderOpacity = parentTopic.borderOpacity
+                }
                 
                 // Add children to the new subtopic
                 var childSubtopics: [Topic] = []
@@ -1152,12 +1189,33 @@ class CanvasViewModel: ObservableObject {
                     var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
                     newChildTopic.name = childTopic.name
                     
-                    // Child topics also inherit the parent's colors
-                    newChildTopic.backgroundColor = parentTopic.backgroundColor
-                    newChildTopic.borderColor = parentTopic.borderColor
-                    newChildTopic.foregroundColor = parentTopic.foregroundColor
-                    newChildTopic.backgroundOpacity = parentTopic.backgroundOpacity
-                    newChildTopic.borderOpacity = parentTopic.borderOpacity
+                    // Apply algorithm shape styling if available
+                    if isAlgorithmFlowchart, let shape = childTopic.shape {
+                        switch shape {
+                        case "oval": // Start/End
+                            newChildTopic.shape = .circle
+                            newChildTopic.borderColor = .green
+                        case "diamond": // Decision
+                            newChildTopic.shape = .diamond
+                            newChildTopic.borderColor = .orange
+                        case "parallelogram": // Input/Output
+                            newChildTopic.shape = .parallelogram
+                            newChildTopic.borderColor = .blue
+                        case "hexagon": // Preparation
+                            newChildTopic.shape = .hexagon
+                            newChildTopic.borderColor = .purple
+                        default: // Rectangle (process)
+                            newChildTopic.shape = .rectangle
+                            newChildTopic.borderColor = .gray
+                        }
+                    } else {
+                        // Child topics also inherit the parent's colors for non-algorithm topics
+                        newChildTopic.backgroundColor = parentTopic.backgroundColor
+                        newChildTopic.borderColor = parentTopic.borderColor
+                        newChildTopic.foregroundColor = parentTopic.foregroundColor
+                        newChildTopic.backgroundOpacity = parentTopic.backgroundOpacity
+                        newChildTopic.borderOpacity = parentTopic.borderOpacity
+                    }
                     
                     childSubtopics.append(newChildTopic)
                 }
@@ -1184,12 +1242,33 @@ class CanvasViewModel: ObservableObject {
                     var newSubtopic = updatedParent.createSubtopic(at: subtopicPosition, count: subtopicCount + 1)
                     newSubtopic.name = parentTopicWithReason.name
                     
-                    // Inherit parent's colors directly
-                    newSubtopic.backgroundColor = updatedParent.backgroundColor
-                    newSubtopic.borderColor = updatedParent.borderColor
-                    newSubtopic.foregroundColor = updatedParent.foregroundColor
-                    newSubtopic.backgroundOpacity = updatedParent.backgroundOpacity
-                    newSubtopic.borderOpacity = updatedParent.borderOpacity
+                    // Apply algorithm shape styling if available
+                    if isAlgorithmFlowchart, let shape = parentTopicWithReason.shape {
+                        switch shape {
+                        case "oval": // Start/End
+                            newSubtopic.shape = .circle
+                            newSubtopic.borderColor = .green
+                        case "diamond": // Decision
+                            newSubtopic.shape = .diamond
+                            newSubtopic.borderColor = .orange
+                        case "parallelogram": // Input/Output
+                            newSubtopic.shape = .parallelogram
+                            newSubtopic.borderColor = .blue
+                        case "hexagon": // Preparation
+                            newSubtopic.shape = .hexagon
+                            newSubtopic.borderColor = .purple
+                        default: // Rectangle (process)
+                            newSubtopic.shape = .rectangle
+                            newSubtopic.borderColor = .gray
+                        }
+                    } else {
+                        // Inherit parent's colors directly for non-algorithm topics
+                        newSubtopic.backgroundColor = updatedParent.backgroundColor
+                        newSubtopic.borderColor = updatedParent.borderColor
+                        newSubtopic.foregroundColor = updatedParent.foregroundColor
+                        newSubtopic.backgroundOpacity = updatedParent.backgroundOpacity
+                        newSubtopic.borderOpacity = updatedParent.borderOpacity
+                    }
                     
                     // Add children to the new subtopic
                     var childSubtopics: [Topic] = []
@@ -1200,12 +1279,33 @@ class CanvasViewModel: ObservableObject {
                         var newChildTopic = newSubtopic.createSubtopic(at: childPosition, count: childCount + 1)
                         newChildTopic.name = childTopic.name
                         
-                        // Child topics also inherit the parent's colors
-                        newChildTopic.backgroundColor = updatedParent.backgroundColor
-                        newChildTopic.borderColor = updatedParent.borderColor
-                        newChildTopic.foregroundColor = updatedParent.foregroundColor
-                        newChildTopic.backgroundOpacity = updatedParent.backgroundOpacity
-                        newChildTopic.borderOpacity = updatedParent.borderOpacity
+                        // Apply algorithm shape styling if available
+                        if isAlgorithmFlowchart, let shape = childTopic.shape {
+                            switch shape {
+                            case "oval": // Start/End
+                                newChildTopic.shape = .circle
+                                newChildTopic.borderColor = .green
+                            case "diamond": // Decision
+                                newChildTopic.shape = .diamond
+                                newChildTopic.borderColor = .orange
+                            case "parallelogram": // Input/Output
+                                newChildTopic.shape = .parallelogram
+                                newChildTopic.borderColor = .blue
+                            case "hexagon": // Preparation
+                                newChildTopic.shape = .hexagon
+                                newChildTopic.borderColor = .purple
+                            default: // Rectangle (process)
+                                newChildTopic.shape = .rectangle
+                                newChildTopic.borderColor = .gray
+                            }
+                        } else {
+                            // Child topics also inherit the parent's colors for non-algorithm topics
+                            newChildTopic.backgroundColor = updatedParent.backgroundColor
+                            newChildTopic.borderColor = updatedParent.borderColor
+                            newChildTopic.foregroundColor = updatedParent.foregroundColor
+                            newChildTopic.backgroundOpacity = updatedParent.backgroundOpacity
+                            newChildTopic.borderOpacity = updatedParent.borderOpacity
+                        }
                         
                         childSubtopics.append(newChildTopic)
                     }
@@ -1260,18 +1360,22 @@ class CanvasViewModel: ObservableObject {
                 
                 // Apply algorithm shape information if available
                 if let shape = childTopic.shape {
-                    // Store shape information for future algorithm rendering features
-                    // For now, we could use different colors or styles based on shape
+                    // Set the actual shape and color for the topic
                     switch shape {
                     case "oval": // Start/End
+                        newSubtopic.shape = .circle
                         newSubtopic.borderColor = .green
                     case "diamond": // Decision
+                        newSubtopic.shape = .diamond
                         newSubtopic.borderColor = .orange
                     case "parallelogram": // Input/Output
+                        newSubtopic.shape = .parallelogram
                         newSubtopic.borderColor = .blue
                     case "hexagon": // Preparation
+                        newSubtopic.shape = .hexagon
                         newSubtopic.borderColor = .purple
                     default: // Rectangle (process)
+                        newSubtopic.shape = .rectangle
                         newSubtopic.borderColor = .gray
                     }
                 }

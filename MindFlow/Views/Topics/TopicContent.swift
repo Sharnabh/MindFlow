@@ -28,19 +28,184 @@ struct TopicContent: View {
     /// Calculates the size needed for the topic content based on text and font properties
     private func calculateSize() -> (width: CGFloat, height: CGFloat) {
         let text = topic.isEditing ? editingName : topic.name
-        let lines = text.components(separatedBy: "\n")
-        let maxLineLength = lines.map { $0.count }.max() ?? 0
         
-        // Scale width based on font size - larger fonts need more width per character
+        // Get shape constraints
+        let maxCharsPerLine = getMaxCharactersPerLine()
         let fontSizeScaleFactor = max(1.0, topic.fontSize / 14.0)
-        let width = max(120, CGFloat(maxLineLength * 10) * fontSizeScaleFactor)
         
-        let lineCount = lines.count
-        // Scale line height based on font size
+        // Perform intelligent text wrapping
+        let wrappedText = wrapTextForShape(text: text, maxCharsPerLine: maxCharsPerLine)
+        let lines = wrappedText.components(separatedBy: "\n")
+        
+        // Calculate dimensions based on wrapped text
+        let maxLineLength = lines.map { $0.count }.max() ?? 0
+        let baseWidth = max(120, CGFloat(maxLineLength * 10) * fontSizeScaleFactor)
+        
+        // Scale line height based on font size and total lines
         let lineHeight = max(24, topic.fontSize * 1.5)
-        let height = max(40, CGFloat(lineCount) * lineHeight)
+        let baseHeight = max(40, CGFloat(lines.count) * lineHeight)
+        
+        // Apply shape-specific adjustments for better text fit
+        let (width, height) = adjustSizeForShape(baseWidth: baseWidth, baseHeight: baseHeight)
         
         return (width, height)
+    }
+    
+    /// Intelligently wraps text based on shape constraints and word boundaries
+    private func wrapTextForShape(text: String, maxCharsPerLine: Int) -> String {
+        let lines = text.components(separatedBy: "\n")
+        var wrappedLines: [String] = []
+        
+        for line in lines {
+            if line.count <= maxCharsPerLine {
+                wrappedLines.append(line)
+            } else {
+                // Need to wrap this line
+                let wrappedLineSegments = wrapLine(line: line, maxCharsPerLine: maxCharsPerLine)
+                wrappedLines.append(contentsOf: wrappedLineSegments)
+            }
+        }
+        
+        return wrappedLines.joined(separator: "\n")
+    }
+    
+    /// Wraps a single line respecting word boundaries when possible
+    private func wrapLine(line: String, maxCharsPerLine: Int) -> [String] {
+        var result: [String] = []
+        var currentLine = ""
+        let words = line.components(separatedBy: " ")
+        
+        for word in words {
+            let potentialLine = currentLine.isEmpty ? word : "\(currentLine) \(word)"
+            
+            if potentialLine.count <= maxCharsPerLine {
+                currentLine = potentialLine
+            } else {
+                // Current word won't fit, start new line
+                if !currentLine.isEmpty {
+                    result.append(currentLine)
+                    currentLine = word
+                } else {
+                    // Single word is too long, force break it
+                    if word.count > maxCharsPerLine {
+                        let brokenWords = forceBreakWord(word: word, maxCharsPerLine: maxCharsPerLine)
+                        result.append(contentsOf: brokenWords.dropLast())
+                        currentLine = brokenWords.last ?? ""
+                    } else {
+                        currentLine = word
+                    }
+                }
+            }
+        }
+        
+        if !currentLine.isEmpty {
+            result.append(currentLine)
+        }
+        
+        return result.isEmpty ? [""] : result
+    }
+    
+    /// Force breaks a word that's too long for a single line
+    private func forceBreakWord(word: String, maxCharsPerLine: Int) -> [String] {
+        var result: [String] = []
+        var remaining = word
+        
+        while remaining.count > maxCharsPerLine {
+            let endIndex = remaining.index(remaining.startIndex, offsetBy: maxCharsPerLine)
+            let chunk = String(remaining[remaining.startIndex..<endIndex])
+            result.append(chunk)
+            remaining = String(remaining[endIndex...])
+        }
+        
+        if !remaining.isEmpty {
+            result.append(remaining)
+        }
+        
+        return result
+    }
+    
+    /// Returns the maximum characters per line based on the shape to encourage text wrapping
+    private func getMaxCharactersPerLine() -> Int {
+        // Base character count, then adjust for shape constraints
+        let baseFontCharWidth = max(8, topic.fontSize * 0.6) // Rough character width estimation
+        let shapeConstraints = getShapeConstraints()
+        
+        // Calculate max characters based on usable width
+        let maxChars = Int(shapeConstraints.usableWidth / baseFontCharWidth)
+        
+        return max(10, min(maxChars, shapeConstraints.maxCharLimit))
+    }
+    
+    /// Returns shape-specific constraints for text layout
+    private func getShapeConstraints() -> (usableWidth: CGFloat, maxCharLimit: Int) {
+        switch topic.shape {
+        case .hexagon, .octagon:
+            // Polygonal shapes: usable area is roughly 70% of total width at the center
+            return (usableWidth: 140, maxCharLimit: 20)
+        case .diamond:
+            // Diamond shape: usable area is roughly 50% of total width at the center
+            return (usableWidth: 100, maxCharLimit: 15)
+        case .circle:
+            // Circular shapes: usable area is roughly 80% of total width at the center
+            return (usableWidth: 160, maxCharLimit: 22)
+        case .parallelogram:
+            // Parallelogram: slightly reduced due to slanted sides
+            return (usableWidth: 200, maxCharLimit: 30)
+        case .star:
+            // Star shape: very limited usable area due to points
+            return (usableWidth: 120, maxCharLimit: 18)
+        case .heart, .cloud, .shield:
+            // Organic shapes: variable but generally constrained
+            return (usableWidth: 180, maxCharLimit: 25)
+        case .leftArrow, .rightArrow:
+            // Arrow shapes: good width in body, constrained by arrow head
+            return (usableWidth: 240, maxCharLimit: 35)
+        case .flag:
+            // Flag shape: constrained by pole and flag geometry
+            return (usableWidth: 200, maxCharLimit: 30)
+        case .document:
+            // Document shape: mostly rectangular with small fold
+            return (usableWidth: 280, maxCharLimit: 40)
+        default:
+            // Rectangle-based shapes: full width available
+            return (usableWidth: 320, maxCharLimit: 45)
+        }
+    }
+    
+    /// Adjusts the calculated size based on the topic's shape to ensure text fits properly
+    private func adjustSizeForShape(baseWidth: CGFloat, baseHeight: CGFloat) -> (width: CGFloat, height: CGFloat) {
+        switch topic.shape {
+        case .hexagon, .octagon:
+            // Polygonal shapes need significantly more space due to angled edges - increased multipliers
+            return (baseWidth * 1.8, baseHeight * 1.6)
+        case .diamond:
+            // Diamond shape needs the most space due to pointed corners
+            return (baseWidth * 2.0, baseHeight * 1.8)
+        case .circle:
+            // Circular shapes need more space to account for curved edges
+            return (baseWidth * 1.5, baseHeight * 1.4)
+        case .parallelogram:
+            // Parallelogram needs extra width due to slanted sides
+            return (baseWidth * 1.5, baseHeight * 1.2)
+        case .star:
+            // Star shape needs more space due to pointed edges
+            return (baseWidth * 1.7, baseHeight * 1.6)
+        case .heart, .cloud, .shield:
+            // Organic shapes need extra space for irregular boundaries
+            return (baseWidth * 1.6, baseHeight * 1.5)
+        case .leftArrow, .rightArrow:
+            // Arrow shapes need extra width for the arrow head
+            return (baseWidth * 1.6, baseHeight * 1.2)
+        case .flag:
+            // Flag shape needs extra space for the flag portion
+            return (baseWidth * 1.5, baseHeight * 1.2)
+        case .document:
+            // Document shape is fairly rectangular, minimal adjustment
+            return (baseWidth * 1.2, baseHeight * 1.1)
+        default:
+            // Rectangle-based shapes (rectangle, rounded rectangle, etc.) work well with base sizing
+            return (baseWidth, baseHeight)
+        }
     }
     
     // MARK: - Helper Methods
@@ -131,6 +296,8 @@ struct TopicContent: View {
     
     private func createTextField() -> some View {
         let size = calculateSize()
+        let padding = getPaddingForShape()
+        let maxWidth = size.width - (padding.horizontal * 2)
         
         return TextEditor(text: $editingName)
             .scrollContentBackground(.hidden)
@@ -143,16 +310,16 @@ struct TopicContent: View {
                      topic.textCase == .lowercase ? .lowercase :
                      nil)
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .frame(width: size.width + 40, height: size.height + 24)
+            .padding(.horizontal, padding.horizontal + 4) // Extra padding for text editing
+            .padding(.vertical, padding.vertical + 4)
+            .frame(width: size.width + (padding.horizontal + 4) * 2, height: size.height + (padding.vertical + 4) * 2)
             .background(
                 createBackground()
-                    .frame(width: size.width + 40, height: size.height + 24)
+                    .frame(width: size.width + (padding.horizontal + 4) * 2, height: size.height + (padding.vertical + 4) * 2)
             )
             .overlay(
                 createBorder()
-                    .frame(width: size.width + 40, height: size.height + 24)
+                    .frame(width: size.width + (padding.horizontal + 4) * 2, height: size.height + (padding.vertical + 4) * 2)
             )
             .focused($isFocused)
             .onChange(of: editingName) { oldValue, newValue in
@@ -177,11 +344,19 @@ struct TopicContent: View {
     
     private func createTextDisplay() -> some View {
         let size = calculateSize()
+        let padding = getPaddingForShape()
+        let maxWidth = size.width - (padding.horizontal * 2)
         
-        return Text(topic.textCase == .uppercase ? topic.name.uppercased() :
-                   topic.textCase == .lowercase ? topic.name.lowercased() :
-                   topic.textCase == .capitalize ? topic.name.capitalized :
-                   topic.name)
+        // Get the wrapped text for display
+        let originalText = topic.textCase == .uppercase ? topic.name.uppercased() :
+                          topic.textCase == .lowercase ? topic.name.lowercased() :
+                          topic.textCase == .capitalize ? topic.name.capitalized :
+                          topic.name
+        
+        let maxCharsPerLine = getMaxCharactersPerLine()
+        let wrappedText = wrapTextForShape(text: originalText, maxCharsPerLine: maxCharsPerLine)
+        
+        return Text(wrappedText)
             .foregroundColor(topic.foregroundColor.opacity(topic.foregroundOpacity))
             .font(getFontWithStyle())
             .strikethrough(topic.textStyles.contains(.strikethrough))
@@ -189,17 +364,54 @@ struct TopicContent: View {
             .multilineTextAlignment(topic.textAlignment == .left ? .leading : topic.textAlignment == .right ? .trailing : .center)
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(width: size.width, height: size.height + 16)
+            .frame(maxWidth: maxWidth) // Constrain text width to force wrapping
+            .padding(.horizontal, padding.horizontal)
+            .padding(.vertical, padding.vertical)
+            .frame(width: size.width + padding.horizontal * 2, height: size.height + padding.vertical * 2)
             .background(
                 createBackground()
-                    .frame(width: size.width + 32, height: size.height + 16)
+                    .frame(width: size.width + padding.horizontal * 2, height: size.height + padding.vertical * 2)
             )
             .overlay(
                 createBorder()
-                    .frame(width: size.width + 32, height: size.height + 16)
+                    .frame(width: size.width + padding.horizontal * 2, height: size.height + padding.vertical * 2)
             )
+    }
+    
+    /// Returns appropriate padding values for different shapes
+    private func getPaddingForShape() -> (horizontal: CGFloat, vertical: CGFloat) {
+        switch topic.shape {
+        case .hexagon, .octagon:
+            // Polygonal shapes need more padding due to angled edges - increased values
+            return (32, 28)
+        case .diamond:
+            // Diamond shape needs significant padding due to pointed corners
+            return (40, 32)
+        case .circle:
+            // Circular shapes need generous padding for curved edges
+            return (28, 24)
+        case .parallelogram:
+            // Parallelogram needs extra horizontal padding for slanted sides
+            return (32, 16)
+        case .star:
+            // Star shape needs extra padding for pointed edges
+            return (36, 28)
+        case .heart, .cloud, .shield:
+            // Organic shapes need extra padding for irregular boundaries
+            return (32, 24)
+        case .leftArrow, .rightArrow:
+            // Arrow shapes need extra horizontal padding for arrow head
+            return (36, 16)
+        case .flag:
+            // Flag shape needs padding for flag portion
+            return (28, 16)
+        case .document:
+            // Document shape works well with standard padding
+            return (24, 16)
+        default:
+            // Rectangle-based shapes use standard padding
+            return (16, 12)
+        }
     }
     
     // MARK: - Background Creation
@@ -274,76 +486,76 @@ struct TopicContent: View {
             case .rectangle:
                 Rectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .roundedRectangle:
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .circle:
                 Capsule()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .roundedSquare:
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .line:
                 Rectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
                     .frame(height: 2)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .diamond:
                 Diamond()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .hexagon:
                 RegularPolygon(sides: 6)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .octagon:
                 RegularPolygon(sides: 8)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .parallelogram:
                 Parallelogram()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .cloud:
                 Cloud()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .heart:
                 Heart()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .shield:
                 Shield()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .star:
                 Star()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .document:
                 Document()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .doubleRectangle:
                 DoubleRectangle()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .flag:
                 Flag()
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .leftArrow:
                 Arrow(pointing: .left)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             case .rightArrow:
                 Arrow(pointing: .right)
                     .stroke(isSelected ? topic.borderColor : topic.borderColor.opacity(topic.borderOpacity), lineWidth: topic.borderWidth.rawValue)
-                    .selectionGlow(isSelected: isSelected, color: topic.borderColor)
+                    .shapeAwareSelectionGlow(isSelected: isSelected, color: topic.borderColor, shape: topic.shape)
             }
         }
     }
@@ -477,5 +689,88 @@ struct NoteEditorPopover: View {
             viewModel.isEditingNote = false
             viewModel.showingNoteEditorForTopicId = nil
         }
+    }
+}
+
+// MARK: - Shape-Aware Selection Glow Extension
+
+extension View {
+    @ViewBuilder func shapeAwareSelectionGlow(isSelected: Bool, color: Color, shape: Topic.Shape) -> some View {
+        self
+            .shadow(color: isSelected ? color.opacity(0.9) : .clear, radius: 4, x: 0, y: 0)
+            .overlay(
+                ZStack {
+                    if isSelected {
+                        Group {
+                            switch shape {
+                            case .rectangle:
+                                Rectangle()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .roundedRectangle:
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .circle:
+                                Capsule()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .roundedSquare:
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .line:
+                                Rectangle()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                                    .frame(height: 2)
+                            case .diamond:
+                                Diamond()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .hexagon:
+                                RegularPolygon(sides: 6)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .octagon:
+                                RegularPolygon(sides: 8)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .parallelogram:
+                                Parallelogram()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .cloud:
+                                Cloud()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .heart:
+                                Heart()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .shield:
+                                Shield()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .star:
+                                Star()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .document:
+                                Document()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .doubleRectangle:
+                                DoubleRectangle()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .flag:
+                                Flag()
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .leftArrow:
+                                Arrow(pointing: .left)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            case .rightArrow:
+                                Arrow(pointing: .right)
+                                    .stroke(color.opacity(0.6), lineWidth: 2)
+                            }
+                        }
+                        .scaleEffect(1.05)
+                        .blur(radius: 1.5)
+                        .opacity(1)
+                        .animation(
+                            Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                            value: isSelected
+                        )
+                    }
+                }
+            )
+            .shadow(color: isSelected ? color.opacity(0.6) : .clear, radius: 6, x: 0, y: 0)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 }
