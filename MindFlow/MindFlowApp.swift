@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import FirebaseCore
 
 @main
 struct MindFlowApp: App {
@@ -14,6 +15,11 @@ struct MindFlowApp: App {
     private let dependencies = DependencyContainer.shared
     
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
+    init() {
+        // Configure Firebase
+        FirebaseApp.configure()
+    }
     
     var body: some Scene {
         WindowGroup {

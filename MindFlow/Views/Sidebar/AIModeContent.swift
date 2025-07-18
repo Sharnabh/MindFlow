@@ -400,7 +400,7 @@ struct AIModeContent: View {
     // Create the button row with mode selector and topic selector
     private func createButtonRow() -> some View {
         HStack {
-            // Brainstorm mode buttonf
+            // Brainstorm mode button
             createModeButton()
             
             // Selected Topic button - any selected topic, whether main or subtopic
@@ -409,6 +409,24 @@ struct AIModeContent: View {
             }
             
             Spacer()
+            
+            // Clear conversation button (show only if there's chat history)
+            if !chatMessages.isEmpty {
+                Button(action: {
+                    AIService.shared.clearConversationHistory()
+                    chatMessages.removeAll()
+                    addChatMessage("Conversation cleared. Starting fresh!", isUser: false)
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10))
+                        .foregroundColor(.red)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(Color(.darkGray))
+                .cornerRadius(4)
+                .help("Clear conversation history")
+            }
         }
         .padding(.bottom, 8)
     }
@@ -434,7 +452,14 @@ struct AIModeContent: View {
         .popover(isPresented: $showModeSelector) {
             ModeSelectorView(
                 selectedMode: $selectedMode,
-                isPresented: $showModeSelector
+                isPresented: $showModeSelector,
+                onModeChange: { newMode in
+                    // Clear conversation history when switching modes
+                    if selectedMode != newMode {
+                        AIService.shared.clearConversationHistory()
+                        addChatMessage("Switched to \(newMode.rawValue) mode. Previous conversation cleared.", isUser: false)
+                    }
+                }
             )
         }
     }
@@ -572,19 +597,127 @@ struct AIModeContent: View {
         // Update the system prompt based on the selected mode
         AIService.shared.updateSystemPrompt(selectedMode.systemPrompt)
         
-        // Generate content based on the selected mode
-        switch selectedMode {
-        case .generateIdeas:
-            generateHierarchy(topic: topic, asSubtopics: false)
-        case .organizeTopics:
-            generateOrganization(topic: topic)
-        case .analyzeStructure:
-            analyzeMapStructure(topic: topic)
-        case .brainStorm:
-            generateBrainstorm(topic: topic)
-        case .generateAlgorithm:
-            generateAlgorithm(topic: topic)
+        // Detect if this is a follow-up or modification request
+        let isFollowUp = detectFollowUpRequest(topic)
+        
+        if isFollowUp {
+            // Handle as conversational follow-up
+            generateConversationalResponse(topic: topic)
+        } else {
+            // Generate content based on the selected mode
+            switch selectedMode {
+            case .generateIdeas:
+                generateHierarchy(topic: topic, asSubtopics: false)
+            case .organizeTopics:
+                generateOrganization(topic: topic)
+            case .analyzeStructure:
+                analyzeMapStructure(topic: topic)
+            case .brainStorm:
+                generateBrainstorm(topic: topic)
+            case .generateAlgorithm:
+                generateAlgorithm(topic: topic)
+            }
         }
+    }
+    
+    // Detect if user input is a follow-up request
+    private func detectFollowUpRequest(_ input: String) -> Bool {
+        let followUpKeywords = [
+            "change", "modify", "different", "instead", "replace", "better", "improve", 
+            "more", "less", "add", "remove", "alternative", "other", "revise",
+            "adjust", "update", "edit", "refine", "simplify", "expand", "that",
+            "it", "this", "them", "those", "previous", "last", "earlier"
+        ]
+        
+        let lowerInput = input.lowercased()
+        
+        // Check if user has chat history (indicating ongoing conversation)
+        let hasHistory = !chatMessages.isEmpty
+        
+        // Check for follow-up keywords
+        let hasFollowUpKeywords = followUpKeywords.contains { keyword in
+            lowerInput.contains(keyword)
+        }
+        
+        // Check for question patterns that suggest reference to previous response
+        let hasReferentialPattern = lowerInput.contains("can you") || 
+                                   lowerInput.contains("could you") ||
+                                   lowerInput.contains("what about") ||
+                                   lowerInput.contains("how about")
+        
+        return hasHistory && (hasFollowUpKeywords || hasReferentialPattern)
+    }
+    
+    // Generate conversational response for follow-ups
+    private func generateConversationalResponse(topic: String) {
+        isGeneratingIdeas = true // Reuse existing loading state
+        aiError = nil
+        
+        Task {
+            do {
+                let response = try await AIService.shared.processConversationalQuery(
+                    userMessage: topic,
+                    mode: selectedMode.rawValue
+                )
+                
+                DispatchQueue.main.async {
+                    // Check if the response contains structured topic suggestions
+                    if self.containsTopicSuggestions(response) {
+                        // Try to parse as topic hierarchy
+                        do {
+                            let hierarchy = try self.parseConversationalTopics(response)
+                            self.addChatMessage("Here are the updated suggestions:", isUser: false, topicSuggestions: hierarchy)
+                        } catch {
+                            // Fall back to regular text response
+                            self.addChatMessage(response, isUser: false)
+                        }
+                    } else {
+                        // Regular conversational response
+                        self.addChatMessage(response, isUser: false)
+                    }
+                    
+                    self.isGeneratingIdeas = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.addChatMessage("Error: \(error.localizedDescription)", isUser: false)
+                    self.isGeneratingIdeas = false
+                }
+            }
+        }
+    }
+    
+    // Check if response contains topic suggestions
+    private func containsTopicSuggestions(_ response: String) -> Bool {
+        return response.contains("topics:") || 
+               response.contains("suggestions:") ||
+               response.contains("ideas:") ||
+               (response.contains("-") && response.contains("\n"))
+    }
+    
+    // Parse conversational response for topic suggestions
+    private func parseConversationalTopics(_ response: String) throws -> TopicHierarchyResult {
+        // Simple parsing for topics mentioned in conversational response
+        let lines = response.components(separatedBy: "\n")
+        var topics: [TopicWithReason] = []
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("-") || trimmed.hasPrefix("•") {
+                let topicName = trimmed.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+                if !topicName.isEmpty {
+                    let topic = TopicWithReason(
+                        name: topicName,
+                        reason: "Suggested in conversation",
+                        children: [],
+                        isSelected: false
+                    )
+                    topics.append(topic)
+                }
+            }
+        }
+        
+        return TopicHierarchyResult(parentTopics: topics, mainIdea: "Conversational Suggestions")
     }
     
     // Generate a topic hierarchy (used by Generate Ideas mode)
@@ -1389,13 +1522,26 @@ fileprivate struct ChatChildTopicView: View {
 private struct ModeSelectorView: View {
     @Binding var selectedMode: AIAssistantMode
     @Binding var isPresented: Bool
+    let onModeChange: ((AIAssistantMode) -> Void)?
+    
+    init(selectedMode: Binding<AIAssistantMode>, isPresented: Binding<Bool>, onModeChange: ((AIAssistantMode) -> Void)? = nil) {
+        self._selectedMode = selectedMode
+        self._isPresented = isPresented
+        self.onModeChange = onModeChange
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(AIAssistantMode.allCases, id: \.self) { mode in
                 Button(action: {
+                    let previousMode = selectedMode
                     selectedMode = mode
                     isPresented = false
+                    
+                    // Call the mode change callback
+                    if previousMode != mode {
+                        onModeChange?(mode)
+                    }
                 }) {
                     HStack(spacing: 12) {
                         // Mode indicator
