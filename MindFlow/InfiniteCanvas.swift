@@ -41,7 +41,7 @@ struct InfiniteCanvas: View {
     private let minimapSize: CGFloat = 200 // Size of the minimap
     private let minimapPadding: CGFloat = 16 // Padding from the edges
     private let topBarHeight: CGFloat = 40 // Height of the top bar
-    private let sidebarWidth: CGFloat = 300 // Width of the sidebar
+    @State private var sidebarWidth: CGFloat = 300 // Dynamic width of the sidebar
     
     // Init with DI
     init(viewModel: CanvasViewModel) {
@@ -339,7 +339,8 @@ struct InfiniteCanvas: View {
                         isShowingBackgroundColorPicker: $isShowingBackgroundColorPicker,
                         isRelationshipMode: $isRelationshipMode,
                         isCircularRelationshipMode: $isCircularRelationshipMode,
-                        isSquaredRelationshipMode: $isSquaredRelationshipMode
+                        isSquaredRelationshipMode: $isSquaredRelationshipMode,
+                        sidebarWidth: $sidebarWidth
                     )
                 }
             }
