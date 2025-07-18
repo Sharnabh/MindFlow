@@ -195,6 +195,10 @@ struct TopBarView: View {
                     
                     Spacer()
                     
+                    // iCloud status indicator
+                    iCloudStatusView()
+                        .padding(.trailing, 8)
+                    
                     // Sidebar toggle button
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.3)) {

@@ -24,8 +24,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		CED8ED172D83F85D00F37456 /* MindFlow.pages */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.pages; sourceTree = "<group>"; };
-		CED8ED192D83FA5600F37456 /* MindFlow.docx */ = {isa = PBXFileReference; lastKnownFileType = file; path = MindFlow.docx; sourceTree = "<group>"; };
 		CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MindFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -84,8 +82,6 @@
 			isa = PBXGroup;
 			children = (
 				CED8ED072D83F83C00F37456 /* MindFlow */,
-				CED8ED172D83F85D00F37456 /* MindFlow.pages */,
-				CED8ED192D83FA5600F37456 /* MindFlow.docx */,
 				CEE50A2D2D9AB9C600EB6709 /* MindFlow.app */,
 				CE4785F72DAD6F3700B1888D /* Frameworks */,
 			);
@@ -311,6 +307,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"MindFlow/Preview Content\"";
+				DEVELOPMENT_TEAM = 73B8W4ZN6V;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -323,7 +320,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sharnabh.MindFlow;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sharnabhB.MindFlow;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -343,6 +340,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"MindFlow/Preview Content\"";
+				DEVELOPMENT_TEAM = 73B8W4ZN6V;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -355,7 +353,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sharnabh.MindFlow;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sharnabhB.MindFlow;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

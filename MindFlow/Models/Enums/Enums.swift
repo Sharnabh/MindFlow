@@ -181,6 +181,7 @@ enum SidebarMode: String, CaseIterable, Identifiable {
     case style = "Style"
     case map = "Map"
     case ai = "AI"
+    case collaboration = "Collaborate"
     
     var id: String { self.rawValue }
 }

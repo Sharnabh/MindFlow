@@ -20,6 +20,7 @@ struct MindFlowApp: App {
             ContentView()
                 .frame(minWidth: 800, minHeight: 600)
                 .environmentObject(dependencies.makeCanvasViewModel())
+                .environmentObject(dependencies.icloudService)
                 .onAppear {
                     // Register for our save notifications
                     NotificationCenter.default.addObserver(forName: NSNotification.Name("SaveMindMap"), object: nil, queue: .main) { _ in
@@ -28,6 +29,10 @@ struct MindFlowApp: App {
                     
                     NotificationCenter.default.addObserver(forName: NSNotification.Name("SaveMindMapAs"), object: nil, queue: .main) { _ in
                         self.handleSaveMindMapAs()
+                    }
+                    
+                    NotificationCenter.default.addObserver(forName: NSNotification.Name("SaveToiCloud"), object: nil, queue: .main) { _ in
+                        self.handleSaveToiCloud()
                     }
                     
                     NotificationCenter.default.addObserver(forName: NSNotification.Name("NewMindMap"), object: nil, queue: .main) { _ in
@@ -74,6 +79,13 @@ struct MindFlowApp: App {
                 
                 Divider()
                 
+                Button("Save to iCloud") {
+                    NotificationCenter.default.post(name: NSNotification.Name("SaveToiCloud"), object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                
+                Divider()
+                
                 Button("Export...") {
                     NotificationCenter.default.post(name: NSNotification.Name("ExportMindMap"), object: nil)
                 }
@@ -115,6 +127,36 @@ struct MindFlowApp: App {
     private func handleNewMindMap() {
         // Show the template selection popup
         NotificationCenter.default.post(name: NSNotification.Name("ShowTemplateSelection"), object: nil)
+    }
+    
+    private func handleSaveToiCloud() {
+        // Handle saving to iCloud
+        guard let activeDocument = DocumentManager.shared.activeDocument else {
+            return
+        }
+        
+        Task {
+            do {
+                let savedURL = try await DocumentManager.shared.saveToiCloud(document: activeDocument)
+                await MainActor.run {
+                    // Show success notification
+                    let notification = NSUserNotification()
+                    notification.title = "Saved to iCloud"
+                    notification.informativeText = "Your mind map has been saved to iCloud"
+                    NSUserNotificationCenter.default.deliver(notification)
+                }
+            } catch {
+                await MainActor.run {
+                    // Show error alert
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to save to iCloud"
+                    alert.informativeText = error.localizedDescription
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+        }
     }
 }
 
