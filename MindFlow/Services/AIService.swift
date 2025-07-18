@@ -1,5 +1,5 @@
 import SwiftUI
-import GoogleGenerativeAI
+import FirebaseAI
 import Combine
 import Network
 
@@ -51,14 +51,6 @@ class AIService: ObservableObject, @unchecked Sendable {
     /// Tests connection to the Gemini API and returns a result
     /// - Returns: A result indicating success or failure
     func testAPIConnection() async -> Result<String, Error> {
-        // Fetch the current API key
-        let currentApiKey = APIConfig.geminiAPIKey
-
-        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
-            self.apiStatus = .missingAPIKey
-            return .failure(APIError.missingAPIKey)
-        }
-        
         guard isNetworkAvailable else {
             self.apiStatus = .noInternet
             return .failure(APIError.noInternetConnection)
@@ -136,7 +128,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         """
         
         do {
-            let response = try await callGeminiAPIAsync(with: prompt)
+            let response = try await callGeminiAPIWithContext(prompt: prompt, mode: "Brainstorm")
             
             // Parse the response into separate ideas (each paragraph is an idea)
             let ideas = response.components(separatedBy: "\n\n")
@@ -185,7 +177,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         """
         
         do {
-            let response = try await callGeminiAPIAsync(with: prompt)
+            let response = try await callGeminiAPIWithContext(prompt: prompt, mode: "Organize Topics")
             
             // Parse the response into sections
             let sections = response.components(separatedBy: "\n\n")
@@ -229,7 +221,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         """
         
         do {
-            let response = try await callGeminiAPIAsync(with: prompt)
+            let response = try await callGeminiAPIWithContext(prompt: prompt, mode: "Analyze Structure")
             
             // Parse the response into sections
             let sections = response.components(separatedBy: "\n\n")
@@ -264,7 +256,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         )
         
         do {
-            let response = try await callGeminiAPIAsync(with: prompt)
+            let response = try await callGeminiAPIWithContext(prompt: prompt, mode: "Generate Ideas")
             let result = try parseHierarchyResponse(response)
             
             DispatchQueue.main.async {
@@ -296,7 +288,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         )
         
         do {
-            let response = try await callGeminiAPIAsync(with: prompt)
+            let response = try await callGeminiAPIWithContext(prompt: prompt, mode: "Generate Algorithm")
             let result = try parseAlgorithmResponse(response)
             
             DispatchQueue.main.async {
@@ -305,6 +297,39 @@ class AIService: ObservableObject, @unchecked Sendable {
             print(result)
             
             return result
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+    
+    /// General conversational method for follow-up questions and refinements
+    /// - Parameters:
+    ///   - userMessage: The user's message or question
+    ///   - mode: The current AI mode context
+    /// - Returns: AI's conversational response
+    func processConversationalQuery(userMessage: String, mode: String) async throws -> String {
+        isLoading = true
+        errorMessage = nil
+        
+        // Enhanced prompt that encourages conversational responses and follow-ups
+        let contextualPrompt = """
+        \(userMessage)
+        
+        Please provide a helpful response. If this appears to be a follow-up question or request for modification to a previous response, take the conversation history into account and provide an appropriate response. Be conversational and helpful.
+        """
+        
+        do {
+            let response = try await callGeminiAPIWithContext(prompt: contextualPrompt, mode: mode)
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            return response
         } catch {
             DispatchQueue.main.async {
                 self.isLoading = false
@@ -517,9 +542,12 @@ class AIService: ObservableObject, @unchecked Sendable {
             return
         }
         
-        let model = GenerativeModel(
-            name: "gemini-1.5-flash",
-            apiKey: currentApiKey,
+        // Initialize the Gemini Developer API backend service
+        let ai = FirebaseAI.firebaseAI(backend: .googleAI())
+        
+        // Create a GenerativeModel instance with generation config
+        let model = ai.generativeModel(
+            modelName: "gemini-2.0-flash-exp",
             generationConfig: GenerationConfig(
                 temperature: 0.7,
                 topP: 0.95,
@@ -635,22 +663,25 @@ class AIService: ObservableObject, @unchecked Sendable {
         return Int(remainder) != nil
     }
     
-    /// Async wrapper for calling the Gemini API
+    /// Async wrapper for calling the Gemini API via FirebaseAI with Google AI backend
     private func callGeminiAPIAsync(with prompt: String) async throws -> String {
-        // Fetch the current API key
-        let currentApiKey = APIConfig.geminiAPIKey
-
-        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
-            throw APIError.missingAPIKey
-        }
-        
         guard isNetworkAvailable else {
             throw APIError.noInternetConnection
         }
         
-        let model = GenerativeModel(
-            name: "gemini-1.5-flash",
-            apiKey: currentApiKey,
+        // Fetch the current API key
+        let currentApiKey = APIConfig.geminiAPIKey
+        
+        guard !currentApiKey.isEmpty && currentApiKey != "YOUR_GEMINI_API_KEY" else {
+            throw APIError.missingAPIKey
+        }
+        
+        // Initialize the Gemini Developer API backend service
+        let ai = FirebaseAI.firebaseAI(backend: .googleAI())
+        
+        // Create the generative model
+        let model = ai.generativeModel(
+            modelName: "gemini-2.0-flash-exp",
             generationConfig: GenerationConfig(
                 temperature: 0.7,
                 topP: 0.95,
@@ -659,6 +690,7 @@ class AIService: ObservableObject, @unchecked Sendable {
             )
         )
         
+        // Generate content
         let response = try await model.generateContent(prompt)
         
         if let text = response.text {
@@ -670,6 +702,105 @@ class AIService: ObservableObject, @unchecked Sendable {
     
     // Private property to store the system prompt
     private var systemPrompt: String = "You are an AI assistant helping with mind mapping."
+    
+    // MARK: - Conversation Context
+    
+    /// Represents a message in the conversation history
+    struct ConversationMessage {
+        let role: String // "user" or "assistant"
+        let content: String
+        let timestamp: Date
+        let mode: String? // AI mode when message was sent
+        
+        init(role: String, content: String, mode: String? = nil) {
+            self.role = role
+            self.content = content
+            self.timestamp = Date()
+            self.mode = mode
+        }
+    }
+    
+    /// Conversation context storage
+    private var conversationHistory: [ConversationMessage] = []
+    private let maxConversationHistory = 10 // Keep last 10 exchanges (5 user + 5 assistant)
+    private var currentSessionMode: String?
+    
+    /// Add a message to conversation history
+    private func addToConversationHistory(role: String, content: String, mode: String? = nil) {
+        let message = ConversationMessage(role: role, content: content, mode: mode)
+        conversationHistory.append(message)
+        
+        // Trim history if it exceeds max length
+        if conversationHistory.count > maxConversationHistory {
+            conversationHistory.removeFirst(conversationHistory.count - maxConversationHistory)
+        }
+    }
+    
+    /// Clear conversation history (when switching modes or starting fresh)
+    func clearConversationHistory() {
+        conversationHistory.removeAll()
+        currentSessionMode = nil
+    }
+    
+    /// Set the current session mode
+    func setSessionMode(_ mode: String) {
+        // If mode changed, clear history to avoid context confusion
+        if currentSessionMode != mode {
+            clearConversationHistory()
+            currentSessionMode = mode
+        }
+    }
+    
+    /// Build context string from conversation history
+    private func buildConversationContext(for currentPrompt: String) -> String {
+        guard !conversationHistory.isEmpty else {
+            return currentPrompt
+        }
+        
+        // Build context from previous messages
+        var contextBuilder = [String]()
+        
+        // Add system prompt with mode context
+        var systemMessage = systemPrompt
+        if let mode = currentSessionMode {
+            systemMessage += " Current mode: \(mode)."
+        }
+        contextBuilder.append("System: \(systemMessage)")
+        
+        // Add conversation history
+        for message in conversationHistory {
+            let rolePrefix = message.role == "user" ? "User" : "Assistant"
+            contextBuilder.append("\(rolePrefix): \(message.content)")
+        }
+        
+        // Add current user message
+        contextBuilder.append("User: \(currentPrompt)")
+        contextBuilder.append("Assistant:")
+        
+        return contextBuilder.joined(separator: "\n\n")
+    }
+    
+    /// Enhanced API call with conversation context
+    private func callGeminiAPIWithContext(prompt: String, mode: String? = nil) async throws -> String {
+        // Set session mode if provided
+        if let mode = mode {
+            setSessionMode(mode)
+        }
+        
+        // Add user message to history
+        addToConversationHistory(role: "user", content: prompt, mode: mode)
+        
+        // Build context-aware prompt
+        let contextualPrompt = buildConversationContext(for: prompt)
+        
+        // Make API call
+        let response = try await callGeminiAPIAsync(with: contextualPrompt)
+        
+        // Add assistant response to history
+        addToConversationHistory(role: "assistant", content: response, mode: mode)
+        
+        return response
+    }
     
     private func parseAlgorithmResponse(_ response: String) throws -> TopicHierarchyResult {
             // Parse the algorithm response similar to hierarchy but with shape and connection information
