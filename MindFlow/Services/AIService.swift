@@ -723,22 +723,27 @@ class AIService: ObservableObject, @unchecked Sendable {
     /// Conversation context storage
     private var conversationHistory: [ConversationMessage] = []
     private let maxConversationHistory = 10 // Keep last 10 exchanges (5 user + 5 assistant)
+    private let maxRecentMessages = 6 // Keep last 6 messages as-is, summarize older ones
     private var currentSessionMode: String?
+    private var conversationSummary: String? // Summarized context from older messages
     
     /// Add a message to conversation history
     private func addToConversationHistory(role: String, content: String, mode: String? = nil) {
         let message = ConversationMessage(role: role, content: content, mode: mode)
         conversationHistory.append(message)
         
-        // Trim history if it exceeds max length
+        // Check if we need to summarize older messages
         if conversationHistory.count > maxConversationHistory {
-            conversationHistory.removeFirst(conversationHistory.count - maxConversationHistory)
+            Task {
+                await summarizeOlderMessages()
+            }
         }
     }
     
     /// Clear conversation history (when switching modes or starting fresh)
     func clearConversationHistory() {
         conversationHistory.removeAll()
+        conversationSummary = nil
         currentSessionMode = nil
     }
     
@@ -751,13 +756,59 @@ class AIService: ObservableObject, @unchecked Sendable {
         }
     }
     
+    /// Get conversation statistics for monitoring
+    func getConversationStats() -> (messageCount: Int, hasSummary: Bool, summaryLength: Int) {
+        return (
+            messageCount: conversationHistory.count,
+            hasSummary: conversationSummary != nil,
+            summaryLength: conversationSummary?.count ?? 0
+        )
+    }
+    
+    /// Summarize older messages to maintain context while reducing prompt size
+    private func summarizeOlderMessages() async {
+        guard conversationHistory.count > maxRecentMessages else { return }
+        
+        // Get messages to summarize (all except the most recent ones)
+        let messagesToSummarize = Array(conversationHistory.prefix(conversationHistory.count - maxRecentMessages))
+        let recentMessages = Array(conversationHistory.suffix(maxRecentMessages))
+        
+        // Build summary prompt
+        let summaryPrompt = """
+        Please provide a concise summary of this conversation context. Focus on:
+        1. Key topics discussed
+        2. Important decisions or conclusions
+        3. User preferences or requirements mentioned
+        4. Any ongoing tasks or goals
+        
+        Conversation to summarize:
+        \(messagesToSummarize.map { message in
+            let rolePrefix = message.role == "user" ? "User" : "Assistant"
+            return "\(rolePrefix): \(message.content)"
+        }.joined(separator: "\n\n"))
+        
+        Provide a clear, structured summary that preserves the essential context for future responses.
+        """
+        
+        do {
+            // Use the basic API call to avoid infinite recursion
+            let summary = try await callGeminiAPIAsync(with: summaryPrompt)
+            
+            // Update conversation state
+            DispatchQueue.main.async { [weak self] in
+                self?.conversationSummary = summary
+                self?.conversationHistory = recentMessages
+            }
+        } catch {
+            // If summarization fails, fall back to simple truncation
+            DispatchQueue.main.async { [weak self] in
+                self?.conversationHistory = recentMessages
+            }
+        }
+    }
+    
     /// Build context string from conversation history
     private func buildConversationContext(for currentPrompt: String) -> String {
-        guard !conversationHistory.isEmpty else {
-            return currentPrompt
-        }
-        
-        // Build context from previous messages
         var contextBuilder = [String]()
         
         // Add system prompt with mode context
@@ -767,10 +818,17 @@ class AIService: ObservableObject, @unchecked Sendable {
         }
         contextBuilder.append("System: \(systemMessage)")
         
-        // Add conversation history
-        for message in conversationHistory {
-            let rolePrefix = message.role == "user" ? "User" : "Assistant"
-            contextBuilder.append("\(rolePrefix): \(message.content)")
+        // Add conversation summary if available
+        if let summary = conversationSummary, !summary.isEmpty {
+            contextBuilder.append("Previous Context Summary: \(summary)")
+        }
+        
+        // Add recent conversation history
+        if !conversationHistory.isEmpty {
+            for message in conversationHistory {
+                let rolePrefix = message.role == "user" ? "User" : "Assistant"
+                contextBuilder.append("\(rolePrefix): \(message.content)")
+            }
         }
         
         // Add current user message
