@@ -73,7 +73,6 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
             }
             database.add(operation)
         }
-        z
         return share
     }
     
@@ -90,7 +89,6 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
             }
             container.add(operation)
         }
-        container.add(operation)
     }
     
     func getCollaborators(for document: MindMapDocument) async throws -> [CKShare.Participant] {

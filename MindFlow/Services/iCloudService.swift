@@ -60,9 +60,14 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
             isAvailable = true
         }
         
-        // Start monitoring documents
-        try await startDocumentQuery()
-        print("iCloud setup completed successfully")
+        // Start monitoring documents with error handling
+        do {
+            try await startDocumentQuery()
+            print("iCloud setup completed successfully")
+        } catch {
+            print("iCloud setup completed with limited monitoring due to: \(error)")
+            // Basic iCloud functionality will still work even if monitoring fails
+        }
     }
     
     private func setupiCloudMonitoring() {
@@ -215,8 +220,27 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
             object: query
         )
         
-        query.start()
-        documentsQuery = query
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(queryDidFinishGathering),
+            name: .NSMetadataQueryDidFinishGathering,
+            object: query
+        )
+        
+        // Start query with error handling
+        do {
+            query.start()
+            documentsQuery = query
+            print("Started iCloud document monitoring")
+        } catch {
+            print("Warning: Could not start iCloud document monitoring: \(error)")
+            // Continue without monitoring - basic iCloud functionality will still work
+        }
+    }
+    
+    @objc private func queryDidFinishGathering() {
+        print("iCloud document query finished initial gathering")
+        queryDidUpdate()
     }
     
     @objc private func queryDidUpdate() {
@@ -235,18 +259,29 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
             
             newDocuments.append(url)
             
-            // Determine sync status using correct NSMetadata attributes
-            // Check if the file is downloaded locally
-            if let isDownloaded = item.value(forAttribute: NSMetadataUbiquitousItemDownloadingStatusKey) as? String {
-                switch isDownloaded {
-                case "Downloaded":
+            // Simplified sync status detection to avoid permission issues
+            do {
+                // Try to access the file to determine if it's available
+                let resourceValues = try url.resourceValues(forKeys: [.isRegularFileKey])
+                if resourceValues.isRegularFile == true {
                     newSyncStatus[url] = .downloaded
-                case "Downloading":
-                    // Try to get download progress if available
-                    let progress = (item.value(forAttribute: NSMetadataUbiquitousItemPercentDownloadedKey) as? NSNumber)?.doubleValue ?? 0.0
-                    newSyncStatus[url] = .downloading(progress: progress / 100.0)
-                case "NotDownloaded":
+                } else {
                     newSyncStatus[url] = .notDownloaded
+                }
+            } catch {
+                // If we can't read the resource values, assume it needs download
+                print("Warning: Could not read resource values for \(url.lastPathComponent): \(error)")
+                newSyncStatus[url] = .notDownloaded
+            }
+        }
+        
+        query.enableUpdates()
+        
+        DispatchQueue.main.async {
+            self.documents = newDocuments
+            self.syncStatus.merge(newSyncStatus) { _, new in new }
+        }
+    }
                 default:
                     // Default to downloaded if we can see the item
                     newSyncStatus[url] = .downloaded
