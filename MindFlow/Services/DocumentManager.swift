@@ -6,6 +6,12 @@ class DocumentManager: ObservableObject {
     
     @Published var documents: [MindMapDocument] = []
     @Published var activeDocumentIndex: Int = -1
+    @Published var isiCloudEnabled: Bool = false
+    @Published var iCloudDocuments: [URL] = []
+    
+    private var iCloudService: iCloudService {
+        return DependencyContainer.shared.icloudService
+    }
     
     private init() {
         // Initialize with an empty document if needed
@@ -25,6 +31,26 @@ class DocumentManager: ObservableObject {
             name: NSNotification.Name("SaveAsActiveDocument"),
             object: nil
         )
+        
+        // Setup iCloud
+        setupiCloud()
+    }
+    
+    private func setupiCloud() {
+        Task {
+            do {
+                try await iCloudService.setupiCloud()
+                await MainActor.run {
+                    isiCloudEnabled = true
+                }
+                try await refreshiCloudDocuments()
+            } catch {
+                print("Failed to setup iCloud: \(error)")
+                await MainActor.run {
+                    isiCloudEnabled = false
+                }
+            }
+        }
     }
     
     @objc private func handleSaveDocument() {
@@ -222,4 +248,78 @@ class DocumentManager: ObservableObject {
             }
         }
     }
-} 
+    
+    // MARK: - iCloud Integration
+    
+    func refreshiCloudDocuments() async throws {
+        let documents = try await iCloudService.getiCloudDocuments()
+        await MainActor.run {
+            iCloudDocuments = documents
+        }
+    }
+    
+    func saveToiCloud(document: MindMapDocument? = nil) async throws -> URL {
+        let documentToSave = document ?? activeDocument
+        guard let doc = documentToSave else {
+            throw DocumentError.noActiveDocument
+        }
+        let savedURL = try await iCloudService.saveToiCloud(document: doc)
+        // Update the document so the app treats it as an iCloud doc (sync badge, reopen path, etc.)
+        await MainActor.run {
+            self.updateDocumentURL(doc, newURL: savedURL)
+        }
+        return savedURL
+    }
+    
+    func openFromiCloud(url: URL) async throws {
+        // Check if document is already open
+        if let existingIndex = documents.firstIndex(where: { $0.url == url }) {
+            await MainActor.run {
+                activeDocumentIndex = existingIndex
+            }
+            return
+        }
+        
+        let topics = try await iCloudService.loadFromiCloud(url: url)
+        let filename = url.lastPathComponent
+        let newDocument = MindMapDocument(filename: filename, url: url, topics: topics)
+        
+        await MainActor.run {
+            documents.append(newDocument)
+            activeDocumentIndex = documents.count - 1
+        }
+    }
+    
+    func deleteiCloudDocument(at url: URL) async throws {
+        try await iCloudService.deleteiCloudDocument(at: url)
+        try await refreshiCloudDocuments()
+    }
+    
+    func isiCloudDocument(_ document: MindMapDocument) -> Bool {
+        guard let url = document.url else { return false }
+        return url.path.contains("Library/Mobile Documents") || 
+               url.path.contains("iCloud")
+    }
+    
+    func getiCloudSyncStatus(for url: URL) -> iCloudDocumentStatus? {
+        return iCloudService.syncStatus[url]
+    }
+}
+
+// MARK: - Document Errors
+enum DocumentError: LocalizedError {
+    case noActiveDocument
+    case saveFailure(String)
+    case loadFailure(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .noActiveDocument:
+            return "No active document to save"
+        case .saveFailure(let message):
+            return "Failed to save document: \(message)"
+        case .loadFailure(let message):
+            return "Failed to load document: \(message)"
+        }
+    }
+}

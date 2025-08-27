@@ -41,7 +41,7 @@ struct InfiniteCanvas: View {
     private let minimapSize: CGFloat = 200 // Size of the minimap
     private let minimapPadding: CGFloat = 16 // Padding from the edges
     private let topBarHeight: CGFloat = 40 // Height of the top bar
-    @State private var sidebarWidth: CGFloat = 300 // Dynamic width of the sidebar
+    @State private var sidebarWidth: CGFloat = 300 // Width of the sidebar (resizable)
     
     // Init with DI
     init(viewModel: CanvasViewModel) {
@@ -741,6 +741,6 @@ extension InfiniteCanvas {
     }
 }
 
-#Preview {
-    InfiniteCanvas(viewModel: DependencyContainer.shared.makeCanvasViewModel())
-} 
+//#Preview {
+//    InfiniteCanvas(viewModel: DependencyContainer.shared.makeCanvasViewModel())
+//} 

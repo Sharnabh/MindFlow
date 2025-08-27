@@ -13,6 +13,7 @@ class DependencyContainer {
     let fileService: FileServiceProtocol
     let themeService: ThemeServiceProtocol
     let keyboardService: KeyboardServiceProtocol
+    let icloudService: iCloudService
     
     // Private initializer for singleton
     private init() {
@@ -23,6 +24,7 @@ class DependencyContainer {
         fileService = FileService()
         themeService = ThemeService()
         keyboardService = KeyboardService()
+        icloudService = iCloudService.shared
         
         // Set up any required connections between services
     }

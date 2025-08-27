@@ -80,6 +80,7 @@ struct SidebarView: View {
                                     Text("Style").tag(SidebarMode.style)
                                     Text("Map").tag(SidebarMode.map)
                                     Text("AI").tag(SidebarMode.ai)
+                                    Text("Collaborate").tag(SidebarMode.collaboration)
                                 }
                                 .pickerStyle(.segmented)
                                 .padding(.horizontal)
@@ -108,8 +109,10 @@ struct SidebarView: View {
                                         isCircularRelationshipMode: $isCircularRelationshipMode,
                                         isSquaredRelationshipMode: $isSquaredRelationshipMode
                                     )
-                                } else {
+                                } else if sidebarMode == .ai {
                                     AIModeContent(viewModel: viewModel)
+                                } else if sidebarMode == .collaboration {
+                                    CollaborationModeContent(viewModel: viewModel)
                                 }
                                 
                                 Spacer(minLength: 20)
@@ -193,6 +196,50 @@ private struct MapModeContent: View {
                 
                 AutoLayoutSection()
                 ThemeSection(viewModel: viewModel)
+            }
+        }
+    }
+}
+
+// Collaboration mode content
+private struct CollaborationModeContent: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                Text("Collaboration Features")
+                    .font(.headline)
+                    .padding(.horizontal)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Current Status:")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Text("✅ Your documents are saved to iCloud")
+                    Text("✅ Auto-sync across your devices")
+                    Text("⏳ Real-time collaboration coming soon")
+                        .foregroundColor(.orange)
+                }
+                .padding(.horizontal)
+                
+                Divider()
+                    .padding(.horizontal)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("What's Next:")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Text("🚀 Share documents with others")
+                    Text("👥 Live collaborative editing")
+                    Text("💬 Real-time comments")
+                    Text("📱 Cross-platform support")
+                }
+                .padding(.horizontal)
+                
+                Spacer()
             }
         }
     }

@@ -36,6 +36,7 @@ struct StartupScreenView: View {
     enum StartupOption: String, CaseIterable, Identifiable {
         case templates = "Templates"
         case recent = "Recent"
+        case icloud = "iCloud"
         case openLocalFiles = "Open Local Files"
         case trash = "Trash"
         
@@ -153,6 +154,8 @@ struct StartupScreenView: View {
                             .padding(.vertical, 0)
                     case .recent:
                         recentFilesView
+                    case .icloud:
+                        iCloudView
                     case .openLocalFiles:
                         // This is handled by openFilePicker() when the option is selected
                         EmptyView()
@@ -360,6 +363,38 @@ var trashView: some View {
         }
     }
     .padding(10)
+}
+
+// iCloud view
+var iCloudView: some View {
+    Group {
+        iCloudDocumentPicker { url in
+            openFromiCloud(url: url)
+        }
+    }
+    .padding(10)
+}
+
+// Open document from iCloud
+func openFromiCloud(url: URL) {
+    Task {
+        do {
+            try await DocumentManager.shared.openFromiCloud(url: url)
+            await MainActor.run {
+                closeStartupScreenAndShowCanvas()
+            }
+        } catch {
+            await MainActor.run {
+                // Show error alert
+                let alert = NSAlert()
+                alert.messageText = "Failed to open iCloud document"
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+        }
+    }
 }
 
 // Format date
