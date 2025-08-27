@@ -125,7 +125,6 @@ struct SidebarView: View {
                                 .onChanged { _ in }
                                 .onEnded { _ in }
                         )
-                    
                     // Drag handle for resizing - positioned on the left
                     DragHandleView(
                         sidebarWidth: $sidebarWidth,
@@ -135,80 +134,6 @@ struct SidebarView: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Drag Handle Component
-private struct DragHandleView: View {
-    @Binding var sidebarWidth: CGFloat
-    let minSidebarWidth: CGFloat
-    let maxSidebarWidth: CGFloat
-    
-    @State private var isHovering = false
-    @State private var isDragging = false
-    
-    var body: some View {
-        Rectangle()
-            .fill(handleColor)
-            .frame(width: handleWidth)
-            .overlay(
-                Rectangle()
-                    .fill(accentColor)
-                    .frame(width: 1)
-            )
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        isDragging = true
-                        let newWidth = sidebarWidth - value.translation.width
-                        sidebarWidth = min(max(newWidth, minSidebarWidth), maxSidebarWidth)
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                    }
-            )
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isHovering = hovering
-                }
-                
-                // Change cursor on hover (macOS)
-                #if os(macOS)
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
-                }
-                #endif
-            }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .animation(.easeInOut(duration: 0.2), value: isHovering)
-            .animation(.easeInOut(duration: 0.1), value: isDragging)
-    }
-    
-    private var handleColor: Color {
-        if isDragging {
-            return Color.blue.opacity(0.6)
-        } else if isHovering {
-            return Color.gray.opacity(0.5)
-        } else {
-            return Color.gray.opacity(0.3)
-        }
-    }
-    
-    private var accentColor: Color {
-        if isDragging {
-            return Color.blue.opacity(0.9)
-        } else if isHovering {
-            return Color.blue.opacity(0.8)
-        } else {
-            return Color.blue.opacity(0.6)
-        }
-    }
-    
-    private var handleWidth: CGFloat {
-        isDragging ? 6 : (isHovering ? 5 : 4)
     }
 }
 
@@ -330,5 +255,79 @@ private func applyTheme(
     themeName: String = ""
 ) {
     // ... existing implementation ...
+}
+
+// MARK: - Drag Handle Component
+private struct DragHandleView: View {
+    @Binding var sidebarWidth: CGFloat
+    let minSidebarWidth: CGFloat
+    let maxSidebarWidth: CGFloat
+    
+    @State private var isHovering = false
+    @State private var isDragging = false
+    
+    var body: some View {
+        Rectangle()
+            .fill(handleColor)
+            .frame(width: handleWidth)
+            .overlay(
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(width: 1)
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        isDragging = true
+                        let newWidth = sidebarWidth - value.translation.width
+                        sidebarWidth = min(max(newWidth, minSidebarWidth), maxSidebarWidth)
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                    }
+            )
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isHovering = hovering
+                }
+                
+                // Change cursor on hover (macOS)
+                #if os(macOS)
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+                #endif
+            }
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .animation(.easeInOut(duration: 0.2), value: isHovering)
+            .animation(.easeInOut(duration: 0.1), value: isDragging)
+    }
+    
+    private var handleColor: Color {
+        if isDragging {
+            return Color.blue.opacity(0.6)
+        } else if isHovering {
+            return Color.gray.opacity(0.5)
+        } else {
+            return Color.gray.opacity(0.3)
+        }
+    }
+    
+    private var accentColor: Color {
+        if isDragging {
+            return Color.blue.opacity(0.9)
+        } else if isHovering {
+            return Color.blue.opacity(0.8)
+        } else {
+            return Color.blue.opacity(0.6)
+        }
+    }
+    
+    private var handleWidth: CGFloat {
+        isDragging ? 6 : (isHovering ? 5 : 4)
+    }
 }
 

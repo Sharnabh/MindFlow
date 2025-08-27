@@ -741,6 +741,6 @@ extension InfiniteCanvas {
     }
 }
 
-#Preview {
-    InfiniteCanvas(viewModel: DependencyContainer.shared.makeCanvasViewModel())
-} 
+//#Preview {
+//    InfiniteCanvas(viewModel: DependencyContainer.shared.makeCanvasViewModel())
+//} 
