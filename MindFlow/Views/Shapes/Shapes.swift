@@ -31,8 +31,8 @@ struct RegularPolygon: Shape {
         for i in 0..<sides {
             let angle = (2.0 * .pi * Double(i)) / Double(sides) - (.pi / 2)
             let point = CGPoint(
-                x: center.x + radius * cos(angle),
-                y: center.y + radius * sin(angle)
+                x: center.x + radius * CGFloat(cos(angle)),
+                y: center.y + radius * CGFloat(sin(angle))
             )
             
             if i == 0 {
@@ -151,8 +151,8 @@ struct Star: Shape {
             let angle = (2.0 * .pi * Double(i)) / Double(points * 2) - (.pi / 2)
             let r = i % 2 == 0 ? radius : innerRadius
             let point = CGPoint(
-                x: center.x + r * cos(angle),
-                y: center.y + r * sin(angle)
+                x: center.x + r * CGFloat(cos(angle)),
+                y: center.y + r * CGFloat(sin(angle))
             )
             
             if i == 0 {
