@@ -263,8 +263,12 @@ class DocumentManager: ObservableObject {
         guard let doc = documentToSave else {
             throw DocumentError.noActiveDocument
         }
-        
-        return try await iCloudService.saveToiCloud(document: doc)
+        let savedURL = try await iCloudService.saveToiCloud(document: doc)
+        // Update the document so the app treats it as an iCloud doc (sync badge, reopen path, etc.)
+        await MainActor.run {
+            self.updateDocumentURL(doc, newURL: savedURL)
+        }
+        return savedURL
     }
     
     func openFromiCloud(url: URL) async throws {

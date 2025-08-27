@@ -73,6 +73,13 @@ struct iCloudDocumentPicker: View {
                 
                 Spacer()
                 
+                #if os(macOS)
+                Button("Reveal in Finder") {
+                    iCloudService.revealICloudDocumentsInFinder()
+                }
+                .disabled(!iCloudService.isAvailable)
+                #endif
+
                 Button("Refresh") {
                     refreshDocuments()
                 }
@@ -87,7 +94,7 @@ struct iCloudDocumentPicker: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-            } else if iCloudService.documents.isEmpty {
+            } else if documentManager.iCloudDocuments.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "icloud")
                         .font(.system(size: 48))
@@ -105,7 +112,7 @@ struct iCloudDocumentPicker: View {
                 LazyVGrid(columns: [
                     GridItem(.adaptive(minimum: 200))
                 ], spacing: 12) {
-                    ForEach(iCloudService.documents, id: \.self) { url in
+                    ForEach(documentManager.iCloudDocuments, id: \.self) { url in
                         iCloudDocumentCard(url: url) {
                             onDocumentSelected(url)
                         }
@@ -131,6 +138,10 @@ struct iCloudDocumentPicker: View {
         Task {
             do {
                 try await documentManager.refreshiCloudDocuments()
+                // Keep the service list in sync for status views
+                await MainActor.run {
+                    iCloudService.documents = documentManager.iCloudDocuments
+                }
                 await MainActor.run {
                     isLoading = false
                 }

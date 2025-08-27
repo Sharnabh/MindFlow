@@ -2,6 +2,9 @@ import Foundation
 import CoreServices
 import UniformTypeIdentifiers
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 // Protocol for iCloud operations
 protocol iCloudServiceProtocol {
@@ -34,6 +37,7 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
     
     private var ubiquityContainerURL: URL?
     private var documentsQuery: NSMetadataQuery?
+    private let containerIdentifier = "iCloud.com.sharnabhB.MindFlow"
     
     private init() {
         setupiCloudMonitoring()
@@ -42,9 +46,12 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
     // MARK: - Setup and Configuration
     
     func setupiCloud() async throws {
-        // Check if iCloud is available
-        guard let containerURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
-            print("iCloud container not available")
+        // Resolve the iCloud container (prefer explicit identifier, fallback to nil)
+        let fm = FileManager.default
+        let containerURL = fm.url(forUbiquityContainerIdentifier: containerIdentifier)
+            ?? fm.url(forUbiquityContainerIdentifier: nil)
+        guard let containerURL else {
+            print("iCloud container not available for identifier: \(containerIdentifier)")
             throw iCloudError.notAvailable
         }
         
@@ -95,7 +102,9 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
     // MARK: - iCloud Operations
     
     func checkiCloudAvailability() -> Bool {
-        return FileManager.default.url(forUbiquityContainerIdentifier: nil) != nil
+    let fm = FileManager.default
+    return fm.url(forUbiquityContainerIdentifier: containerIdentifier) != nil ||
+           fm.url(forUbiquityContainerIdentifier: nil) != nil
     }
     
     func saveToiCloud(document: MindMapDocument) async throws -> URL {
@@ -105,7 +114,12 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
         }
         
         let documentsURL = containerURL.appendingPathComponent("Documents")
-        let fileURL = documentsURL.appendingPathComponent(document.filename)
+        // Ensure the file has the correct extension so it shows up in queries and Finder
+        let ensuredFilename: String = {
+            let lower = document.filename.lowercased()
+            return lower.hasSuffix(".mindflow") ? document.filename : document.filename + ".mindflow"
+        }()
+        let fileURL = documentsURL.appendingPathComponent(ensuredFilename)
         print("Saving document to iCloud: \(fileURL)")
         
         // Update sync status
@@ -119,8 +133,18 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(document.topics)
             
-            // Write to iCloud
-            try data.write(to: fileURL)
+            // Write to a temporary local file first
+            let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            let tempURL = tempDir.appendingPathComponent(UUID().uuidString).appendingPathExtension("mindflow")
+            try data.write(to: tempURL, options: .atomic)
+            
+            // If a file already exists at destination, remove it to avoid setUbiquitous failure
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                try FileManager.default.removeItem(at: fileURL)
+            }
+            
+            // Move into iCloud using setUbiquitous for proper iCloud indexing and visibility
+            try FileManager.default.setUbiquitous(true, itemAt: tempURL, destinationURL: fileURL)
             print("Successfully saved document to iCloud: \(document.filename)")
             
             // Mark as uploaded
@@ -137,6 +161,21 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
             throw error
         }
     }
+    
+    // Expose the iCloud Documents URL for UI helpers
+    func icloudDocumentsURL() -> URL? {
+        guard let containerURL = ubiquityContainerURL else { return nil }
+        return containerURL.appendingPathComponent("Documents")
+    }
+    
+    // Convenience to reveal the iCloud folder in Finder on macOS
+    #if os(macOS)
+    @MainActor
+    func revealICloudDocumentsInFinder() {
+        guard let url = icloudDocumentsURL() else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    #endif
     
     func loadFromiCloud(url: URL) async throws -> [Topic] {
         // Check if file needs to be downloaded
@@ -186,14 +225,35 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
         }
         
         let documentsURL = containerURL.appendingPathComponent("Documents")
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: documentsURL,
-            includingPropertiesForKeys: [.nameKey, .ubiquitousItemDownloadingStatusKey],
-            options: .skipsHiddenFiles
-        )
+        // Ensure directory exists
+        try FileManager.default.createDirectory(at: documentsURL, withIntermediateDirectories: true)
         
-        return contents.filter { url in
-            url.pathExtension == "mindflow"
+        // Try direct listing first
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: documentsURL,
+                includingPropertiesForKeys: [.nameKey, .ubiquitousItemDownloadingStatusKey],
+                options: .skipsHiddenFiles
+            )
+            let files = contents.filter { $0.pathExtension == "mindflow" }
+            await MainActor.run { self.documents = files }
+            return files
+        } catch {
+            print("Direct iCloud listing failed: \(error). Falling back to metadata query snapshot.")
+            // Fallback to current query snapshot if available
+            if let query = documentsQuery {
+                var urls: [URL] = []
+                for i in 0..<query.resultCount {
+                    if let item = query.result(at: i) as? NSMetadataItem,
+                       let url = item.value(forAttribute: NSMetadataItemURLKey) as? URL,
+                       url.pathExtension == "mindflow" {
+                        urls.append(url)
+                    }
+                }
+                await MainActor.run { self.documents = urls }
+                return urls
+            }
+            throw error
         }
     }
     
@@ -282,24 +342,7 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
             self.syncStatus.merge(newSyncStatus) { _, new in new }
         }
     }
-                default:
-                    // Default to downloaded if we can see the item
-                    newSyncStatus[url] = .downloaded
-                }
-            } else {
-                // Fallback: if we can query the item, assume it's available
-                newSyncStatus[url] = .downloaded
-            }
-        }
-        
-        query.enableUpdates()
-        
-        DispatchQueue.main.async {
-            self.documents = newDocuments
-            self.syncStatus.merge(newSyncStatus) { _, new in new }
-        }
-    }
-    
+
     func monitorDocumentStatus(at url: URL) -> AsyncStream<iCloudDocumentStatus> {
         AsyncStream { continuation in
             // Initial status
