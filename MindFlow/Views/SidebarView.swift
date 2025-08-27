@@ -55,9 +55,11 @@ struct SidebarView: View {
     @Binding var isRelationshipMode: Bool
     @Binding var isCircularRelationshipMode: Bool
     @Binding var isSquaredRelationshipMode: Bool
+    @Binding var sidebarWidth: CGFloat
     
     private let topBarHeight: CGFloat = 40
-    private let sidebarWidth: CGFloat = 300
+    private let minSidebarWidth: CGFloat = 220
+    private let maxSidebarWidth: CGFloat = 600
     
     var body: some View {
         VStack(spacing: 0) {
@@ -67,11 +69,12 @@ struct SidebarView: View {
             
             HStack(spacing: 0) {
                 Spacer()
-                Rectangle()
-                    .fill(Color(.windowBackgroundColor))
-                    .frame(width: sidebarWidth)
-                    .overlay(
-                        VStack(spacing: 16) {
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(.windowBackgroundColor))
+                        .frame(width: sidebarWidth)
+                        .overlay(
+                            VStack(spacing: 16) {
                                 // Mode selector
                                 Picker("", selection: $sidebarMode) {
                                     Text("Style").tag(SidebarMode.style)
@@ -82,9 +85,10 @@ struct SidebarView: View {
                                 .pickerStyle(.segmented)
                                 .padding(.horizontal)
                                 .padding(.top, 12)
-                            Divider()
-                                .padding(.horizontal)
-                            
+                                
+                                Divider()
+                                    .padding(.horizontal)
+                                
                                 if sidebarMode == .style {
                                     StyleModeContent(
                                         viewModel: viewModel,
@@ -110,12 +114,101 @@ struct SidebarView: View {
                                 } else if sidebarMode == .collaboration {
                                     CollaborationModeContent(viewModel: viewModel)
                                 }
-                            Spacer(minLength: 20)
-                        }
+                                
+                                Spacer(minLength: 20)
+                            }
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 2, x: -1, y: 0)
+                        .gesture(
+                            // Consume drag gestures to prevent canvas from moving when dragging on sidebar
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in }
+                                .onEnded { _ in }
+                        )
+                    
+                    // Drag handle for resizing - positioned on the left
+                    DragHandleView(
+                        sidebarWidth: $sidebarWidth,
+                        minSidebarWidth: minSidebarWidth,
+                        maxSidebarWidth: maxSidebarWidth
                     )
-                    .shadow(color: .black.opacity(0.1), radius: 2, x: -1, y: 0)
+                }
             }
         }
+    }
+}
+
+// MARK: - Drag Handle Component
+private struct DragHandleView: View {
+    @Binding var sidebarWidth: CGFloat
+    let minSidebarWidth: CGFloat
+    let maxSidebarWidth: CGFloat
+    
+    @State private var isHovering = false
+    @State private var isDragging = false
+    
+    var body: some View {
+        Rectangle()
+            .fill(handleColor)
+            .frame(width: handleWidth)
+            .overlay(
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(width: 1)
+            )
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        isDragging = true
+                        let newWidth = sidebarWidth - value.translation.width
+                        sidebarWidth = min(max(newWidth, minSidebarWidth), maxSidebarWidth)
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                    }
+            )
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isHovering = hovering
+                }
+                
+                // Change cursor on hover (macOS)
+                #if os(macOS)
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+                #endif
+            }
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .animation(.easeInOut(duration: 0.2), value: isHovering)
+            .animation(.easeInOut(duration: 0.1), value: isDragging)
+    }
+    
+    private var handleColor: Color {
+        if isDragging {
+            return Color.blue.opacity(0.6)
+        } else if isHovering {
+            return Color.gray.opacity(0.5)
+        } else {
+            return Color.gray.opacity(0.3)
+        }
+    }
+    
+    private var accentColor: Color {
+        if isDragging {
+            return Color.blue.opacity(0.9)
+        } else if isHovering {
+            return Color.blue.opacity(0.8)
+        } else {
+            return Color.blue.opacity(0.6)
+        }
+    }
+    
+    private var handleWidth: CGFloat {
+        isDragging ? 6 : (isHovering ? 5 : 4)
     }
 }
 
