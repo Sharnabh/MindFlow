@@ -57,7 +57,7 @@ struct Note: Identifiable, Equatable, Codable {
     }
 }
 
-struct Topic: Identifiable, Equatable {
+struct Topic: Identifiable, Equatable, Codable {
     enum Shape: Codable {
         case rectangle
         case roundedRectangle
@@ -251,7 +251,148 @@ struct Topic: Identifiable, Equatable {
     }
 }
 
+// MARK: - Codable Implementation
+
 extension Topic {
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, positionX, positionY, parentId, subtopics, shape, backgroundColor, backgroundOpacity,
+             borderColor, borderOpacity, borderWidth, branchStyle, font, fontSize, fontWeight,
+             foregroundColor, foregroundOpacity, textStyles, textCase, textAlignment, isCollapsed, note
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        
+        let x = try container.decode(CGFloat.self, forKey: .positionX)
+        let y = try container.decode(CGFloat.self, forKey: .positionY)
+        position = CGPoint(x: x, y: y)
+        
+        parentId = try container.decodeIfPresent(UUID.self, forKey: .parentId)
+        subtopics = try container.decode([Topic].self, forKey: .subtopics)
+        
+        // Not encoding these transient properties
+        isSelected = false
+        isEditing = false
+        relations = []
+        
+        shape = try container.decode(Shape.self, forKey: .shape)
+        
+        // Decode colors using their components
+        let bgColor = try container.decode(ColorComponents.self, forKey: .backgroundColor)
+        backgroundColor = Color(red: bgColor.red, green: bgColor.green, blue: bgColor.blue, opacity: bgColor.opacity)
+        
+        backgroundOpacity = try container.decode(Double.self, forKey: .backgroundOpacity)
+        
+        let bColor = try container.decode(ColorComponents.self, forKey: .borderColor)
+        borderColor = Color(red: bColor.red, green: bColor.green, blue: bColor.blue, opacity: bColor.opacity)
+        
+        borderOpacity = try container.decode(Double.self, forKey: .borderOpacity)
+        
+        // Decode BorderWidth using its raw Double value
+        let borderWidthValue = try container.decode(Double.self, forKey: .borderWidth)
+        if let borderWidth = BorderWidth(rawValue: borderWidthValue) {
+            self.borderWidth = borderWidth
+        } else {
+            self.borderWidth = .medium // Default value if not found
+        }
+        
+        // Decode BranchStyle using its raw String value
+        let branchStyleValue = try container.decode(String.self, forKey: .branchStyle)
+        if let branchStyle = BranchStyle(rawValue: branchStyleValue) {
+            self.branchStyle = branchStyle
+        } else {
+            self.branchStyle = .default // Default value if not found
+        }
+        
+        font = try container.decode(String.self, forKey: .font)
+        fontSize = try container.decode(CGFloat.self, forKey: .fontSize)
+        
+        // Decode font weight as integer and convert
+        let weightRawValue = try container.decode(Int.self, forKey: .fontWeight)
+        fontWeight = Font.Weight.fromRawValue(weightRawValue)
+        
+        let fgColor = try container.decode(ColorComponents.self, forKey: .foregroundColor)
+        foregroundColor = Color(red: fgColor.red, green: fgColor.green, blue: fgColor.blue, opacity: fgColor.opacity)
+        
+        foregroundOpacity = try container.decode(Double.self, forKey: .foregroundOpacity)
+        
+        let textStyleIndices = try container.decode([Int].self, forKey: .textStyles)
+        textStyles = Set(textStyleIndices.compactMap { TextStyle.fromIntValue($0) })
+        
+        let textCaseValue = try container.decode(Int.self, forKey: .textCase)
+        textCase = TextCase.fromIntValue(textCaseValue)
+        
+        let textAlignmentValue = try container.decode(Int.self, forKey: .textAlignment)
+        textAlignment = TextAlignment.fromIntValue(textAlignmentValue)
+        
+        isCollapsed = try container.decode(Bool.self, forKey: .isCollapsed)
+        
+        // Decode note if present
+        note = try container.decodeIfPresent(Note.self, forKey: .note)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        
+        // Encode CGPoint as separate components with unique keys
+        try container.encode(position.x, forKey: .positionX)
+        try container.encode(position.y, forKey: .positionY)
+        
+        try container.encodeIfPresent(parentId, forKey: .parentId)
+        try container.encode(subtopics, forKey: .subtopics)
+        
+        // We don't encode relations since they're a potential source of circular references
+        
+        try container.encode(shape, forKey: .shape)
+        
+        // Encode Color as components
+        let bgColor = backgroundColor.toComponents()
+        try container.encode(bgColor, forKey: .backgroundColor)
+        
+        try container.encode(backgroundOpacity, forKey: .backgroundOpacity)
+        
+        let bColor = borderColor.toComponents()
+        try container.encode(bColor, forKey: .borderColor)
+        
+        try container.encode(borderOpacity, forKey: .borderOpacity)
+        
+        // Encode BorderWidth using its raw Double value
+        try container.encode(borderWidth.rawValue, forKey: .borderWidth)
+        
+        // Encode BranchStyle using its raw String value
+        try container.encode(branchStyle.rawValue, forKey: .branchStyle)
+        
+        try container.encode(font, forKey: .font)
+        try container.encode(fontSize, forKey: .fontSize)
+        
+        // Encode font weight as integer
+        try container.encode(fontWeight.rawValue, forKey: .fontWeight)
+        
+        let fgColor = foregroundColor.toComponents()
+        try container.encode(fgColor, forKey: .foregroundColor)
+        
+        try container.encode(foregroundOpacity, forKey: .foregroundOpacity)
+        
+        // Encode text styles as array of integers
+        let textStyleIndices = textStyles.map { $0.intValue }
+        try container.encode(textStyleIndices, forKey: .textStyles)
+        
+        try container.encode(textCase.intValue, forKey: .textCase)
+        try container.encode(textAlignment.intValue, forKey: .textAlignment)
+        
+        try container.encode(isCollapsed, forKey: .isCollapsed)
+        
+        // Encode note if present
+        try container.encodeIfPresent(note, forKey: .note)
+    }
+
     static func createMainTopic(at position: CGPoint, count: Int, templateType: TemplateType = .mindMap) -> Topic {
         Topic(
             name: "Main Topic \(count)",
