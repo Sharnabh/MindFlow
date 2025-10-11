@@ -8,6 +8,9 @@ struct CollaborationPanel: View {
     let document: MindMapDocument
     @State private var showingShareSheet = false
     @State private var shareURL: URL?
+    @State private var isSharing = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -25,10 +28,19 @@ struct CollaborationPanel: View {
                     }
                     .buttonStyle(.bordered)
                 } else {
-                    Button("Share Document") {
-                        shareDocument()
+                    HStack {
+                        if isSharing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Sharing...")
+                                .font(.caption)
+                        } else {
+                            Button("Share Document") {
+                                shareDocument()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             }
             
@@ -65,6 +77,13 @@ struct CollaborationPanel: View {
                     showingShareSheet = false
                 }
             }
+        }
+        .alert("Sharing Error", isPresented: $showingError) {
+            Button("OK") {
+                showingError = false
+            }
+        } message: {
+            Text(errorMessage ?? "Unknown error occurred")
         }
     }
     
@@ -133,16 +152,40 @@ struct CollaborationPanel: View {
     }
     
     private func shareDocument() {
+        print("🔄 Starting document sharing process...")
+        isSharing = true
+        errorMessage = nil
+        
         Task {
             do {
+                // First check CloudKit availability
+                print("🔍 Checking CloudKit availability...")
+                let container = CKContainer(identifier: "iCloud.com.sharnabhB.MindFlow")
+                let status = try await container.accountStatus()
+                
+                if status != .available {
+                    throw NSError(domain: "CloudKitError", code: 1, userInfo: [
+                        NSLocalizedDescriptionKey: "iCloud account not available. Please sign in to iCloud in System Preferences."
+                    ])
+                }
+                print("✅ CloudKit account is available")
+                
+                print("📄 Converting document to CloudKit record...")
                 let share = try await collaborationService.shareDocument(document)
+                
                 await MainActor.run {
+                    print("✅ Share created successfully: \(share.url?.absoluteString ?? "No URL")")
                     shareURL = share.url
                     showingShareSheet = true
+                    isSharing = false
                 }
             } catch {
-                // Handle error
-                print("Failed to share document: \(error)")
+                print("❌ Failed to share document: \(error)")
+                await MainActor.run {
+                    errorMessage = "Failed to share document: \(error.localizedDescription)"
+                    showingError = true
+                    isSharing = false
+                }
             }
         }
     }

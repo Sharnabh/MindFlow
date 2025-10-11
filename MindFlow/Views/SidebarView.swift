@@ -204,42 +204,30 @@ private struct MapModeContent: View {
 // Collaboration mode content
 private struct CollaborationModeContent: View {
     @ObservedObject var viewModel: CanvasViewModel
+    @ObservedObject private var documentManager = DocumentManager.shared
     
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Text("Collaboration Features")
-                    .font(.headline)
-                    .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Current Status:")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    Text("✅ Your documents are saved to iCloud")
-                    Text("✅ Auto-sync across your devices")
-                    Text("⏳ Real-time collaboration coming soon")
-                        .foregroundColor(.orange)
+                if let activeDocument = documentManager.activeDocument {
+                    CollaborationPanel(document: activeDocument)
+                } else {
+                    VStack(spacing: 16) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                        
+                        Text("No Document Open")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        Text("Open a document to start collaborating")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
                 }
-                .padding(.horizontal)
-                
-                Divider()
-                    .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("What's Next:")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    Text("🚀 Share documents with others")
-                    Text("👥 Live collaborative editing")
-                    Text("💬 Real-time comments")
-                    Text("📱 Cross-platform support")
-                }
-                .padding(.horizontal)
-                
-                Spacer()
             }
         }
     }

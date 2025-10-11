@@ -34,6 +34,9 @@ struct InfiniteCanvas: View {
     // Access theme service for background settings
     @ObservedObject private var themeService = DependencyContainer.shared.themeService as! ThemeService
     
+    // Collaboration service
+    @ObservedObject private var collaborationService = CollaborationService.shared
+    
     // Constants for canvas
     private let minScale: CGFloat = 0.1
     private let maxScale: CGFloat = 5.0
@@ -254,6 +257,14 @@ struct InfiniteCanvas: View {
                     TopicsCanvasView(viewModel: viewModel, isRelationshipMode: $isRelationshipMode, isCircularRelationshipMode: $isCircularRelationshipMode, isSquaredRelationshipMode: $isSquaredRelationshipMode)
                         .scaleEffect(scale)
                         .offset(x: offset.x, y: offset.y)
+                    
+                    // Live cursor overlay for collaboration
+                    LiveCursorOverlay(
+                        canvasSize: geometry.size,
+                        scale: scale,
+                        offset: offset
+                    )
+                    .allowsHitTesting(false) // Don't interfere with topic interactions
                 }
                 .padding(.top, topBarHeight) // Add padding for the top bar
                 .onContinuousHover { phase in
@@ -368,9 +379,11 @@ struct InfiniteCanvas: View {
                 setupFocus()
                 setupTouchBar()
                 registerNotificationObservers()
+                setupCollaboration()
             }
             .onDisappear {
                 cleanupResources()
+                cleanupCollaboration()
             }
         }
         .ignoresSafeArea()
@@ -410,6 +423,74 @@ struct InfiniteCanvas: View {
             viewModel: viewModel,
             isRelationshipMode: $isRelationshipMode
         )
+    }
+    
+    private func setupCollaboration() {
+        // Start collaboration for the active document if available
+        if let activeDocument = DocumentManager.shared.activeDocument {
+            // Start real-time sync
+            Task {
+                for await change in collaborationService.syncRealTimeChanges(for: activeDocument) {
+                    await handleCollaborationChange(change)
+                }
+            }
+            
+            // Start presence monitoring
+            collaborationService.startPresenceMonitoring(for: activeDocument)
+            
+            // Debug: List active subscriptions
+            Task {
+                await collaborationService.listActiveSubscriptions()
+            }
+        }
+        
+        // Start cursor position broadcasting
+        startCursorBroadcasting()
+    }
+    
+    private func startCursorBroadcasting() {
+        // Broadcast cursor position every 100ms when mouse is moving
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            guard let activeDocument = DocumentManager.shared.activeDocument else { return }
+            
+            Task {
+                await CollaborationService.shared.broadcastCursorPosition(cursorPosition, for: activeDocument)
+            }
+        }
+    }
+    
+    private func handleCollaborationChange(_ change: CollaborationChange) async {
+        await MainActor.run {
+            switch change {
+            case .topicAdded(let topic, _):
+                // Add topic to the canvas
+                viewModel.loadTopics([topic], preserveSelection: true)
+            case .topicUpdated(let topic, _):
+                viewModel.updateTopic(topic)
+            case .topicDeleted(let topicID, _):
+                viewModel.deleteTopic(withId: topicID)
+            case .topicMoved(let topicID, let position, _):
+                viewModel.moveTopic(withId: topicID, to: position)
+            case .relationshipAdded(let fromID, let toID, _):
+                // Handle relationship addition
+                viewModel.addRelation(from: fromID, to: toID)
+            case .relationshipRemoved(let fromID, let toID, _):
+                // Handle relationship removal
+                viewModel.removeRelation(from: fromID, to: toID)
+            case .userCursor(let userID, let position):
+                // Handle user cursor - this is handled by the LiveCursorOverlay
+                break
+            case .error(let message):
+                print("Collaboration error: \(message)")
+            }
+        }
+    }
+    
+    private func cleanupCollaboration() {
+        // Stop collaboration for the active document if available
+        if let activeDocument = DocumentManager.shared.activeDocument {
+            collaborationService.stopRealTimeSync(for: activeDocument)
+        }
     }
     
     private func registerNotificationObservers() {
