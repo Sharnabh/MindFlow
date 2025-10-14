@@ -41,112 +41,38 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     
     private let container: CKContainer
     private let database: CKDatabase
-    private let customZone: CKRecordZone
     private var activeSubscriptions: [UUID: CKQuerySubscription] = [:]
     private var changeStreams: [UUID: AsyncStream<CollaborationChange>.Continuation] = [:]
     private var presenceTimers: [UUID: Timer] = [:]
     private var userHeartbeats: [CKRecord.ID: Date] = [:]
-    private var zoneExists: Bool = false
-    private var zoneCheckInProgress: Bool = false
     
     private init() {
         container = CKContainer(identifier: "iCloud.com.sharnabhB.MindFlow")
-        database = container.privateCloudDatabase
-        customZone = CKRecordZone(zoneName: "MindFlowCollaborationZone")
-        
-        // Pre-warm the zone check in the background
-        Task {
-            try? await ensureCustomZoneExists()
-        }
-    }
-    
-    // MARK: - Zone Management
-    
-    private func ensureCustomZoneExists() async throws {
-        // Return immediately if we already know the zone exists
-        if zoneExists {
-            print("✅ Custom zone already exists (cached)")
-            return
-        }
-        
-        // Prevent multiple simultaneous zone checks
-        if zoneCheckInProgress {
-            print("⏳ Zone check already in progress, waiting...")
-            while zoneCheckInProgress {
-                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
-            }
-            return
-        }
-        
-        zoneCheckInProgress = true
-        defer { zoneCheckInProgress = false }
-        
-        print("🔍 Checking if custom zone exists...")
-        
-        do {
-            let _ = try await database.recordZone(for: customZone.zoneID)
-            print("✅ Custom zone already exists")
-            zoneExists = true
-        } catch {
-            print("📝 Creating custom zone...")
-            let operation = CKModifyRecordZonesOperation(recordZonesToSave: [customZone])
-            
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                operation.modifyRecordZonesCompletionBlock = { _, _, error in
-                    if let error = error {
-                        print("❌ Failed to create custom zone: \(error)")
-                        continuation.resume(throwing: error)
-                    } else {
-                        print("✅ Custom zone created successfully")
-                        self.zoneExists = true
-                        continuation.resume(returning: ())
-                    }
-                }
-                database.add(operation)
-            }
-        }
+        database = container.sharedCloudDatabase
     }
     
     // MARK: - Document Sharing
     
     func shareDocument(_ document: MindMapDocument) async throws -> CKShare {
-        print("🔄 CollaborationService: Starting share process for document: \(document.filename)")
-        
-        // 0. Ensure custom zone exists (should be fast due to caching)
-        try await ensureCustomZoneExists()
-        
-        // 1. Convert document to CloudKit record in custom zone
-        print("📄 Creating CloudKit record from document...")
-        let documentRecord = try await createCloudKitRecord(from: document, in: customZone)
-        print("✅ CloudKit record created: \(documentRecord.recordID)")
+        // 1. Convert document to CloudKit record
+        let documentRecord = try await createCloudKitRecord(from: document)
         
         // 2. Create a share for the document
-        print("🔗 Creating CloudKit share...")
         let share = CKShare(rootRecord: documentRecord)
         share[CKShare.SystemFieldKey.title] = document.filename
         share.publicPermission = .none // Private sharing only
-        print("✅ Share created with title: \(document.filename)")
         
-        // 3. Save BOTH the document record AND share in the SAME operation
-        print("💾 Saving document record and share together...")
+        // 3. Save both record and share
         let operation = CKModifyRecordsOperation(
             recordsToSave: [documentRecord, share],
             recordIDsToDelete: nil
         )
         
-        // Set operation properties for better performance
-        operation.savePolicy = .changedKeys
-        operation.qualityOfService = .userInitiated
-        
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKShare, Error>) in
             operation.modifyRecordsCompletionBlock = { [weak self] savedRecords, deletedRecordIDs, error in
                 if let error = error {
-                    print("❌ Failed to save document and share: \(error)")
                     continuation.resume(throwing: error)
                 } else {
-                    print("✅ Document record and share saved successfully")
-                    print("🔗 Share URL: \(share.url?.absoluteString ?? "No URL")")
-                    
                     // Store collaboration info
                     let collaborationInfo = CollaborationInfo(
                         shareURL: share.url!,
@@ -155,7 +81,6 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                         isOwner: true
                     )
                     self?.activeCollaborations[document.id] = collaborationInfo
-                    print("✅ Collaboration info stored for document: \(document.id)")
                     continuation.resume(returning: share)
                 }
             }
@@ -180,11 +105,11 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     }
     
     func getCollaborators(for document: MindMapDocument) async throws -> [CKShare.Participant] {
-        // Query for the share record associated with this document in shared database
+        // Query for the share record associated with this document
         let predicate = NSPredicate(format: "share.recordID == %@", CKRecord.ID(recordName: document.id.uuidString))
         let query = CKQuery(recordType: "Topic", predicate: predicate)
         
-        let records = try await container.sharedCloudDatabase.records(matching: query)
+        let records = try await database.records(matching: query)
         
         // Extract participants from share records
         var participants: [CKShare.Participant] = []
@@ -203,11 +128,11 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     }
     
     func stopSharing(_ document: MindMapDocument) async throws {
-        // Find and delete the share record from shared database
+        // Find and delete the share record
         let predicate = NSPredicate(format: "share.recordID == %@", CKRecord.ID(recordName: document.id.uuidString))
         let query = CKQuery(recordType: "Topic", predicate: predicate)
         
-        let records = try await container.sharedCloudDatabase.records(matching: query)
+        let records = try await database.records(matching: query)
         var recordIDsToDelete: [CKRecord.ID] = []
         
         for (_, result) in records.matchResults {
@@ -231,7 +156,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                         continuation.resume(returning: ())
                     }
                 }
-                container.sharedCloudDatabase.add(operation)
+                database.add(operation)
             }
         }
         
@@ -246,11 +171,10 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
             // Store the continuation for this document
             changeStreams[document.id] = continuation
             
-            // Set up CloudKit subscription for real-time updates in custom zone
+            // Set up CloudKit subscription for real-time updates
             let subscription = CKQuerySubscription(
                 recordType: "Topic",
                 predicate: NSPredicate(format: "documentID == %@", document.id.uuidString),
-                subscriptionID: "topic-changes-\(document.id.uuidString)",
                 options: [.firesOnRecordCreation, .firesOnRecordUpdate, .firesOnRecordDeletion]
             )
             
@@ -285,8 +209,8 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         do {
             let userID = try await container.userRecordID()
             
-            // Create a cursor position record in custom zone
-            let cursorRecord = CKRecord(recordType: "CursorPosition", recordID: CKRecord.ID(zoneID: customZone.zoneID))
+            // Create a cursor position record
+            let cursorRecord = CKRecord(recordType: "CursorPosition")
             cursorRecord["documentID"] = document.id.uuidString
             cursorRecord["userID"] = userID.recordName
             cursorRecord["positionX"] = NSNumber(value: position.x)
@@ -369,7 +293,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         do {
             let userID = try await container.userRecordID()
             
-            let heartbeatRecord = CKRecord(recordType: "UserPresence", recordID: CKRecord.ID(zoneID: customZone.zoneID))
+            let heartbeatRecord = CKRecord(recordType: "UserPresence")
             heartbeatRecord["documentID"] = document.id.uuidString
             heartbeatRecord["userID"] = userID.recordName
             heartbeatRecord["timestamp"] = Date()
@@ -691,41 +615,12 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         return try decoder.decode(Topic.self, from: topicData)
     }
     
-    private func createCloudKitRecord(from document: MindMapDocument, in zone: CKRecordZone? = nil) async throws -> CKRecord {
-        let recordID: CKRecord.ID
-        if let zone = zone {
-            recordID = CKRecord.ID(recordName: document.id.uuidString, zoneID: zone.zoneID)
-        } else {
-            recordID = CKRecord.ID(recordName: document.id.uuidString)
-        }
-        
-        let record = CKRecord(recordType: "MindMapDocument", recordID: recordID)
+    private func createCloudKitRecord(from document: MindMapDocument) async throws -> CKRecord {
+        let record = CKRecord(recordType: "MindMapDocument", recordID: CKRecord.ID(recordName: document.id.uuidString))
         record["filename"] = document.filename
         record["topics"] = try JSONEncoder().encode(document.topics)
         record["lastModified"] = Date()
         return record
-    }
-    
-    // MARK: - Debug Methods
-    
-    func listActiveSubscriptions() async {
-        print("Active CloudKit Subscriptions (from local tracking):")
-        if activeSubscriptions.isEmpty {
-            print("- No active subscriptions tracked locally")
-        } else {
-            for (documentID, subscription) in activeSubscriptions {
-                print("- Document \(documentID): \(subscription.recordType) - \(subscription.predicate)")
-            }
-        }
-        
-        print("Active change streams:")
-        if changeStreams.isEmpty {
-            print("- No active change streams")
-        } else {
-            for (documentID, _) in changeStreams {
-                print("- Document \(documentID): Change stream active")
-            }
-        }
     }
     
     // MARK: - Cleanup

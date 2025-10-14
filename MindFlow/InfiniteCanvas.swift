@@ -439,9 +439,9 @@ struct InfiniteCanvas: View {
             collaborationService.startPresenceMonitoring(for: activeDocument)
             
             // Debug: List active subscriptions
-            Task {
-                await collaborationService.listActiveSubscriptions()
-            }
+            // Task {
+            //     await collaborationService.listActiveSubscriptions()
+            // }
         }
         
         // Start cursor position broadcasting
