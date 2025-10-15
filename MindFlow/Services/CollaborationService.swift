@@ -40,7 +40,8 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     @Published var liveUsers: [CKRecord.ID: UserPresence] = [:]
     
     private let container: CKContainer
-    private let database: CKDatabase
+    private let sharedDatabase: CKDatabase
+    private let privateDatabase: CKDatabase
     private var activeSubscriptions: [UUID: CKQuerySubscription] = [:]
     private var changeStreams: [UUID: AsyncStream<CollaborationChange>.Continuation] = [:]
     private var presenceTimers: [UUID: Timer] = [:]
@@ -48,25 +49,26 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     
     private init() {
         container = CKContainer(identifier: "iCloud.com.sharnabhB.MindFlow")
-        database = container.sharedCloudDatabase
+        sharedDatabase = container.sharedCloudDatabase
+        privateDatabase = container.privateCloudDatabase
     }
     
     // MARK: - Document Sharing
     
     func shareDocument(_ document: MindMapDocument) async throws -> CKShare {
-        // 1. Convert document to CloudKit record
+        // 1. Ensure custom zone exists in private database
+        try await createCustomZoneIfNeeded()
+        
+        // 2. Convert document to CloudKit record in private database custom zone
         let documentRecord = try await createCloudKitRecord(from: document)
         
-        // 2. Create a share for the document
+        // 3. Create a share for the document
         let share = CKShare(rootRecord: documentRecord)
         share[CKShare.SystemFieldKey.title] = document.filename
         share.publicPermission = .none // Private sharing only
         
-        // 3. Save both record and share
-        let operation = CKModifyRecordsOperation(
-            recordsToSave: [documentRecord, share],
-            recordIDsToDelete: nil
-        )
+        // 4. Save both document record and share in the same operation
+        let operation = CKModifyRecordsOperation(recordsToSave: [documentRecord, share], recordIDsToDelete: nil)
         
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKShare, Error>) in
             operation.modifyRecordsCompletionBlock = { [weak self] savedRecords, deletedRecordIDs, error in
@@ -84,7 +86,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                     continuation.resume(returning: share)
                 }
             }
-            database.add(operation)
+            privateDatabase.add(operation)
         }
         return share
     }
@@ -106,10 +108,12 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     
     func getCollaborators(for document: MindMapDocument) async throws -> [CKShare.Participant] {
         // Query for the share record associated with this document
-        let predicate = NSPredicate(format: "share.recordID == %@", CKRecord.ID(recordName: document.id.uuidString))
-        let query = CKQuery(recordType: "Topic", predicate: predicate)
+        let customZone = CKRecordZone(zoneName: "MindFlowDocuments")
+        let recordID = CKRecord.ID(recordName: document.id.uuidString, zoneID: customZone.zoneID)
+        let predicate = NSPredicate(format: "share.recordID == %@", recordID)
+        let query = CKQuery(recordType: "MindMapDocument", predicate: predicate)
         
-        let records = try await database.records(matching: query)
+        let records = try await privateDatabase.records(matching: query)
         
         // Extract participants from share records
         var participants: [CKShare.Participant] = []
@@ -129,10 +133,12 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     
     func stopSharing(_ document: MindMapDocument) async throws {
         // Find and delete the share record
-        let predicate = NSPredicate(format: "share.recordID == %@", CKRecord.ID(recordName: document.id.uuidString))
-        let query = CKQuery(recordType: "Topic", predicate: predicate)
+        let customZone = CKRecordZone(zoneName: "MindFlowDocuments")
+        let recordID = CKRecord.ID(recordName: document.id.uuidString, zoneID: customZone.zoneID)
+        let predicate = NSPredicate(format: "share.recordID == %@", recordID)
+        let query = CKQuery(recordType: "MindMapDocument", predicate: predicate)
         
-        let records = try await database.records(matching: query)
+        let records = try await privateDatabase.records(matching: query)
         var recordIDsToDelete: [CKRecord.ID] = []
         
         for (_, result) in records.matchResults {
@@ -156,7 +162,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                         continuation.resume(returning: ())
                     }
                 }
-                database.add(operation)
+                privateDatabase.add(operation)
             }
         }
         
@@ -196,7 +202,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                 }
             }
             
-            database.add(operation)
+            privateDatabase.add(operation)
             
             // Set up push notification handling
             setupPushNotificationHandling(for: document)
@@ -229,7 +235,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                         continuation.resume(returning: ())
                     }
                 }
-                database.add(operation)
+                privateDatabase.add(operation)
             }
         } catch {
             // Only log errors that aren't related to container configuration
@@ -262,7 +268,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
             }
         }
         
-        database.add(operation)
+        privateDatabase.add(operation)
         
         // Set up periodic cleanup of old cursor positions
         startCursorCleanup(for: document)
@@ -310,7 +316,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                         continuation.resume(returning: ())
                     }
                 }
-                database.add(operation)
+                privateDatabase.add(operation)
             }
         } catch {
             // Only log errors that aren't related to container configuration
@@ -336,7 +342,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         let query = CKQuery(recordType: "UserPresence", predicate: predicate)
         
         do {
-            let records = try await database.records(matching: query)
+            let records = try await privateDatabase.records(matching: query)
             var inactiveUserIDs: [CKRecord.ID] = []
             
             for (_, result) in records.matchResults {
@@ -377,7 +383,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         let query = CKQuery(recordType: "CursorPosition", predicate: predicate)
         
         do {
-            let records = try await database.records(matching: query)
+            let records = try await privateDatabase.records(matching: query)
             var recordIDsToDelete: [CKRecord.ID] = []
             
             for (_, result) in records.matchResults {
@@ -399,7 +405,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                             continuation.resume(returning: ())
                         }
                     }
-                    database.add(operation)
+                    privateDatabase.add(operation)
                 }
             }
         } catch {
@@ -507,7 +513,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         Task {
             do {
                 // Fetch the updated record
-                let record = try await database.record(for: recordID)
+                let record = try await privateDatabase.record(for: recordID)
                 
                 // Check if this is a cursor position update
                 if record.recordType == "CursorPosition" {
@@ -616,11 +622,36 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
     }
     
     private func createCloudKitRecord(from document: MindMapDocument) async throws -> CKRecord {
-        let record = CKRecord(recordType: "MindMapDocument", recordID: CKRecord.ID(recordName: document.id.uuidString))
+        // Create record in custom zone for sharing (zone is in shared database)
+        let customZone = CKRecordZone(zoneName: "MindFlowDocuments")
+        let record = CKRecord(recordType: "MindMapDocument", recordID: CKRecord.ID(recordName: document.id.uuidString, zoneID: customZone.zoneID))
         record["filename"] = document.filename
         record["topics"] = try JSONEncoder().encode(document.topics)
         record["lastModified"] = Date()
         return record
+    }
+    
+    private func createCustomZoneIfNeeded() async throws {
+        let customZone = CKRecordZone(zoneName: "MindFlowDocuments")
+        
+        do {
+            // Try to fetch the zone to see if it exists in private database
+            _ = try await privateDatabase.recordZone(for: customZone.zoneID)
+        } catch {
+            // Zone doesn't exist, create it in private database
+            let operation = CKModifyRecordZonesOperation(recordZonesToSave: [customZone], recordZoneIDsToDelete: nil)
+            
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                operation.modifyRecordZonesCompletionBlock = { _, _, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+                privateDatabase.add(operation)
+            }
+        }
     }
     
     // MARK: - Cleanup
@@ -629,7 +660,7 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
         // Remove subscription
         if let subscription = activeSubscriptions[document.id] {
             let operation = CKModifySubscriptionsOperation(subscriptionsToSave: nil, subscriptionIDsToDelete: [subscription.subscriptionID])
-            database.add(operation)
+            privateDatabase.add(operation)
             activeSubscriptions.removeValue(forKey: document.id)
         }
         
