@@ -73,6 +73,10 @@ struct ContentView: View {
                     }
                     .zIndex(100)
                 }
+                
+                // Share acceptance overlay
+                ShareAcceptanceOverlay()
+                    .zIndex(200)
             }
         }
         .onAppear {
@@ -139,6 +143,17 @@ struct ContentView: View {
                 }
         }
         
+        // Open shared document from custom URL
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("OpenSharedDocument"),
+            object: nil,
+            queue: .main) { notification in
+                if let userInfo = notification.userInfo,
+                   let documentID = userInfo["documentID"] as? UUID {
+                    openSharedDocument(documentID: documentID)
+                }
+        }
+        
         // Save topics from canvas to document
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("SaveTopicsToDocument"),
@@ -192,6 +207,36 @@ struct ContentView: View {
         if let document = documentManager.activeDocument {
             document.save { _, _ in
                 // No special handling needed here - errors are handled in the save method
+            }
+        }
+    }
+    
+    private func openSharedDocument(documentID: UUID) {
+        Task {
+            do {
+                let sharedDocument = try await CollaborationService.shared.openSharedDocument(with: documentID)
+                
+                await MainActor.run {
+                    // Hide startup screen
+                    showingStartupScreen = false
+                    
+                    // Add the shared document to the document manager
+                    documentManager.documents.append(sharedDocument)
+                    documentManager.activeDocumentIndex = documentManager.documents.count - 1
+                    
+                    // Update the canvas with the shared document's topics
+                    viewModel.topicService.updateAllTopics(sharedDocument.topics)
+                }
+            } catch {
+                await MainActor.run {
+                    // Show error alert
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to open shared document"
+                    alert.informativeText = error.localizedDescription
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
             }
         }
     }

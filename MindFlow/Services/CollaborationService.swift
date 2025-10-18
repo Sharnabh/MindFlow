@@ -75,9 +75,12 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                 if let error = error {
                     continuation.resume(throwing: error)
                 } else {
-                    // Store collaboration info
+                    // Create custom URL instead of using iCloud share URL
+                    let customURL = URL(string: "mindmap://open?id=\(document.id.uuidString)")!
+                    
+                    // Store collaboration info with custom URL
                     let collaborationInfo = CollaborationInfo(
-                        shareURL: share.url!,
+                        shareURL: customURL,
                         participants: share.participants,
                         permissions: .readWrite,
                         isOwner: true
@@ -103,6 +106,58 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                 }
             }
             container.add(operation)
+        }
+    }
+    
+    // MARK: - Custom URL Sharing
+    
+    func openSharedDocument(with documentID: UUID) async throws -> MindMapDocument {
+        // Try to find the document in active collaborations first
+        if let collaborationInfo = activeCollaborations[documentID] {
+            // Document is already shared, return it
+            return try await loadDocumentFromCloudKit(documentID: documentID)
+        }
+        
+        // If not found in active collaborations, try to load from CloudKit
+        return try await loadDocumentFromCloudKit(documentID: documentID)
+    }
+    
+    private func loadDocumentFromCloudKit(documentID: UUID) async throws -> MindMapDocument {
+        let customZone = CKRecordZone(zoneName: "MindFlowDocuments")
+        let recordID = CKRecord.ID(recordName: documentID.uuidString, zoneID: customZone.zoneID)
+        
+        do {
+            let record = try await privateDatabase.record(for: recordID)
+            
+            // Parse the document from the CloudKit record
+            guard let filename = record["filename"] as? String,
+                  let topicsData = record["topics"] as? Data else {
+                throw CollaborationError.shareNotFound
+            }
+            
+            let topics = try JSONDecoder().decode([Topic].self, from: topicsData)
+            
+            let document = MindMapDocument(
+                filename: filename,
+                topics: topics
+            )
+            return document
+        } catch {
+            // If not found in private database, try shared database
+            let sharedRecord = try await sharedDatabase.record(for: recordID)
+            
+            guard let filename = sharedRecord["filename"] as? String,
+                  let topicsData = sharedRecord["topics"] as? Data else {
+                throw CollaborationError.shareNotFound
+            }
+            
+            let topics = try JSONDecoder().decode([Topic].self, from: topicsData)
+            
+            let document = MindMapDocument(
+                filename: filename,
+                topics: topics
+            )
+            return document
         }
     }
     

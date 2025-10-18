@@ -3,6 +3,180 @@ import CloudKit
 
 // MARK: - Collaboration UI Components
 
+// MARK: - Share Acceptance View
+struct ShareAcceptanceView: View {
+    let shareURL: URL
+    @State private var isAccepting = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
+    @State private var shareAccepted = false
+    @State private var shareMetadata: CKShare.Metadata?
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            // Header
+            HStack {
+                Image(systemName: "person.2.badge.plus")
+                    .foregroundColor(.blue)
+                    .font(.title2)
+                Text("Accept Share")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            if shareAccepted {
+                // Success state
+                VStack(spacing: 16) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.system(size: 50))
+                    
+                    Text("Share Accepted!")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    
+                    Text("You can now collaborate on this mind map.")
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("Open Document") {
+                        // Close the share acceptance view
+                        NotificationCenter.default.post(name: NSNotification.Name("CloseShareAcceptance"), object: nil)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            } else {
+                // Share info and accept button
+                VStack(spacing: 16) {
+                    // Share URL info
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Share Details")
+                            .font(.headline)
+                        
+                        Text("You've been invited to collaborate on a mind map.")
+                            .foregroundColor(.secondary)
+                        
+                        if let metadata = shareMetadata {
+                            Text("Document: \(metadata.share[CKShare.SystemFieldKey.title] as? String ?? "Unknown")")
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(8)
+                    
+                    // Accept button
+                    HStack {
+                        if isAccepting {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Accepting...")
+                                .font(.subheadline)
+                        } else {
+                            Button("Accept Share") {
+                                acceptShare()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .frame(width: 400, height: 300)
+        .background(Color(.windowBackgroundColor))
+        .cornerRadius(12)
+        .shadow(radius: 10)
+        .onAppear {
+            loadShareMetadata()
+        }
+        .alert("Error", isPresented: $showingError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage ?? "Unknown error occurred")
+        }
+    }
+    
+    private func loadShareMetadata() {
+        Task {
+            do {
+                let container = CKContainer(identifier: "iCloud.com.sharnabhB.MindFlow")
+                let metadata = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKShare.Metadata, Error>) in
+                    container.fetchShareMetadata(with: shareURL) { metadata, error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                        } else if let metadata = metadata {
+                            continuation.resume(returning: metadata)
+                        } else {
+                            continuation.resume(throwing: NSError(domain: "CloudKitError", code: -1, userInfo: [NSLocalizedDescriptionKey: "No metadata returned"]))
+                        }
+                    }
+                }
+                await MainActor.run {
+                    self.shareMetadata = metadata
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "Failed to load share details: \(error.localizedDescription)"
+                    self.showingError = true
+                }
+            }
+        }
+    }
+    
+    private func acceptShare() {
+        guard let metadata = shareMetadata else { return }
+        
+        isAccepting = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                try await CollaborationService.shared.acceptShare(from: metadata)
+                await MainActor.run {
+                    self.shareAccepted = true
+                    self.isAccepting = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "Failed to accept share: \(error.localizedDescription)"
+                    self.showingError = true
+                    self.isAccepting = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Share Acceptance Overlay
+struct ShareAcceptanceOverlay: View {
+    @State private var shareURL: URL?
+    @State private var showingShareAcceptance = false
+    
+    var body: some View {
+        Color.clear
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowShareAcceptance"))) { notification in
+                if let url = notification.userInfo?["shareURL"] as? URL {
+                    shareURL = url
+                    showingShareAcceptance = true
+                }
+            }
+            .sheet(isPresented: $showingShareAcceptance) {
+                if let url = shareURL {
+                    ShareAcceptanceView(shareURL: url)
+                        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseShareAcceptance"))) { _ in
+                            showingShareAcceptance = false
+                        }
+                }
+            }
+    }
+}
+
 struct CollaborationPanel: View {
     @ObservedObject private var collaborationService = CollaborationService.shared
     let document: MindMapDocument
@@ -174,8 +348,14 @@ struct CollaborationPanel: View {
                 let share = try await collaborationService.shareDocument(document)
                 
                 await MainActor.run {
-                    print("✅ Share created successfully: \(share.url?.absoluteString ?? "No URL")")
-                    shareURL = share.url
+                    // Get the custom URL from collaboration info instead of CloudKit share URL
+                    if let collaborationInfo = collaborationService.activeCollaborations[document.id] {
+                        print("✅ Share created successfully: \(collaborationInfo.shareURL.absoluteString)")
+                        shareURL = collaborationInfo.shareURL
+                    } else {
+                        print("❌ No collaboration info found")
+                        shareURL = share.url // Fallback to CloudKit URL
+                    }
                     showingShareSheet = true
                     isSharing = false
                 }

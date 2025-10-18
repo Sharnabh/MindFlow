@@ -188,6 +188,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else { return }
         
+        // Check if this is a custom mindmap URL
+        if url.scheme == "mindmap" && url.host == "open" {
+            handleCustomShareURL(url)
+            return
+        }
+        
+        // Check if this is an iCloud share URL (for backward compatibility)
+        if url.scheme == "https" && url.host == "www.icloud.com" && url.path.contains("/share/") {
+            handleShareURL(url)
+            return
+        }
+        
         // Add to recent files
         let newRecentFile = StartupScreenView.RecentFile(
             name: url.lastPathComponent,
@@ -215,6 +227,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.runModal()
             }
         }
+    }
+    
+    // Handle custom mindmap URLs
+    private func handleCustomShareURL(_ url: URL) {
+        print("🔗 Received custom mindmap URL: \(url)")
+        
+        // Extract document ID from URL
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems,
+              let idItem = queryItems.first(where: { $0.name == "id" }),
+              let documentIDString = idItem.value,
+              let documentID = UUID(uuidString: documentIDString) else {
+            print("❌ Invalid mindmap URL format")
+            return
+        }
+        
+        // Post notification to open shared document
+        NotificationCenter.default.post(
+            name: NSNotification.Name("OpenSharedDocument"),
+            object: nil,
+            userInfo: ["documentID": documentID, "shareURL": url]
+        )
+    }
+    
+    // Handle iCloud share URLs
+    private func handleShareURL(_ url: URL) {
+        print("🔗 Received iCloud share URL: \(url)")
+        
+        // Post notification to show share acceptance UI
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ShowShareAcceptance"),
+            object: nil,
+            userInfo: ["shareURL": url]
+        )
     }
     
     @objc func showOpenPanel() {
