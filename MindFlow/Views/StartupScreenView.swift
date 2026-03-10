@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import TipKit
 
 struct StartupScreenView: View {
     @EnvironmentObject var viewModel: CanvasViewModel
@@ -15,6 +16,9 @@ struct StartupScreenView: View {
     @State private var recentFiles: [RecentFile] = []
     @State private var trashedFiles: [RecentFile] = []
     @State private var showingWelcome: Bool = true
+    
+    // TipKit manager
+    @StateObject private var tipKitManager = TipKitManager.shared
     
     // Colors from logo.svg
     private let backgroundColor = LinearGradient(
@@ -659,6 +663,7 @@ var welcomeView: some View {
                     .multilineTextAlignment(.center)
             }
             .padding(.top, 20)
+            .popoverTip(WelcomeTip())
             
             // Features highlight
             VStack(spacing: 15) {

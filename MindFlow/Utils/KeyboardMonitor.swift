@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Cocoa
+import TipKit
 
 // MARK: - Key Code Constants
 enum KeyCode {
@@ -127,6 +128,10 @@ class KeyboardMonitor: KeyboardMonitorProtocol {
                     object: nil,
                     userInfo: ["event": event]
                 )
+                
+                // Track keyboard shortcut for tips
+                TipKitManager.shared.trackKeyboardShortcutUsed()
+                
                 // Don't play system sound for Cmd+Z
                 shouldPassEvent = false
             }

@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct TopBarView: View {
     @ObservedObject var viewModel: CanvasViewModel
@@ -7,6 +8,9 @@ struct TopBarView: View {
     @State private var showingNoteEditor = false
     let topBarHeight: CGFloat
     @State private var showingPresentationCustomization = false // Added state for customization sheet
+    
+    // TipKit manager
+    @StateObject private var tipKitManager = TipKitManager.shared
 
     var body: some View {
         Rectangle()
@@ -26,6 +30,9 @@ struct TopBarView: View {
                         Button(action: {
                             if !viewModel.topics.isEmpty {
                                 self.showingPresentationCustomization = true // Show customization view
+                                
+                                // Track presentation mode for tips
+                                tipKitManager.trackPresentationModeAccessed()
                             }
                         }) {
                             HStack(spacing: 4) {
@@ -54,6 +61,9 @@ struct TopBarView: View {
                         // Auto layout button
                         Button(action: {
                             viewModel.performFullAutoLayout()
+                            
+                            // Track auto layout for tips
+                            tipKitManager.trackAutoLayoutAccessed()
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "rectangle.grid.1x2")
@@ -115,6 +125,11 @@ struct TopBarView: View {
                         // Relationship button
                         Button(action: {
                             isRelationshipMode.toggle()
+                            
+                            // Track relationship mode for tips
+                            if isRelationshipMode {
+                                tipKitManager.trackRelationshipModeEnabled()
+                            }
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.triangle.branch")

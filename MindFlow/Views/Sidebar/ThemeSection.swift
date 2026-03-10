@@ -1,7 +1,9 @@
 import SwiftUI
+import TipKit
 
 struct ThemeSection: View {
     @ObservedObject var viewModel: CanvasViewModel
+    @StateObject private var tipKitManager = TipKitManager.shared
     
     var body: some View {
         SidebarSection(title: "Theme", content: AnyView(
@@ -22,6 +24,9 @@ struct ThemeSection: View {
                             topicTextColor: Color(red: 0.15, green: 0.3, blue: 0.15),
                             themeName: "Nature"
                         )
+                        
+                        // Track theme section for tips
+                        tipKitManager.trackThemeSectionOpened()
                     }
                 )
                 

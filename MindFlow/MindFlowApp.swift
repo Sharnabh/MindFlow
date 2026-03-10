@@ -8,6 +8,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import FirebaseCore
+import TipKit
 
 @main
 struct MindFlowApp: App {
@@ -19,6 +20,9 @@ struct MindFlowApp: App {
     init() {
         // Configure Firebase
         FirebaseApp.configure()
+        
+        // Initialize TipKit
+        TipKitManager.shared
     }
     
     var body: some Scene {

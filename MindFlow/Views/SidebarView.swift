@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 // Reusable components
 struct SidebarSection: View {

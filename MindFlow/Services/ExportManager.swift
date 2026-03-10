@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import Foundation
+import TipKit
 
 enum ExportFormat: String, CaseIterable, Identifiable {
     case png = "PNG"
@@ -69,6 +70,9 @@ class ExportManager {
     @objc private func handleExportRequest() {
         // Request the canvas view model to provide data for export
         NotificationCenter.default.post(name: NSNotification.Name("PrepareCanvasForExport"), object: nil)
+        
+        // Track export for tips
+        TipKitManager.shared.trackExportInitiated()
     }
     
     // Executes when the InfiniteCanvas calls back with its prepared view

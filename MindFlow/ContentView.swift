@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import TipKit
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: CanvasViewModel
@@ -14,6 +15,7 @@ struct ContentView: View {
     @State private var showingTemplatePopup = false
     @ObservedObject private var documentManager = DocumentManager.shared
     @ObservedObject private var presentationManager = PresentationManager.shared
+    @StateObject private var tipKitManager = TipKitManager.shared
     
     // Panel reference to prevent multiple panels
     private static var currentOpenPanel: NSOpenPanel? = nil
@@ -89,6 +91,9 @@ struct ContentView: View {
             
             // Register for notifications
             registerNotifications()
+            
+            // Track app launch for tips
+            tipKitManager.trackAppLaunch()
         }
         // No more sheet, the presentation is handled by PresentationHelper
         .onReceive(NotificationCenter.default.publisher(for: .init("PresentationEnded"))) { _ in

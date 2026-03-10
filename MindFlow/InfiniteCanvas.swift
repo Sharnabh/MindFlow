@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Combine
 import CoreGraphics
+import TipKit
 
 
 struct InfiniteCanvas: View {
@@ -36,6 +37,9 @@ struct InfiniteCanvas: View {
     
     // Collaboration service
     @ObservedObject private var collaborationService = CollaborationService.shared
+    
+    // TipKit manager
+    @StateObject private var tipKitManager = TipKitManager.shared
     
     // Constants for canvas
     private let minScale: CGFloat = 0.1
@@ -306,6 +310,9 @@ struct InfiniteCanvas: View {
                     onTapLocation: { minimapPoint in
                         let canvasPoint = minimapToCanvasPosition(minimapPoint, size: CGSize(width: minimapSize, height: minimapSize))
                         centerCanvasOn(canvasPoint, in: geometry)
+                        
+                        // Track minimap interaction for tips
+                        tipKitManager.trackMinimapInteraction()
                     }
                 )
                 .frame(width: minimapSize, height: minimapSize)
@@ -353,6 +360,10 @@ struct InfiniteCanvas: View {
                         isSquaredRelationshipMode: $isSquaredRelationshipMode,
                         sidebarWidth: $sidebarWidth
                     )
+                    .onAppear {
+                        // Track sidebar opened for tips
+                        tipKitManager.trackSidebarOpened()
+                    }
                 }
             }
             .gesture(
@@ -603,6 +614,9 @@ struct InfiniteCanvas: View {
         let zoomDelta = (value - 1) * dampening
         let newScale = scale * (1 + zoomDelta)
         scale = min(maxScale, max(minScale, newScale))
+        
+        // Track canvas interaction for tips
+        tipKitManager.trackCanvasInteraction()
     }
     
     // Handle drag gesture
@@ -617,6 +631,9 @@ struct InfiniteCanvas: View {
                 x: offset.x + deltaX,
                 y: offset.y + deltaY
             )
+            
+            // Track canvas interaction for tips
+            tipKitManager.trackCanvasInteraction()
         }
         
         lastDragPosition = currentPosition

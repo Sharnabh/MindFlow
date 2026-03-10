@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 // AI Assistant Mode
 fileprivate enum AIAssistantMode: String, CaseIterable {
@@ -77,6 +78,9 @@ struct AIModeContent: View {
     @State private var scrollViewHeight: CGFloat = 0
     @State private var scrollViewContentHeight: CGFloat = 0
     
+    // TipKit manager
+    @StateObject private var tipKitManager = TipKitManager.shared
+    
     var body: some View {
         VStack(spacing: 0) {
             // API Key Status Section
@@ -90,6 +94,14 @@ struct AIModeContent: View {
         }
         .onAppear {
             checkApiKey()
+            
+            // Track AI mode access for tips
+            tipKitManager.trackAIModeAccessed()
+            
+            // Track API key status for tips
+            if !isKeyValid {
+                tipKitManager.trackAIModeWithoutKey()
+            }
         }
         .sheet(isPresented: $showApiKeySheet) {
             ApiKeySetupView(apiKey: $apiKey, onSave: {
