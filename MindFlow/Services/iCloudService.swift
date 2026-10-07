@@ -78,10 +78,19 @@ class iCloudService: iCloudServiceProtocol, ObservableObject {
     }
     
     private func setupiCloudMonitoring() {
-        // Check iCloud availability periodically
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+        // Initial check
+        Task {
+            await self.updateiCloudAvailability()
+        }
+        
+        // Listen for system iCloud account/container changes
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name.NSUbiquityIdentityDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             Task {
-                await self.updateiCloudAvailability()
+                await self?.updateiCloudAvailability()
             }
         }
     }

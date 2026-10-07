@@ -1,5 +1,5 @@
 import SwiftUI
-import FirebaseAI
+import GoogleGenerativeAI
 import Combine
 import Network
 
@@ -25,10 +25,11 @@ class AIService: ObservableObject, @unchecked Sendable {
     private func setupNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async {
-            self?.isNetworkAvailable = path.status == .satisfied
-                if !self!.isNetworkAvailable && self!.isLoading {
-                    self?.errorMessage = "Network connection lost. Please check your internet connection and try again."
-                    self?.isLoading = false
+                guard let self = self else { return }
+                self.isNetworkAvailable = path.status == .satisfied
+                if !self.isNetworkAvailable && self.isLoading {
+                    self.errorMessage = "Network connection lost. Please check your internet connection and try again."
+                    self.isLoading = false
                 }
             }
         }
@@ -542,12 +543,10 @@ class AIService: ObservableObject, @unchecked Sendable {
             return
         }
         
-        // Initialize the Gemini Developer API backend service
-        let ai = FirebaseAI.firebaseAI(backend: .googleAI())
-        
-        // Create a GenerativeModel instance with generation config
-        let model = ai.generativeModel(
-            modelName: "gemini-2.0-flash-exp",
+        // Create a GenerativeModel instance with user's API key and generation config
+        let model = GenerativeModel(
+            name: "gemini-2.0-flash",
+            apiKey: currentApiKey,
             generationConfig: GenerationConfig(
                 temperature: 0.7,
                 topP: 0.95,
@@ -663,7 +662,7 @@ class AIService: ObservableObject, @unchecked Sendable {
         return Int(remainder) != nil
     }
     
-    /// Async wrapper for calling the Gemini API via FirebaseAI with Google AI backend
+    /// Async wrapper for calling the Gemini API via GoogleGenerativeAI
     private func callGeminiAPIAsync(with prompt: String) async throws -> String {
         guard isNetworkAvailable else {
             throw APIError.noInternetConnection
@@ -676,12 +675,10 @@ class AIService: ObservableObject, @unchecked Sendable {
             throw APIError.missingAPIKey
         }
         
-        // Initialize the Gemini Developer API backend service
-        let ai = FirebaseAI.firebaseAI(backend: .googleAI())
-        
-        // Create the generative model
-        let model = ai.generativeModel(
-            modelName: "gemini-2.0-flash-exp",
+        // Create the generative model with user API key
+        let model = GenerativeModel(
+            name: "gemini-2.0-flash",
+            apiKey: currentApiKey,
             generationConfig: GenerationConfig(
                 temperature: 0.7,
                 topP: 0.95,

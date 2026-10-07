@@ -12,15 +12,6 @@ enum KeyCode {
     static let zKey = UInt16(6)
 }
 
-// MARK: - Notification Name Constants
-extension NSNotification.Name {
-    static let returnKeyPressed = NSNotification.Name("ReturnKeyPressed")
-    static let undoRequested = NSNotification.Name("UndoRequested")
-    static let redoRequested = NSNotification.Name("RedoRequested")
-    static let returnFocusToCanvas = NSNotification.Name("ReturnFocusToCanvas")
-    static let keyDown = NSNotification.Name("KeyDown")
-}
-
 // MARK: - KeyboardMonitor Protocol for testability
 protocol KeyboardMonitorProtocol {
     var keyHandler: ((NSEvent) -> Void)? { get set }
@@ -59,8 +50,6 @@ class KeyboardMonitor: KeyboardMonitorProtocol {
         guard monitor == nil else { return }
         
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            print("KeyboardMonitor received key: \(event.keyCode), modifiers: \(event.modifierFlags.rawValue)")
-            
             var shouldPassEvent = true
             
             // Post notification for Return key
@@ -68,7 +57,6 @@ class KeyboardMonitor: KeyboardMonitorProtocol {
                 // Log the modifiers for debugging
                 let isCommandPressed = event.modifierFlags.contains(.command)
                 let isShiftPressed = event.modifierFlags.contains(.shift)
-                print("Return pressed - Command: \(isCommandPressed), Shift: \(isShiftPressed)")
                 
                 // Post notification with the event for our custom handlers
                 self?.notificationCenter.post(

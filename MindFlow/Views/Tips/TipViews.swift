@@ -11,13 +11,8 @@ import TipKit
 // MARK: - Tip View Modifiers
 
 extension View {
-    /// Add a tip to any view with custom positioning
-    func tipView<T: Tip>(_ tip: T, placement: TipViewPlacement = .automatic) -> some View {
-        self.popoverTip(tip, placement: placement)
-    }
-    
-    /// Add a tip with custom arrow edge
-    func tipView<T: Tip>(_ tip: T, arrowEdge: Edge) -> some View {
+    /// Add a tip to any view with custom arrow edge
+    func tipView<T: Tip>(_ tip: T, arrowEdge: Edge = .top) -> some View {
         self.popoverTip(tip, arrowEdge: arrowEdge)
     }
 }
@@ -157,20 +152,20 @@ struct CollaborationTipView: View {
 
 // MARK: - Tip Container Views
 
-struct TipContainerView<Content: View>: View {
+struct TipContainerView<Content: View, T: Tip>: View {
     let content: Content
-    let tip: any Tip
-    let placement: TipViewPlacement
+    let tip: T
+    let arrowEdge: Edge
     
-    init(@ViewBuilder content: () -> Content, tip: any Tip, placement: TipViewPlacement = .automatic) {
+    init(@ViewBuilder content: () -> Content, tip: T, arrowEdge: Edge = .top) {
         self.content = content()
         self.tip = tip
-        self.placement = placement
+        self.arrowEdge = arrowEdge
     }
     
     var body: some View {
         content
-            .popoverTip(tip, placement: placement)
+            .popoverTip(tip, arrowEdge: arrowEdge)
     }
 }
 
@@ -180,19 +175,19 @@ struct ConditionalTipView<Content: View, T: Tip>: View {
     let content: Content
     let tip: T
     let condition: Bool
-    let placement: TipViewPlacement
+    let arrowEdge: Edge
     
-    init(@ViewBuilder content: () -> Content, tip: T, condition: Bool, placement: TipViewPlacement = .automatic) {
+    init(@ViewBuilder content: () -> Content, tip: T, condition: Bool, arrowEdge: Edge = .top) {
         self.content = content()
         self.tip = tip
         self.condition = condition
-        self.placement = placement
+        self.arrowEdge = arrowEdge
     }
     
     var body: some View {
         if condition {
             content
-                .popoverTip(tip, placement: placement)
+                .popoverTip(tip, arrowEdge: arrowEdge)
         } else {
             content
         }

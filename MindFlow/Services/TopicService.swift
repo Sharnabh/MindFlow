@@ -374,58 +374,38 @@ class TopicService: TopicServiceProtocol, ObservableObject {
         // Don't create cycles
         if hasParentChildCycle(parentId: parentId, childId: childId) { return }
         
-        // Create a new reference to work with
-        var newParentTopic = parentPath.topic
-        // Create a complete deep copy of the child to ensure we don't lose any data
-        // This is critical to avoid the bug where topics disappear when made children
-        let childCopy = childPath.topic.deepCopy()
+        // Create complete copies of both topics
+        var parentTopic = parentPath.topic
+        let childTopicCopy = childPath.topic.deepCopy()
         
-        // Handle differently if we're moving a main topic vs a subtopic
+        // Keep the original child ID for selection and relation updates
+        let originalChildId = childId
+        
+        // Update the child topic properties for its new role as subtopic
+        var updatedChildTopic = childTopicCopy
+        updatedChildTopic.parentId = parentTopic.id
+        updatedChildTopic.position = calculatePositionForNewSubtopic(parentTopic)
+        
+        // First add the child to the parent
+        parentTopic.subtopics.append(updatedChildTopic)
+        
+        // Update the parent in the hierarchy
+        updateTopicAtPath(parentTopic, path: parentPath.path)
+        
+        // Then remove the original child - only after it has been safely added as a subtopic
         if childPath.path.isEmpty {
-            // It's a main topic, so we need extra care
-            
-            // Update child's parent reference
-            var updatedChildTopic = childCopy
-            updatedChildTopic.parentId = newParentTopic.id
-            
-            // Calculate position for the child topic
-            let newPosition = calculatePositionForNewSubtopic(newParentTopic)
-            updatedChildTopic.position = newPosition
-            
-            // IMPORTANT: Order of operations matters here!
-            // 1. Add the child to the parent's subtopics first
-            newParentTopic.subtopics.append(updatedChildTopic)
-            
-            // 2. Update the parent in the hierarchy before removing the child from main topics
-            // This ensures the child exists somewhere in the hierarchy before being removed
-            updateTopicAtPath(newParentTopic, path: parentPath.path)
-            
-            // 3. Only now remove the original child from the main topics array
+            // It's a main topic, remove from topics array
             if let index = topics.firstIndex(where: { $0.id == childId }) {
                 topics.remove(at: index)
             }
         } else {
-            // It's already a subtopic, simpler case
-            var childTopic = childPath.topic
-            
-            // Remove child from its current parent
+            // It's a subtopic, remove from its current parent
             let _ = removeSubtopicRecursively(id: childId, from: &topics[childPath.path.mainTopicIndex])
-            
-            // Update child's parent reference and position
-            childTopic.parentId = newParentTopic.id
-            childTopic.position = calculatePositionForNewSubtopic(newParentTopic)
-            
-            // Add child to new parent's subtopics
-            newParentTopic.subtopics.append(childTopic)
-            
-            // Update parent in the hierarchy
-            updateTopicAtPath(newParentTopic, path: parentPath.path)
         }
         
-        // Make sure we preserve the selection
-        if selectedTopicId == childId {
-            // Re-select the topic in case it was deselected during the move
-            selectTopic(withId: childId) 
+        // Ensure we maintain the selection if this topic was selected
+        if selectedTopicId == originalChildId {
+            selectedTopicId = originalChildId
         }
         
         // Ensure all views update

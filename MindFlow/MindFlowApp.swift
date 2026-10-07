@@ -9,6 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import FirebaseCore
 import TipKit
+import UserNotifications
 
 @main
 struct MindFlowApp: App {
@@ -150,10 +151,15 @@ struct MindFlowApp: App {
                 let savedURL = try await DocumentManager.shared.saveToiCloud(document: activeDocument)
                 await MainActor.run {
                     // Show success notification
-                    let notification = NSUserNotification()
-                    notification.title = "Saved to iCloud"
-                    notification.informativeText = "Your mind map has been saved to iCloud"
-                    NSUserNotificationCenter.default.deliver(notification)
+                    let content = UNMutableNotificationContent()
+                    content.title = "Saved to iCloud"
+                    content.body = "Your mind map has been saved to iCloud"
+                    let request = UNNotificationRequest(
+                        identifier: UUID().uuidString,
+                        content: content,
+                        trigger: nil
+                    )
+                    UNUserNotificationCenter.current().add(request)
                 }
             } catch {
                 await MainActor.run {

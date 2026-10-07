@@ -75,12 +75,12 @@ class CollaborationService: CollaborationServiceProtocol, ObservableObject {
                 if let error = error {
                     continuation.resume(throwing: error)
                 } else {
-                    // Create custom URL instead of using iCloud share URL
-                    let customURL = URL(string: "mindmap://open?id=\(document.id.uuidString)")!
+                    // Use CloudKit's official share URL if available, falling back to custom URL
+                    let shareURL = share.url ?? URL(string: "mindmap://open?id=\(document.id.uuidString)")!
                     
-                    // Store collaboration info with custom URL
+                    // Store collaboration info
                     let collaborationInfo = CollaborationInfo(
-                        shareURL: customURL,
+                        shareURL: shareURL,
                         participants: share.participants,
                         permissions: .readWrite,
                         isOwner: true

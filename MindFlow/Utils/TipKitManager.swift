@@ -8,6 +8,8 @@
 import SwiftUI
 import TipKit
 
+typealias Event = Tips.Event
+
 // MARK: - TipKit Manager
 class TipKitManager: ObservableObject {
     static let shared = TipKitManager()
@@ -23,6 +25,28 @@ class TipKitManager: ObservableObject {
             .datastoreLocation(.applicationDefault)
         ])
     }
+}
+
+// MARK: - TipKit Events
+
+struct TipKitEvents {
+    static let appLaunch = Event(id: "app_launch")
+    static let firstTopicCreated = Event(id: "first_topic_created")
+    static let canvasInteraction = Event(id: "canvas_interaction")
+    static let sidebarOpened = Event(id: "sidebar_opened")
+    static let aiModeAccessed = Event(id: "ai_mode_accessed")
+    static let aiModeWithoutKey = Event(id: "ai_mode_without_key")
+    static let collaborationAvailable = Event(id: "collaboration_available")
+    static let shareInitiated = Event(id: "share_initiated")
+    static let relationshipModeEnabled = Event(id: "relationship_mode_enabled")
+    static let keyboardShortcutUsed = Event(id: "keyboard_shortcut_used")
+    static let exportInitiated = Event(id: "export_initiated")
+    static let presentationModeAccessed = Event(id: "presentation_mode_accessed")
+    static let themeSectionOpened = Event(id: "theme_section_opened")
+    static let colorPickerOpened = Event(id: "color_picker_opened")
+    static let minimapInteraction = Event(id: "minimap_interaction")
+    static let undoUsed = Event(id: "undo_used")
+    static let autoLayoutAccessed = Event(id: "auto_layout_accessed")
 }
 
 // MARK: - Onboarding Tips
@@ -41,7 +65,9 @@ struct WelcomeTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'app_launch'")
+        #Rule(TipKitEvents.appLaunch) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -59,7 +85,9 @@ struct CanvasNavigationTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'first_topic_created'")
+        #Rule(TipKitEvents.firstTopicCreated) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -77,7 +105,9 @@ struct TopicCreationTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'canvas_interaction'")
+        #Rule(TipKitEvents.canvasInteraction) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -95,7 +125,9 @@ struct SidebarDiscoveryTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'sidebar_opened'")
+        #Rule(TipKitEvents.sidebarOpened) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -115,7 +147,9 @@ struct AIAssistantTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'ai_mode_accessed'")
+        #Rule(TipKitEvents.aiModeAccessed) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -133,7 +167,9 @@ struct APIKeySetupTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'ai_mode_without_key'")
+        #Rule(TipKitEvents.aiModeWithoutKey) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -153,7 +189,9 @@ struct CollaborationTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'collaboration_available'")
+        #Rule(TipKitEvents.collaborationAvailable) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -171,7 +209,9 @@ struct SharingTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'share_initiated'")
+        #Rule(TipKitEvents.shareInitiated) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -191,7 +231,9 @@ struct RelationshipModeTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'relationship_mode_enabled'")
+        #Rule(TipKitEvents.relationshipModeEnabled) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -209,7 +251,9 @@ struct KeyboardShortcutsTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'keyboard_shortcut_used'")
+        #Rule(TipKitEvents.keyboardShortcutUsed) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -227,7 +271,9 @@ struct ExportTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'export_initiated'")
+        #Rule(TipKitEvents.exportInitiated) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -245,7 +291,9 @@ struct PresentationModeTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'presentation_mode_accessed'")
+        #Rule(TipKitEvents.presentationModeAccessed) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -265,7 +313,9 @@ struct ThemeTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'theme_section_opened'")
+        #Rule(TipKitEvents.themeSectionOpened) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -283,7 +333,9 @@ struct ColorCustomizationTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'color_picker_opened'")
+        #Rule(TipKitEvents.colorPickerOpened) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -303,7 +355,9 @@ struct MinimapTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'minimap_interaction'")
+        #Rule(TipKitEvents.minimapInteraction) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -321,7 +375,9 @@ struct UndoRedoTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'undo_used'")
+        #Rule(TipKitEvents.undoUsed) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -339,7 +395,9 @@ struct AutoLayoutTip: Tip {
     }
     
     var rules: [Rule] {
-        #Rule("$event == 'auto_layout_accessed'")
+        #Rule(TipKitEvents.autoLayoutAccessed) {
+            $0.donations.count >= 1
+        }
     }
 }
 
@@ -347,77 +405,113 @@ struct AutoLayoutTip: Tip {
 
 extension TipKitManager {
     func trackEvent(_ event: String) {
-        // Track events for tip triggers
         Task {
-            await Tips.recordEvent("$event == '\(event)'")
+            switch event {
+            case "app_launch":
+                await TipKitEvents.appLaunch.donate()
+            case "first_topic_created":
+                await TipKitEvents.firstTopicCreated.donate()
+            case "canvas_interaction":
+                await TipKitEvents.canvasInteraction.donate()
+            case "sidebar_opened":
+                await TipKitEvents.sidebarOpened.donate()
+            case "ai_mode_accessed":
+                await TipKitEvents.aiModeAccessed.donate()
+            case "ai_mode_without_key":
+                await TipKitEvents.aiModeWithoutKey.donate()
+            case "collaboration_available":
+                await TipKitEvents.collaborationAvailable.donate()
+            case "share_initiated":
+                await TipKitEvents.shareInitiated.donate()
+            case "relationship_mode_enabled":
+                await TipKitEvents.relationshipModeEnabled.donate()
+            case "keyboard_shortcut_used":
+                await TipKitEvents.keyboardShortcutUsed.donate()
+            case "export_initiated":
+                await TipKitEvents.exportInitiated.donate()
+            case "presentation_mode_accessed":
+                await TipKitEvents.presentationModeAccessed.donate()
+            case "theme_section_opened":
+                await TipKitEvents.themeSectionOpened.donate()
+            case "color_picker_opened":
+                await TipKitEvents.colorPickerOpened.donate()
+            case "minimap_interaction":
+                await TipKitEvents.minimapInteraction.donate()
+            case "undo_used":
+                await TipKitEvents.undoUsed.donate()
+            case "auto_layout_accessed":
+                await TipKitEvents.autoLayoutAccessed.donate()
+            default:
+                break
+            }
         }
     }
     
     func trackAppLaunch() {
-        trackEvent("app_launch")
+        Task { await TipKitEvents.appLaunch.donate() }
     }
     
     func trackFirstTopicCreated() {
-        trackEvent("first_topic_created")
+        Task { await TipKitEvents.firstTopicCreated.donate() }
     }
     
     func trackCanvasInteraction() {
-        trackEvent("canvas_interaction")
+        Task { await TipKitEvents.canvasInteraction.donate() }
     }
     
     func trackSidebarOpened() {
-        trackEvent("sidebar_opened")
+        Task { await TipKitEvents.sidebarOpened.donate() }
     }
     
     func trackAIModeAccessed() {
-        trackEvent("ai_mode_accessed")
+        Task { await TipKitEvents.aiModeAccessed.donate() }
     }
     
     func trackAIModeWithoutKey() {
-        trackEvent("ai_mode_without_key")
+        Task { await TipKitEvents.aiModeWithoutKey.donate() }
     }
     
     func trackCollaborationAvailable() {
-        trackEvent("collaboration_available")
+        Task { await TipKitEvents.collaborationAvailable.donate() }
     }
     
     func trackShareInitiated() {
-        trackEvent("share_initiated")
+        Task { await TipKitEvents.shareInitiated.donate() }
     }
     
     func trackRelationshipModeEnabled() {
-        trackEvent("relationship_mode_enabled")
+        Task { await TipKitEvents.relationshipModeEnabled.donate() }
     }
     
     func trackKeyboardShortcutUsed() {
-        trackEvent("keyboard_shortcut_used")
+        Task { await TipKitEvents.keyboardShortcutUsed.donate() }
     }
     
     func trackExportInitiated() {
-        trackEvent("export_initiated")
+        Task { await TipKitEvents.exportInitiated.donate() }
     }
     
     func trackPresentationModeAccessed() {
-        trackEvent("presentation_mode_accessed")
+        Task { await TipKitEvents.presentationModeAccessed.donate() }
     }
     
     func trackThemeSectionOpened() {
-        trackEvent("theme_section_opened")
+        Task { await TipKitEvents.themeSectionOpened.donate() }
     }
     
     func trackColorPickerOpened() {
-        trackEvent("color_picker_opened")
+        Task { await TipKitEvents.colorPickerOpened.donate() }
     }
     
     func trackMinimapInteraction() {
-        trackEvent("minimap_interaction")
+        Task { await TipKitEvents.minimapInteraction.donate() }
     }
     
     func trackUndoUsed() {
-        trackEvent("undo_used")
+        Task { await TipKitEvents.undoUsed.donate() }
     }
     
     func trackAutoLayoutAccessed() {
-        trackEvent("auto_layout_accessed")
+        Task { await TipKitEvents.autoLayoutAccessed.donate() }
     }
 }
